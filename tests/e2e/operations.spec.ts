@@ -34,7 +34,9 @@ test('TC-03 / TC-07: lost reply, independent execution, reconciliation and opera
   await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Обнаружено расхождение', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Перейти к разбору и решению' }).click();
+  const operator = await (await page.request.get('/api/session')).json();
   await page.getByRole('button', { name: 'Взять разбор', exact: true }).click();
+  await expect(page.getByText(operator.userId, { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Взять разбор', exact: true })).toHaveCount(0);
   await page.getByRole('combobox', { name: 'Действие', exact: true }).selectOption('APPLY_EXTERNAL_RESULT');
   await page.getByLabel('Причина решения', { exact: true }).fill('Проверено фактическое исполнение, принимаю сохранённый результат');
