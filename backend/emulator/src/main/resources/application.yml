@@ -1,0 +1,27 @@
+server:
+  address: ${SI_EMULATOR_ADDRESS:127.0.0.1}
+  port: ${SI_EMULATOR_PORT:19581}
+spring:
+  application:
+    name: system-integration-emulator
+  datasource:
+    url: ${SI_EMULATOR_DB_URL:jdbc:postgresql://127.0.0.1:19532/si_emulator}
+    username: ${SI_EMULATOR_DB_USER:si_emulator}
+    password: ${SI_EMULATOR_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 4
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db

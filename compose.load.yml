@@ -1,0 +1,11 @@
+services:
+  backend:
+    environment:
+      SI_DB_URL: jdbc:postgresql://postgres:5432/si_test
+      SI_DB_USER: si_test
+      SI_DB_PASSWORD: ${SI_TEST_DB_PASSWORD:?Set SI_TEST_DB_PASSWORD in .env}
+  emulator:
+    environment:
+      SI_EMULATOR_DB_URL: jdbc:postgresql://postgres:5432/si_emulator_test
+      SI_EMULATOR_DB_USER: si_emulator_test
+      SI_EMULATOR_DB_PASSWORD: ${SI_EMULATOR_TEST_DB_PASSWORD:?Set SI_EMULATOR_TEST_DB_PASSWORD in .env}

@@ -1,0 +1,9 @@
+.git
+.local
+.env
+.env.local
+**/node_modules
+**/build
+**/.gradle
+frontend/dist
+tests/results

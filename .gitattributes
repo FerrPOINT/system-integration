@@ -1,0 +1,5 @@
+* text=auto
+/backend/gradlew text eol=lf
+/backend/gradlew.bat text eol=crlf
+/backend/database/*.sh text eol=lf
+/docs/original-specification.md -text

@@ -1,0 +1,1009 @@
+openapi: 3.1.0
+info:
+  title: Внутренний API заданий
+  version: 1.0.0
+  description: Контракт сессии, реестра, истории и операторских действий.
+security:
+  - session: []
+paths:
+  /api/csrf:
+    get:
+      operationId: getCsrfToken
+      tags: [Session]
+      security: []
+      summary: Получить токен для следующего запроса, меняющего состояние
+      description: После входа и выхода клиент запрашивает новый токен.
+      responses:
+        '200':
+          description: Токен привязан к текущей сессии.
+          content:
+            application/json:
+              schema:
+                title: CsrfToken
+                type: object
+                required: [token]
+                properties:
+                  token:
+                    type: string
+  /api/login:
+    post:
+      operationId: logIn
+      tags: [Authentication]
+      security: []
+      summary: Войти под демопользователем
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  minLength: 1
+                  maxLength: 64
+                  pattern: '^[A-Za-z0-9._-]+$'
+                password:
+                  type: string
+                  format: password
+                  writeOnly: true
+      responses:
+        '204':
+          description: Сессия создана. Идентификатор передаётся в Set-Cookie.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/logout:
+    post:
+      operationId: logOut
+      tags: [Authentication]
+      summary: Завершить сессию
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+      responses:
+        '204':
+          description: Сессия завершена.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/session:
+    get:
+      operationId: getSession
+      tags: [Session]
+      summary: Получить текущего пользователя и роль
+      responses:
+        '200':
+          description: Пользователь из серверной сессии.
+          content:
+            application/json:
+              schema:
+                title: Session
+                type: object
+                required: [userId, username, role]
+                properties:
+                  userId:
+                    type: string
+                    format: uuid
+                  username:
+                    type: string
+                  role:
+                    type: string
+                    enum: [INITIATOR, OPERATOR]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/tasks:
+    get:
+      operationId: listTasks
+      tags: [Tasks]
+      summary: Прочитать доступные задания
+      description: Порядок по времени создания и ID, от новых к старым.
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: businessStatus
+          in: query
+          schema:
+            $ref: '#/components/schemas/BusinessStatus'
+        - name: createdFrom
+          in: query
+          description: Включённая нижняя граница времени создания в UTC.
+          schema:
+            type: string
+            format: date-time
+        - name: createdTo
+          in: query
+          description: Исключённая верхняя граница времени создания в UTC. При обеих границах должна быть позже createdFrom.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Доступная страница из 20 записей или меньше.
+          content:
+            application/json:
+              schema:
+                title: TaskPage
+                type: object
+                required: [items, page, hasNext]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 20
+                    items:
+                      $ref: '#/components/schemas/Task'
+                  page:
+                    type: integer
+                    minimum: 0
+                  hasNext:
+                    type: boolean
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createTask
+      tags: [Tasks]
+      summary: Сохранить задание инициатора
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              title: CreateTaskRequest
+              type: object
+              additionalProperties: false
+              required: [title, request]
+              properties:
+                title:
+                  $ref: '#/components/schemas/Title'
+                request:
+                  $ref: '#/components/schemas/Request'
+      responses:
+        '201':
+          description: Первичное создание или повтор исходного результата команды.
+          content:
+            application/json:
+              schema:
+                title: CreateTaskResult
+                type: object
+                required: [taskId]
+                properties:
+                  taskId:
+                    type: string
+                    format: uuid
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/tasks/{taskId}:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getTask
+      tags: [Tasks]
+      summary: Прочитать карточку задания
+      responses:
+        '200':
+          description: Доступное задание.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: renameTask
+      tags: [Tasks]
+      summary: Изменить название собственного задания
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              title: RenameTaskRequest
+              type: object
+              additionalProperties: false
+              required: [title, expectedTitleRevision]
+              properties:
+                title:
+                  $ref: '#/components/schemas/Title'
+                expectedTitleRevision:
+                  $ref: '#/components/schemas/TitleRevision'
+      responses:
+        '200':
+          description: Зафиксированное название и его версия. Повтор команды возвращает тот же результат.
+          content:
+            application/json:
+              schema:
+                title: RenameTaskResult
+                type: object
+                required: [title, titleRevision]
+                properties:
+                  title:
+                    $ref: '#/components/schemas/Title'
+                  titleRevision:
+                    $ref: '#/components/schemas/TitleRevision'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/tasks/{taskId}/history:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    get:
+      operationId: listTaskHistory
+      tags: [Tasks]
+      summary: Прочитать историю задания
+      description: Инициатор читает свою историю, оператор читает любую. Сортировка по времени и ID от новых записей к старым.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Страница истории.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryPage'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/tasks/{taskId}/reconciliations:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    post:
+      operationId: reconcileTask
+      tags: [Operations]
+      summary: Сверить состояние задания
+      description: Только оператор. Сохраняет оба снимка и вывод сверки. Недоступность эмулятора возвращается как исход UNAVAILABLE.
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Сохранённая сверка.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reconciliation'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/tasks/{taskId}/reconciliations/{reconciliationId}:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+      - name: reconciliationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getTaskReconciliation
+      tags: [Operations]
+      summary: Прочитать сохранённую сверку
+      description: Только оператор. Проверяет принадлежность сверки заданию и возвращает исходные снимки.
+      responses:
+        '200':
+          description: Сохранённая сверка.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reconciliation'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/exchange/issues:
+    get:
+      operationId: listExchangeIssues
+      tags: [Operations]
+      summary: Прочитать список проблем обмена
+      description: Только оператор. Сортировка по времени открытия и ID от новых к старым.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/IssueStatus'
+      responses:
+        '200':
+          description: Страница проблем.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuePage'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/exchange/issues/{issueId}:
+    parameters:
+      - $ref: '#/components/parameters/IssueId'
+    get:
+      operationId: getExchangeIssue
+      tags: [Operations]
+      summary: Прочитать проблему обмена
+      description: Только оператор. Доступные действия рассчитаны для текущей версии проблемы.
+      responses:
+        '200':
+          description: Проблема и последний известный исход.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/exchange/issues/{issueId}/take:
+    parameters:
+      - $ref: '#/components/parameters/IssueId'
+    post:
+      operationId: takeExchangeIssue
+      tags: [Operations]
+      summary: Взять открытый разбор на себя
+      description: Только оператор для открытой проблемы по заданию. Атомарно меняет ответственного, версию и историю. Повтор ключа возвращает исходный ответ.
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TakeIssueRequest'
+      responses:
+        '200':
+          description: Проблема после назначения.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/exchange/issues/{issueId}/retry:
+    parameters:
+      - $ref: '#/components/parameters/IssueId'
+    post:
+      operationId: retryExchange
+      tags: [Operations]
+      summary: Поставить разрешённый повтор в очередь
+      description: |
+        Только оператор. DELIVERY_DELAYED переносит следующий шаг на текущее время.
+        Для PROTOCOL_ERROR требует актуальный reconciliationId и NEEDS_REVIEW,
+        сверка должна подтвердить отсутствие операции или тот же запрос и executions = 0.
+        Готовый итог применяется через resolve с APPLY_EXTERNAL_RESULT.
+        Назначает GET и переводит проблему в DELIVERY_UNCERTAIN.
+        Проверяет свободный захват, сохраняет ID и счётчик попыток.
+        Повтор ключа возвращает исходное подтверждение команды.
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetryRequest'
+      responses:
+        '202':
+          description: Шаг назначен в существующей очереди. Исход виден по доставке задания и истории.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/exchange/issues/{issueId}/resolve:
+    parameters:
+      - $ref: '#/components/parameters/IssueId'
+    post:
+      operationId: resolveExchangeIssue
+      tags: [Operations]
+      summary: Записать решение по результатам сверки
+      description: |
+        Только оператор. Проверяет версию проблемы, принадлежность и актуальность сверки.
+        APPLY_EXTERNAL_RESULT требует тот же внешний запрос и допустимую новую версию.
+        ACKNOWLEDGE_DIFFERENCE для PROTOCOL_ERROR закрывает проблему и переводит
+        приостановленную доставку в STOPPED с сохранением бизнес-результата.
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveIssueRequest'
+      responses:
+        '200':
+          description: Сохранённое решение.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueResolution'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+  parameters:
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IssueId:
+      name: issueId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Csrf:
+      name: X-CSRF-TOKEN
+      in: header
+      required: true
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID одной команды. Для независимой команды клиент создаёт новый ключ.
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Invalid:
+      description: VALIDATION_FAILED. Запрос не соответствует контракту.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: SESSION_REQUIRED при отсутствии сессии. INVALID_CREDENTIALS при неверном входе.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: ACCESS_DENIED для запрещённой роли или CSRF_INVALID для неверного токена.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: NOT_FOUND. Объект отсутствует или недоступен пользователю.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: |
+        IDEMPOTENCY_CONFLICT при том же ключе с иным содержимым.
+        TITLE_REVISION_CONFLICT или ISSUE_REVISION_CONFLICT при устаревшей версии.
+        SNAPSHOT_STALE при устаревших данных сверки. ACTION_NOT_ALLOWED при недопустимом действии.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Title:
+      type: string
+      minLength: 1
+      maxLength: 160
+      pattern: '^[\s\S]*\S[\s\S]*$'
+    Request:
+      $ref: './external-exchange.openapi.yaml#/components/schemas/OperationInput'
+    Problem:
+      type: object
+      required: [title, status, code]
+      properties:
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          enum:
+            - VALIDATION_FAILED
+            - SESSION_REQUIRED
+            - INVALID_CREDENTIALS
+            - ACCESS_DENIED
+            - CSRF_INVALID
+            - NOT_FOUND
+            - IDEMPOTENCY_CONFLICT
+            - TITLE_REVISION_CONFLICT
+            - ISSUE_REVISION_CONFLICT
+            - SNAPSHOT_STALE
+            - ACTION_NOT_ALLOWED
+        detail:
+          type: string
+    TitleRevision:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 9007199254740991
+    BusinessStatus:
+      type: string
+      enum: [PENDING, RUNNING, SUCCEEDED, REJECTED]
+    Task:
+      type: object
+      required: [taskId, operationId, ownerId, title, titleRevision, request, deliveryStatus, businessStatus, createdAt]
+      properties:
+        taskId:
+          type: string
+          format: uuid
+        operationId:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          format: uuid
+        title:
+          $ref: '#/components/schemas/Title'
+        titleRevision:
+          $ref: '#/components/schemas/TitleRevision'
+        request:
+          $ref: '#/components/schemas/Request'
+        deliveryStatus:
+          $ref: '#/components/schemas/DeliveryStatus'
+        businessStatus:
+          $ref: '#/components/schemas/BusinessStatus'
+        createdAt:
+          type: string
+          format: date-time
+        result:
+          $ref: '#/components/schemas/TaskResult'
+      allOf:
+        - if:
+            properties:
+              businessStatus:
+                enum: [SUCCEEDED, REJECTED]
+          then:
+            required: [result]
+          else:
+            not:
+              required: [result]
+        - if:
+            properties:
+              businessStatus:
+                const: SUCCEEDED
+          then:
+            properties:
+              result:
+                properties:
+                  status:
+                    const: SUCCEEDED
+        - if:
+            properties:
+              businessStatus:
+                const: REJECTED
+          then:
+            properties:
+              result:
+                properties:
+                  status:
+                    const: REJECTED
+    DeliveryStatus:
+      type: string
+      enum: [QUEUED, RETRY_WAIT, UNKNOWN, ACKNOWLEDGED, NEEDS_REVIEW, STOPPED]
+      description: |
+        RETRY_WAIT и UNKNOWN сохраняются при отложенных попытках.
+        NEEDS_REVIEW означает приостановку из-за ошибки протокола.
+        STOPPED означает явное решение оператора прекратить отправку.
+    TaskResult:
+      type: object
+      description: Итог исполнения. До завершения поле result отсутствует.
+      required: [status, completedAt]
+      properties:
+        status:
+          type: string
+          enum: [SUCCEEDED, REJECTED]
+        completedAt:
+          type: string
+          format: date-time
+        rejectionCode:
+          type: string
+          enum: [QUANTITY_LIMIT_EXCEEDED]
+      allOf:
+        - if:
+            properties:
+              status:
+                const: REJECTED
+          then:
+            required: [rejectionCode]
+          else:
+            not:
+              required: [rejectionCode]
+    HistoryPage:
+      type: object
+      required: [items, page, hasNext]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/HistoryEvent'
+        page:
+          type: integer
+          minimum: 0
+        hasNext:
+          type: boolean
+    HistoryEvent:
+      type: object
+      required: [eventId, taskId, operationId, occurredAt, actor, type, summary]
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        taskId:
+          type: string
+          format: uuid
+        operationId:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+        actor:
+          type: string
+          enum: [USER, SYSTEM]
+        actorUserId:
+          type: string
+          format: uuid
+          description: Идентификатор автора для событий USER. Для SYSTEM поле отсутствует.
+        type:
+          type: string
+          enum: [CREATED, RENAMED, DELIVERY_ATTEMPT, DELIVERY_ACKNOWLEDGED, DELIVERY_UNCERTAIN, RESULT_APPLIED, RESULT_IGNORED, ISSUE_OPENED, RETRY_QUEUED, RECONCILED, ISSUE_RESOLVED, RESPONSIBILITY_CHANGED]
+        summary:
+          type: string
+          description: Содержание изменения без секретов и исходных ошибочных пакетов.
+        attemptId:
+          type: string
+          format: uuid
+        resultVersion:
+          type: integer
+          enum: [1, 2]
+        issueId:
+          type: string
+          format: uuid
+        reconciliationId:
+          type: string
+          format: uuid
+          description: Ссылка на снимки сверки для события RECONCILED, решения или возобновления после ошибки протокола.
+        previousAssigneeId:
+          type: string
+          format: uuid
+          description: Прежний ответственный. Отсутствует при первом назначении.
+        assignedTo:
+          type: string
+          format: uuid
+          description: Новый ответственный для RESPONSIBILITY_CHANGED.
+      allOf:
+        - if:
+            properties:
+              actor:
+                const: USER
+          then:
+            required: [actorUserId]
+          else:
+            not:
+              required: [actorUserId]
+        - if:
+            properties:
+              type:
+                const: RESPONSIBILITY_CHANGED
+          then:
+            required: [assignedTo]
+            properties:
+              actor:
+                const: USER
+        - if:
+            properties:
+              type:
+                const: RECONCILED
+          then:
+            required: [reconciliationId]
+    IssuePage:
+      type: object
+      required: [items, page, hasNext]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Issue'
+        page:
+          type: integer
+          minimum: 0
+        hasNext:
+          type: boolean
+    IssueStatus:
+      type: string
+      enum: [OPEN, RESOLVED]
+    IssueRevision:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 9007199254740991
+    Issue:
+      type: object
+      required: [issueId, issueRevision, kind, status, openedAt, summary, allowedActions]
+      properties:
+        issueId:
+          type: string
+          format: uuid
+        taskId:
+          type: string
+          format: uuid
+          description: Отсутствует у общей проблемы ленты, которую нельзя связать с заданием.
+        operationId:
+          type: string
+          format: uuid
+        issueRevision:
+          $ref: '#/components/schemas/IssueRevision'
+        kind:
+          type: string
+          enum: [DELIVERY_UNCERTAIN, DELIVERY_DELAYED, PROTOCOL_ERROR, RESULT_CONFLICT, RECONCILIATION_DIFFERENCE]
+          description: DELIVERY_DELAYED означает длительную задержку после четвёртой попытки. Следующие попытки назначаются по общей очереди.
+        status:
+          $ref: '#/components/schemas/IssueStatus'
+        openedAt:
+          type: string
+          format: date-time
+        summary:
+          type: string
+        assignedTo:
+          type: string
+          format: uuid
+          description: Ответственный оператор. Отсутствует до первого назначения.
+        evidence:
+          $ref: '#/components/schemas/ExchangeEvidence'
+        allowedActions:
+          type: array
+          description: Доступные действия в текущем состоянии. Каждое действие встречается один раз.
+          maxItems: 5
+          items:
+            type: string
+            enum: [TAKE_OWNERSHIP, RETRY, RECONCILE, APPLY_EXTERNAL_RESULT, ACKNOWLEDGE_DIFFERENCE]
+        nextAttemptAt:
+          type: string
+          format: date-time
+          description: Время запланированного отложенного шага. Поле отсутствует без такого шага.
+        latestReconciliationId:
+          type: string
+          format: uuid
+        resolution:
+          $ref: '#/components/schemas/IssueResolution'
+    ExchangeEvidence:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          description: Причина отклонения без исходного ошибочного пакета и секретов.
+        cursor:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+        local:
+          $ref: '#/components/schemas/LocalSnapshot'
+          description: Снимок задания на момент ошибки. Отсутствует у общей проблемы ленты.
+        received:
+          $ref: './external-exchange.openapi.yaml#/components/schemas/Result'
+          description: Заполнено, если входящий снимок соответствует схеме, но нарушает правила применения.
+    Reconciliation:
+      type: object
+      required: [reconciliationId, taskId, operationId, checkedAt, checkedBy, outcome, local, externalAvailability]
+      properties:
+        reconciliationId:
+          type: string
+          format: uuid
+        taskId:
+          type: string
+          format: uuid
+        operationId:
+          type: string
+          format: uuid
+        checkedAt:
+          type: string
+          format: date-time
+        checkedBy:
+          type: string
+          format: uuid
+        outcome:
+          type: string
+          enum: [MATCH, DIFFERENCE, UNAVAILABLE]
+        local:
+          $ref: '#/components/schemas/LocalSnapshot'
+        externalAvailability:
+          type: string
+          enum: [PRESENT, NOT_FOUND, UNAVAILABLE]
+        external:
+          $ref: './external-exchange.openapi.yaml#/components/schemas/OperationState'
+        issueId:
+          type: string
+          format: uuid
+      allOf:
+        - if:
+            properties:
+              externalAvailability:
+                const: PRESENT
+          then:
+            required: [external]
+          else:
+            not:
+              required: [external]
+    LocalSnapshot:
+      type: object
+      required: [request, deliveryStatus, businessStatus]
+      properties:
+        request:
+          $ref: '#/components/schemas/Request'
+        deliveryStatus:
+          $ref: '#/components/schemas/DeliveryStatus'
+        businessStatus:
+          $ref: '#/components/schemas/BusinessStatus'
+        resultVersion:
+          type: integer
+          enum: [1, 2]
+        result:
+          $ref: '#/components/schemas/TaskResult'
+    TakeIssueRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedIssueRevision]
+      properties:
+        expectedIssueRevision:
+          $ref: '#/components/schemas/IssueRevision'
+    RetryRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedIssueRevision, reason]
+      properties:
+        expectedIssueRevision:
+          $ref: '#/components/schemas/IssueRevision'
+        reason:
+          $ref: '#/components/schemas/ActionReason'
+        reconciliationId:
+          type: string
+          format: uuid
+          description: Обязателен для возобновления после PROTOCOL_ERROR.
+    ResolutionAction:
+      type: string
+      enum: [APPLY_EXTERNAL_RESULT, ACKNOWLEDGE_DIFFERENCE]
+    ActionReason:
+      type: string
+      minLength: 1
+      maxLength: 500
+      pattern: '^[\s\S]*\S[\s\S]*$'
+    ResolveIssueRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedIssueRevision, reconciliationId, action, reason]
+      properties:
+        expectedIssueRevision:
+          $ref: '#/components/schemas/IssueRevision'
+        reconciliationId:
+          type: string
+          format: uuid
+        action:
+          $ref: '#/components/schemas/ResolutionAction'
+        reason:
+          $ref: '#/components/schemas/ActionReason'
+    IssueResolution:
+      type: object
+      required: [issueId, reconciliationId, action, reason, decidedBy, decidedAt]
+      properties:
+        issueId:
+          type: string
+          format: uuid
+        reconciliationId:
+          type: string
+          format: uuid
+        action:
+          $ref: '#/components/schemas/ResolutionAction'
+        reason:
+          $ref: '#/components/schemas/ActionReason'
+        decidedBy:
+          type: string
+          format: uuid
+        decidedAt:
+          type: string
+          format: date-time

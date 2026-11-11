@@ -1,0 +1,15 @@
+FROM node:24.19.0-alpine AS build
+RUN npm install --global --no-audit --no-fund corepack@0.35.0
+WORKDIR /work
+COPY contracts contracts
+COPY frontend frontend
+WORKDIR /work/frontend
+RUN corepack pnpm install --frozen-lockfile --reporter=append-only
+RUN corepack pnpm build
+
+FROM nginx:1.30.1-alpine
+ARG VCS_REF=development
+LABEL org.opencontainers.image.revision=$VCS_REF
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /work/frontend/dist /usr/share/nginx/html
+EXPOSE 8080

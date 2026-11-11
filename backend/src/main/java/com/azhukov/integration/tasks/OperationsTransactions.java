@@ -1,0 +1,238 @@
+package com.azhukov.integration.tasks;
+
+import com.azhukov.integration.contract.ExchangeReply;
+import com.azhukov.integration.auth.AppUser;
+import com.azhukov.integration.contract.external.model.OperationState;
+import com.azhukov.integration.contract.external.model.Result;
+import com.azhukov.integration.contract.internal.model.*;
+import com.azhukov.integration.contract.ExchangeProtocol;
+import com.azhukov.integration.http.ApiProblem;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
+
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+
+import static com.azhukov.integration.contract.internal.model.Issue.AllowedActionsEnum.*;
+
+@Service
+public class OperationsTransactions {
+    private final TaskRepository tasks;
+    private final ExchangeIssues issues;
+    private final ExchangeTasks exchange;
+    private final CommandReceipts commands;
+    private final ObjectMapper json;
+    private final ExchangeProtocol protocol;
+
+    public OperationsTransactions(TaskRepository tasks,ExchangeIssues issues,ExchangeTasks exchange,
+                                  CommandReceipts commands,ObjectMapper json) {
+        this.tasks=tasks; this.issues=issues; this.exchange=exchange; this.commands=commands; this.json=json;
+        this.protocol=new ExchangeProtocol(json);
+    }
+
+    @Transactional(readOnly=true)
+    public TaskRepository.ExchangeTask snapshot(AppUser user,UUID task) {
+        requireOperator(user);
+        return tasks.exchange(tasks.get(task,user,false).getOperationId(),false);
+    }
+
+    @Transactional(readOnly=true)
+    public Issue get(AppUser user,UUID id) { requireOperator(user); return view(context(id,user,false),user); }
+
+    @Transactional(readOnly=true)
+    public IssuePage list(AppUser user,int page,IssueStatus status) {
+        requireOperator(user);
+        if (page < 0) throw ApiProblem.invalid("Номер страницы не может быть отрицательным");
+        var rows=issues.list(page,status);
+        return new IssuePage(rows.stream().limit(20).map(row -> view(context(row,user,false),user)).toList(),page,rows.size()>20);
+    }
+
+    @Transactional(readOnly=true)
+    public Reconciliation reconciliation(AppUser user,UUID task,UUID id) {
+        requireOperator(user);
+        tasks.get(task,user,false);
+        return issues.reconciliation(task,id).value();
+    }
+
+    @Transactional
+    public Reconciliation saveReconciliation(AppUser user,UUID key,TaskRepository.ExchangeTask before,ExchangeReply reply) {
+        requireOperator(user);
+        return commands.execute(user.id(),"RECONCILE",key,before.task().getTaskId(),200,Reconciliation.class,() -> {
+            var current=tasks.exchange(before.task().getOperationId(),true);
+            if (current.version()!=before.version()) throw stale();
+            OperationState external=null;
+            String protocolFailure=null;
+            var availability=Reconciliation.ExternalAvailabilityEnum.UNAVAILABLE;
+            if (ExchangeProtocol.missingOperation(reply.status(),reply.body()))
+                availability=Reconciliation.ExternalAvailabilityEnum.NOT_FOUND;
+            else if (reply.status()>=400 && reply.status()<500) protocolFailure="Сверка получила некорректный постоянный ответ HTTP "+reply.status();
+            if (reply.status()==200) {
+                try { external=protocol.state(reply.body()); availability=Reconciliation.ExternalAvailabilityEnum.PRESENT; }
+                catch (IllegalArgumentException invalid) { protocolFailure="Сверка получила некорректный внешний снимок"; }
+            }
+            var outcome=availability==Reconciliation.ExternalAvailabilityEnum.UNAVAILABLE ? Reconciliation.OutcomeEnum.UNAVAILABLE :
+                matches(current,external) ? Reconciliation.OutcomeEnum.MATCH : Reconciliation.OutcomeEnum.DIFFERENCE;
+            UUID issue=issues.active(current.task().getTaskId());
+            if (protocolFailure!=null) issue=issues.open(current,current.task().getOperationId(),"PROTOCOL_ERROR",
+                protocolFailure,reply.body(),null,null);
+            if (outcome==Reconciliation.OutcomeEnum.DIFFERENCE && issue==null) {
+                issue=issues.open(current,current.task().getOperationId(),"RECONCILIATION_DIFFERENCE",
+                    "Сверка обнаружила расхождение с внешней системой",java.util.Arrays.asList(issues.snapshot(current),external),null,null);
+            }
+            var saved=new Reconciliation(UUID.randomUUID(),current.task().getTaskId(),current.task().getOperationId(),
+                OffsetDateTime.now(ZoneOffset.UTC),user.id(),outcome,json.convertValue(issues.snapshot(current),LocalSnapshot.class),availability)
+                .issueId(issue);
+            if (external!=null) saved.external(external);
+            issues.saveReconciliation(saved,current.version());
+            tasks.history(current.task(),user.id(),HistoryEvent.TypeEnum.RECONCILED,"Сверка: "+outcome.getValue(),
+                Map.of("reconciliationId",saved.getReconciliationId()));
+            return saved;
+        });
+    }
+
+    @Transactional
+    public Issue take(AppUser user,UUID key,UUID id,TakeIssueRequest input) {
+        requireOperator(user);
+        return commands.execute(user.id(),"TAKE_ISSUE",key,new Target(id,input),200,Issue.class,() -> {
+            var context=context(id,user,true);
+            version(context,input.getExpectedIssueRevision());
+            requireAction(context,user,TAKE_OWNERSHIP);
+            UUID previous=context.issue().value().getAssignedTo();
+            issues.assign(id,user.id());
+            var details=new LinkedHashMap<String,Object>();
+            details.put("issueId",id); details.put("assignedTo",user.id());
+            if (previous!=null) details.put("previousAssigneeId",previous);
+            tasks.history(context.state().task(),user.id(),HistoryEvent.TypeEnum.RESPONSIBILITY_CHANGED,
+                previous==null ? "Оператор взял разбор на себя" : "Разбор передан другому оператору",details);
+            return view(context(id,user,false),user);
+        });
+    }
+
+    @Transactional
+    public Issue retry(AppUser user,UUID key,UUID id,RetryRequest input) {
+        requireOperator(user);
+        return commands.execute(user.id(),"RETRY_EXCHANGE",key,new Target(id,input),200,Issue.class,() -> {
+            var context=context(id,user,true);
+            version(context,input.getExpectedIssueRevision());
+            boolean protocolError=context.issue().value().getKind()==Issue.KindEnum.PROTOCOL_ERROR;
+            if (protocolError) requireFresh(context,input.getReconciliationId());
+            requireAction(context,user,RETRY);
+            var queue=tasks.lockQueue(context.state().task().getOperationId());
+            if (queue.claim()!=null) throw notAllowed();
+            tasks.scheduleRetry(context.state().task().getOperationId(),protocolError ? "GET" : queue.step(),0);
+            if (protocolError) {
+                tasks.delivery(context.state().task().getOperationId(),DeliveryStatus.UNKNOWN);
+                issues.resumeProtocol(id);
+            } else issues.advanceRevision(id);
+            var details=new LinkedHashMap<String,Object>(); details.put("issueId",id);
+            if (input.getReconciliationId()!=null) details.put("reconciliationId",input.getReconciliationId());
+            tasks.history(context.state().task(),user.id(),HistoryEvent.TypeEnum.RETRY_QUEUED,
+                "Повтор назначен оператором: "+input.getReason(),details);
+            return view(context(id,user,false),user);
+        });
+    }
+
+    @Transactional
+    public IssueResolution resolve(AppUser user,UUID key,UUID id,ResolveIssueRequest input) {
+        requireOperator(user);
+        return commands.execute(user.id(),"RESOLVE_ISSUE",key,new Target(id,input),200,IssueResolution.class,() -> {
+            var context=context(id,user,true);
+            version(context,input.getExpectedIssueRevision());
+            requireFresh(context,input.getReconciliationId());
+            requireAction(context,user,Issue.AllowedActionsEnum.fromValue(input.getAction().getValue()));
+            var resolution=new IssueResolution(id,input.getReconciliationId(),input.getAction(),input.getReason(),user.id(),OffsetDateTime.now(ZoneOffset.UTC));
+            // Close the target first so common result application closes only other temporary issues.
+            issues.resolve(id,resolution);
+            if (input.getAction()==ResolutionAction.APPLY_EXTERNAL_RESULT) {
+                exchange.apply(context.state(),(Result)external(context).getResult(),user.id());
+            } else if (context.issue().value().getKind()==Issue.KindEnum.PROTOCOL_ERROR &&
+                context.state().task().getDeliveryStatus()==DeliveryStatus.NEEDS_REVIEW) {
+                tasks.delivery(context.state().task().getOperationId(),DeliveryStatus.STOPPED);
+                tasks.removeQueue(context.state().task().getOperationId());
+            }
+            tasks.history(context.state().task(),user.id(),HistoryEvent.TypeEnum.ISSUE_RESOLVED,
+                "Решение оператора: "+input.getReason(),Map.of("issueId",id,"reconciliationId",input.getReconciliationId()));
+            return resolution;
+        });
+    }
+
+    private record Context(ExchangeIssues.StoredIssue issue,TaskRepository.ExchangeTask state,ExchangeIssues.SavedReconciliation reconciliation) {}
+    private record Target(UUID id,Object input) {}
+
+    private Context context(UUID id,AppUser user,boolean lock) { return context(issues.get(id,false),user,lock); }
+
+    private Context context(ExchangeIssues.StoredIssue original,AppUser user,boolean lock) {
+        var task=original.value().getTaskId();
+        if (task==null) return new Context(original,null,null);
+        var record=tasks.get(task,user,lock);
+        var state=tasks.exchange(record.getOperationId(),false);
+        var row=lock ? issues.get(original.value().getIssueId(),true) : original;
+        var reconciliation=row.value().getLatestReconciliationId()==null ? null : issues.reconciliation(task,row.value().getLatestReconciliationId());
+        return new Context(row,state,reconciliation);
+    }
+
+    private Issue view(Context context,AppUser user) { return context.issue().value().allowedActions(actions(context,user)); }
+
+    private List<Issue.AllowedActionsEnum> actions(Context context,AppUser user) {
+        var issue=context.issue().value();
+        if (issue.getStatus()!=IssueStatus.OPEN || context.state()==null) return List.of();
+        var actions=new ArrayList<Issue.AllowedActionsEnum>();
+        if (!user.id().equals(issue.getAssignedTo())) actions.add(TAKE_OWNERSHIP);
+        actions.add(RECONCILE);
+        if (issue.getKind()==Issue.KindEnum.DELIVERY_DELAYED && context.issue().queueFree()) actions.add(RETRY);
+        var external=fresh(context) ? external(context) : null;
+        boolean protocolError=issue.getKind()==Issue.KindEnum.PROTOCOL_ERROR;
+        if (protocolError && context.state().task().getDeliveryStatus()==DeliveryStatus.NEEDS_REVIEW && context.issue().queueFree() && fresh(context) &&
+            context.reconciliation().value().getExternalAvailability()!=Reconciliation.ExternalAvailabilityEnum.UNAVAILABLE &&
+            (external==null || (sameIdentity(context.state(),external) && external.getExecutions().getValue()==0))) actions.add(RETRY);
+        boolean reviewKind=protocolError || issue.getKind()==Issue.KindEnum.RESULT_CONFLICT || issue.getKind()==Issue.KindEnum.RECONCILIATION_DIFFERENCE;
+        if (reviewKind && fresh(context) && context.reconciliation().value().getOutcome()!=Reconciliation.OutcomeEnum.UNAVAILABLE) {
+            actions.add(ACKNOWLEDGE_DIFFERENCE);
+            if (external!=null && sameIdentity(context.state(),external) && external.getResult() instanceof Result result &&
+                result.getVersion()==Result.VersionEnum.NUMBER_2 &&
+                (context.state().result()==null || result.getVersion().getValue()>context.state().result().getVersion().getValue())) actions.add(APPLY_EXTERNAL_RESULT);
+        }
+        return actions;
+    }
+
+    private boolean fresh(Context context) {
+        return context.reconciliation()!=null && context.reconciliation().exchangeVersion()==context.state().version();
+    }
+
+    private OperationState external(Context context) {
+        var value=context.reconciliation().value().getExternal();
+        return value==null ? null : protocol.state(json.valueToTree(value));
+    }
+
+    private boolean matches(TaskRepository.ExchangeTask state,OperationState external) {
+        if (external==null) return state.task().getDeliveryStatus()!=DeliveryStatus.ACKNOWLEDGED && state.result()==null;
+        return sameIdentity(state,external) && state.task().getDeliveryStatus()==DeliveryStatus.ACKNOWLEDGED && Objects.equals(state.result(),external.getResult());
+    }
+
+    private boolean sameIdentity(TaskRepository.ExchangeTask state,OperationState external) {
+        return external.getOperationId().equals(state.task().getOperationId()) && external.getRequest().equals(ExchangeTasks.input(state));
+    }
+
+    private void requireFresh(Context context,UUID id) {
+        if (id==null || !id.equals(context.issue().value().getLatestReconciliationId()) || !fresh(context)) throw stale();
+    }
+    private void requireAction(Context context,AppUser user,Issue.AllowedActionsEnum action) {
+        if (!actions(context,user).contains(action)) throw notAllowed();
+    }
+    private static void version(Context context,long expected) {
+        if (context.issue().value().getIssueRevision()!=expected)
+            throw new ApiProblem(409,"ISSUE_REVISION_CONFLICT","Проблема уже изменена. Обновите карточку");
+    }
+    private static void requireOperator(AppUser user) {
+        if (!user.isOperator()) throw new ApiProblem(403,"ACCESS_DENIED","Действие доступно оператору");
+    }
+    private static ApiProblem stale() { return new ApiProblem(409,"SNAPSHOT_STALE","Сверка устарела. Выполните новую сверку"); }
+    private static ApiProblem notAllowed() { return new ApiProblem(409,"ACTION_NOT_ALLOWED","Действие недоступно в текущем состоянии"); }
+}

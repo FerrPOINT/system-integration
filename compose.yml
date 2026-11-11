@@ -1,0 +1,119 @@
+name: system-integration
+
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '3'
+
+services:
+  postgres:
+    logging: *bounded-logging
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_USER: si_admin
+      POSTGRES_PASSWORD: ${SI_DB_ADMIN_PASSWORD:?Set SI_DB_ADMIN_PASSWORD in .env}
+      SI_DB_PASSWORD: ${SI_DB_PASSWORD:?Set SI_DB_PASSWORD in .env}
+      SI_EMULATOR_DB_PASSWORD: ${SI_EMULATOR_DB_PASSWORD:?Set SI_EMULATOR_DB_PASSWORD in .env}
+      SI_TEST_DB_PASSWORD: ${SI_TEST_DB_PASSWORD:?Set SI_TEST_DB_PASSWORD in .env}
+      SI_EMULATOR_TEST_DB_PASSWORD: ${SI_EMULATOR_TEST_DB_PASSWORD:?Set SI_EMULATOR_TEST_DB_PASSWORD in .env}
+    ports:
+      - '127.0.0.1:19532:5432'
+    volumes:
+      - postgres:/var/lib/postgresql
+      - ./backend/database/init.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U si_admin -d postgres']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    cpus: 0.8
+    mem_limit: 1536m
+
+  backend:
+    logging: *bounded-logging
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: backend
+      args:
+        VCS_REF: ${SI_SOURCE_REF:-development}
+    environment:
+      SI_ADDRESS: 0.0.0.0
+      SI_PORT: 8080
+      SI_DB_URL: jdbc:postgresql://postgres:5432/si_app
+      SI_DB_PASSWORD: ${SI_DB_PASSWORD:?Set SI_DB_PASSWORD in .env}
+      SI_EMULATOR_URL: http://emulator:8080
+      SI_DEMO_PASSWORD: ${SI_DEMO_PASSWORD:?Set SI_DEMO_PASSWORD in .env}
+      SPRING_PROFILES_ACTIVE: demo-users
+    ports:
+      - '127.0.0.1:19580:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://localhost:8080/actuator/health/readiness]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    cpus: 0.8
+    mem_limit: 1536m
+
+  emulator:
+    logging: *bounded-logging
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: emulator
+      args:
+        VCS_REF: ${SI_SOURCE_REF:-development}
+    environment:
+      SI_EMULATOR_ADDRESS: 0.0.0.0
+      SI_EMULATOR_PORT: 8080
+      SI_EMULATOR_DB_URL: jdbc:postgresql://postgres:5432/si_emulator
+      SI_EMULATOR_DB_PASSWORD: ${SI_EMULATOR_DB_PASSWORD:?Set SI_EMULATOR_DB_PASSWORD in .env}
+      SPRING_PROFILES_ACTIVE: test-faults
+    ports:
+      - '127.0.0.1:19581:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://localhost:8080/actuator/health/readiness]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    cpus: 0.4
+    mem_limit: 1g
+
+  frontend:
+    logging: *bounded-logging
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VCS_REF: ${SI_SOURCE_REF:-development}
+    ports:
+      - '127.0.0.1:19573:8080'
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:8080/]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    cpus: 0.1
+    mem_limit: 64m
+
+volumes:
+  postgres:
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.252.95.0/24

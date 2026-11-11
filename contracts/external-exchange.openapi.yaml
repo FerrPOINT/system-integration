@@ -1,0 +1,337 @@
+openapi: 3.1.0
+info:
+  title: Контракт внешнего обмена
+  version: 1.0.0
+  description: Контракт внутреннего приложения и локального эмулятора.
+paths:
+  /operations/{operationId}:
+    parameters:
+      - name: operationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: acceptOperation
+      tags: [Exchange]
+      summary: Принять или подтвердить существующую операцию
+      description: |
+        202 означает первое принятие, 200 — повтор того же содержимого.
+        Оба ответа подтверждают получение, а итог доступен отдельным событием.
+        После перезапуска на прежней БД повтор возвращает 200 без нового исполнения.
+        Один ID с отличающимся reference или quantity возвращает 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationInput'
+            example:
+              reference: REQ-123456
+              quantity: 25
+      responses:
+        '202':
+          $ref: '#/components/responses/Acknowledged'
+        '200':
+          $ref: '#/components/responses/Acknowledged'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '409':
+          description: OPERATION_CONFLICT. Идентификатор уже закреплён за другим содержимым.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: inspectOperation
+      tags: [Exchange]
+      summary: Прочитать фактическое состояние и число исполнений
+      responses:
+        '200':
+          description: Состояние из БД эмулятора, независимо от выдачи событий.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationState'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          description: OPERATION_NOT_FOUND. Эмулятор доступен и не знает операцию с данным ID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /result-events:
+    get:
+      operationId: listResultEvents
+      tags: [Exchange]
+      summary: Прочитать опубликованные события после сохранённой позиции
+      description: |
+        События упорядочены по позиции публикации. Версия результата
+        описывает состояние отдельной операции и может идти вне порядка.
+        При отсутствии событий возвращается пустой массив.
+      parameters:
+        - name: after
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/Cursor'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Страница событий. Следующий запрос использует позицию последнего обработанного события.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResultEvent'
+              example:
+                - cursor: 31
+                  result:
+                    operationId: 40ad5299-2e09-4d7f-9a14-f02ca60f55ef
+                    request:
+                      reference: REQ-123456
+                      quantity: 25
+                    version: 2
+                    status: SUCCEEDED
+                    completedAt: '2026-11-11T00:00:01Z'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /test/faults/{reference}:
+    parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^REQ-[0-9]{6}$'
+    put:
+      operationId: configureFault
+      tags: [TestFaults]
+      summary: Включить сбой для будущей отправки по номеру заявки
+      description: |
+        Маршрут доступен только в тестовом профиле и в закрытой сети эмулятора.
+        DROP_RESPONSE_AFTER_EXECUTION задерживает первый ответ PUT после записи
+        итога. GET операции видит итог сразу, а лента удерживает события этой
+        операции до снятия режима. Перезапуск с прежней БД сохраняет удержание.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FaultConfiguration'
+      responses:
+        '204':
+          description: Режим сохранён. Повтор установки того же режима не запускает его повторно.
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '409':
+          description: FAULT_ALREADY_BOUND. Режим уже связан с операцией.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    delete:
+      operationId: clearFault
+      tags: [TestFaults]
+      summary: Выключить режим сбоя
+      description: Маршрут доступен только в тестовом профиле и в закрытой сети эмулятора.
+      responses:
+        '204':
+          description: |
+            Режим выключен. Сохранённые операции и опубликованные события остаются.
+            Для DROP_RESPONSE_AFTER_EXECUTION удержанный итог доступен для публикации.
+        '400':
+          $ref: '#/components/responses/Invalid'
+components:
+  responses:
+    Acknowledged:
+      description: Операция сохранена в БД эмулятора.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Acknowledgement'
+    Invalid:
+      description: VALIDATION_FAILED. Входные данные не соответствуют контракту.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unavailable:
+      description: UNAVAILABLE. Исход ранее отправленной операции проверяется запросом фактического состояния.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    FaultConfiguration:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [UNAVAILABLE, DROP_RESPONSE_AFTER_EXECUTION, DUPLICATE_RESULT, DELAY_RESULT]
+    Cursor:
+      type: integer
+      format: int64
+      minimum: 0
+      maximum: 9007199254740991
+      description: Ноль означает чтение с начала. Позиции событий положительны.
+    OperationInput:
+      type: object
+      additionalProperties: false
+      required: [reference, quantity]
+      properties:
+        reference:
+          type: string
+          pattern: '^REQ-[0-9]{6}$'
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 1000
+    Acknowledgement:
+      type: object
+      additionalProperties: false
+      required: [operationId, request, acceptedAt]
+      description: ID и запрос из сохранённой операции эмулятора.
+      properties:
+        operationId:
+          type: string
+          format: uuid
+        request:
+          $ref: '#/components/schemas/OperationInput'
+        acceptedAt:
+          type: string
+          format: date-time
+    OperationState:
+      type: object
+      additionalProperties: false
+      required: [operationId, request, acceptedAt, executions, result]
+      description: ID и запрос вложенного результата совпадают с внешней записью. При нуле исполнений result равен null или показывает RUNNING. При одном исполнении результат завершённый.
+      properties:
+        operationId:
+          type: string
+          format: uuid
+        request:
+          $ref: '#/components/schemas/OperationInput'
+        acceptedAt:
+          type: string
+          format: date-time
+        executions:
+          type: integer
+          enum: [0, 1]
+          description: Число зафиксированных итогов выполнения.
+        result:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/Result'
+      allOf:
+        - if:
+            properties:
+              executions:
+                const: 0
+          then:
+            properties:
+              result:
+                anyOf:
+                  - type: 'null'
+                  - type: object
+                    properties:
+                      status:
+                        const: RUNNING
+          else:
+            properties:
+              result:
+                type: object
+                properties:
+                  status:
+                    enum: [SUCCEEDED, REJECTED]
+    ResultEvent:
+      type: object
+      additionalProperties: false
+      required: [cursor, result]
+      properties:
+        cursor:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+        result:
+          $ref: '#/components/schemas/Result'
+    Result:
+      type: object
+      additionalProperties: false
+      required: [operationId, request, version, status]
+      description: Снимок относится к сохранённым ID и запросу операции, включая промежуточное состояние RUNNING.
+      properties:
+        operationId:
+          type: string
+          format: uuid
+        request:
+          $ref: '#/components/schemas/OperationInput'
+        version:
+          type: integer
+          enum: [1, 2]
+        status:
+          type: string
+          enum: [RUNNING, SUCCEEDED, REJECTED]
+        rejectionCode:
+          type: string
+          const: QUANTITY_LIMIT_EXCEEDED
+        completedAt:
+          type: string
+          format: date-time
+          description: Момент фиксации итога исполнения в БД эмулятора в UTC.
+      allOf:
+        - if:
+            properties:
+              status:
+                const: RUNNING
+          then:
+            properties:
+              version:
+                const: 1
+            not:
+              required: [completedAt]
+          else:
+            properties:
+              version:
+                const: 2
+            required: [completedAt]
+        - if:
+            properties:
+              status:
+                const: REJECTED
+          then:
+            required: [rejectionCode]
+          else:
+            not:
+              required: [rejectionCode]
+    Problem:
+      type: object
+      required: [title, status, code]
+      properties:
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          enum: [VALIDATION_FAILED, OPERATION_NOT_FOUND, OPERATION_CONFLICT, UNAVAILABLE, FAULT_ALREADY_BOUND]
+        detail:
+          type: string

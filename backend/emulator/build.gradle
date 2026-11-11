@@ -1,0 +1,42 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot'
+}
+
+group = 'com.azhukov.integration'
+version = rootProject.version
+
+java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+repositories { mavenCentral() }
+
+dependencies {
+    implementation platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES)
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+sourceSets.main.java.srcDir(rootProject.tasks.named('generateExchangeApi').flatMap {
+    it.outputDir.dir('src/main/java')
+})
+
+tasks.named('test') { useJUnitPlatform { excludeTags 'postgres' } }
+tasks.named('bootJar') { archiveFileName = 'system-integration-emulator.jar' }
+
+tasks.register('integrationTest', Test) {
+    description = 'Emulator API and durability tests against si_emulator_test'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'postgres' }
+    maxHeapSize = '384m'
+    jvmArgs '-XX:ActiveProcessorCount=2'
+    doFirst {
+        if (!System.getenv('SI_EMULATOR_TEST_DB_PASSWORD')) throw new GradleException('SI_EMULATOR_TEST_DB_PASSWORD is required')
+    }
+}

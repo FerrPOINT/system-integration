@@ -1,0 +1,11 @@
+/.local/
+/backend/.gradle/
+/backend/build/
+/backend/emulator/build/
+/frontend/node_modules/
+/frontend/dist/
+/frontend/build/
+/tests/results/
+/tests/node_modules/
+.env
+.env.local
