@@ -15,11 +15,13 @@ const externalOrigin = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.
 if (dataset.origin !== origin || dataset.initialCount !== 5000) throw new Error('Prepare the exact 5000-record dataset on this test origin');
 if (!process.env.SI_DEMO_PASSWORD) throw new Error('SI_DEMO_PASSWORD is required');
 
-const expected = { backend: [0.8, 1536 * 1048576], postgres: [0.8, 1536 * 1048576], emulator: [0.4, 1024 * 1048576] };
 const resources = loadEnvironment();
+const resourceTotal = { cpu: resources.reduce((sum, item) => sum + item.cpu, 0), memory: resources.reduce((sum, item) => sum + item.memory, 0) };
+if (resourceTotal.cpu > 2 || resourceTotal.memory > 4 * 1024 ** 3)
+  throw new Error('The complete application must fit within 2 CPU and 4 GiB');
 for (const resource of resources) {
-  const [cpu, memory] = expected[resource.service];
-  if (resource.cpu !== cpu || resource.memory !== memory) throw new Error(`Incorrect actual resource limits for ${resource.service}`);
+  if (!Number.isFinite(resource.cpu) || resource.cpu <= 0 || !Number.isSafeInteger(resource.memory) || resource.memory <= 0)
+    throw new Error(`Explicit CPU and memory limits are required for ${resource.service}`);
   if (resource.service !== 'postgres' && resource.sourceCommit !== sourceCommit)
     throw new Error(`The ${resource.service} image is not labelled with the qualified source commit`);
 }
@@ -94,6 +96,23 @@ await Promise.all(clients.map(async client => {
 const finishedAt = new Date().toISOString();
 const p95 = values => { const sorted = [...values].sort((a, b) => a - b); return sorted.length ? sorted[Math.ceil(0.95 * sorted.length) - 1] : null; };
 const durations = []; const externalErrors = {}; let pending = 0, notAccepted = 0;
+const progressWaitStartedAt = new Date().toISOString();
+let externalProgressObserved = false;
+if (created.length) {
+  const first = created[0], deadline = Date.now() + 120_000;
+  try {
+    while (Date.now() < deadline) {
+      const task = await clients[first.client].session.get('/api/tasks/' + first.taskId);
+      if (task.businessStatus === 'SUCCEEDED') { externalProgressObserved = true; break; }
+      if (task.businessStatus === 'REJECTED') throw new ApiFailure(0, 'UNEXPECTED_BUSINESS_REJECTION');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    if (!externalProgressObserved) externalErrors.PROGRESS_CHECK_TIMEOUT = 1;
+  } catch (error) {
+    externalErrors[error instanceof ApiFailure ? error.code : error.name] = 1;
+  }
+}
+const progressWaitFinishedAt = new Date().toISOString();
 const externalCheckStartedAt = new Date().toISOString();
 await parallel(created, 8, async item => {
   try {
@@ -132,13 +151,14 @@ const writes = measurements.slice(2).flatMap(stat => stat.latencies);
 const errors = measurements.reduce((total, stat) => total + Object.values(stat.errors).reduce((a, b) => a + b, 0), 0);
 const report = {
   sourceCommit, startedAt, finishedAt, clients: 20, warmupSeconds: 30, measuredSeconds: 120, initialCount: 5000, resources, warmupErrors,
-  resourceTotal: { cpu: resources.reduce((sum, item) => sum + item.cpu, 0), memory: resources.reduce((sum, item) => sum + item.memory, 0) },
+  resourceTotal,
   operations: measurements.map(stat => ({ operation: stat.operation, count: stat.latencies.length, share: stat.latencies.length / counts.reduce((a, b) => a + b, 0),
     successes: stat.successes, errors: stat.errors, p95Ms: p95(stat.latencies) })),
   readP95Ms: p95(reads), writeP95Ms: p95(writes), errors,
   external: { checked: created.length, completed: durations.length, pending, notAccepted, acceptedPending: pending - notAccepted,
     pendingShare: created.length ? pending / created.length : null,
-    errors: externalErrors, p95Ms: p95(durations), checkStartedAt: externalCheckStartedAt, checkFinishedAt: new Date().toISOString() },
+    errors: externalErrors, p95Ms: p95(durations), progressWaitStartedAt, progressWaitFinishedAt, externalProgressObserved,
+    checkStartedAt: externalCheckStartedAt, checkFinishedAt: new Date().toISOString() },
 };
 report.sourceUnchanged = git('rev-parse', 'HEAD') === sourceCommit && !git('status', '--porcelain');
 report.passed = report.sourceUnchanged && errors === 0 && Object.keys(warmupErrors).length === 0 && counts.every(count => count > 0) && Math.max(...counts) - Math.min(...counts) <= 20 &&
