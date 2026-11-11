@@ -16,7 +16,8 @@ const databases = {
   emulator: 'PGPASSWORD="$SI_EMULATOR_DB_PASSWORD" psql -h 127.0.0.1 -U si_emulator -d si_emulator -X -Atq -v ON_ERROR_STOP=1',
 };
 const holders = new Set();
-const receipt = { startedAt: new Date().toISOString(), stages: [], passed: false };
+const receipt = { testSourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+  startedAt: new Date().toISOString(), runtime: [], stages: [], passed: false };
 
 function docker(args, options = {}) { return execFileSync('docker', args, { cwd: root, encoding: 'utf8', ...options }); }
 function composeRun(args) { return docker([...compose, ...args]); }
@@ -71,6 +72,7 @@ function mark(name, evidence) { receipt.stages.push({ name, at: new Date().toISO
 for (const service of ['backend', 'emulator']) {
   const id = composeRun(['ps', '-q', service]).trim(); assert.ok(id, service + ' must be running');
   const [container] = JSON.parse(docker(['inspect', id]));
+  receipt.runtime.push({ service, image: container.Image, sourceCommit: container.Config.Labels['org.opencontainers.image.revision'] });
   const env = Object.fromEntries(container.Config.Env.map(value => { const i = value.indexOf('='); return [value.slice(0, i), value.slice(i + 1)]; }));
   assert.equal(service === 'backend' ? env.SI_DB_URL : env.SI_EMULATOR_DB_URL,
     service === 'backend' ? 'jdbc:postgresql://postgres:5432/si_app' : 'jdbc:postgresql://postgres:5432/si_emulator');
@@ -148,15 +150,14 @@ try {
   mark('Emulator executes a durably accepted operation after restart', { taskId: pending.taskId, operationId: pending.operationId });
 
   const publishLatch = await hold('emulator', 'SELECT last_cursor FROM feed_position WHERE id = 1 FOR UPDATE;'); await publishLatch.ready;
-  // This mode commits execution in PUT, independently of the publisher waiting on the latch.
-  const unpublished = await create('REQ-830004', 'DROP_RESPONSE_AFTER_EXECUTION');
+  // Normal execution must continue while the independent publisher waits on the counter.
+  const unpublished = await create('REQ-830004');
   const executed = await waitFor('execution committed before publication', async () => {
     const response = await fetch(external + '/operations/' + unpublished.operationId, { signal: AbortSignal.timeout(5000) });
     if (response.status === 404) return false;
     assert.equal(response.status, 200); const state = await response.json(); return state.executions === 1 && state;
   });
   assert.equal(query('emulator', `SELECT count(*) FROM result_events WHERE operation_id = ${sqlQuote(unpublished.operationId)} AND cursor IS NULL;`), '2');
-  await fault('REQ-830004');
   composeRun(['kill', '-s', 'SIGKILL', 'emulator']); await publishLatch.release();
   composeRun(['up', '-d', '--no-build', '--no-deps', '--wait', 'emulator']); await completed(unpublished);
   assert.deepEqual(await inspect(unpublished.operationId), executed);

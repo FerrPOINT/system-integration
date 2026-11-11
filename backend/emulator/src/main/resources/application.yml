@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: system-integration-emulator
+  task:
+    scheduling:
+      pool:
+        size: 2
   datasource:
     url: ${SI_EMULATOR_DB_URL:jdbc:postgresql://127.0.0.1:19532/si_emulator}
     username: ${SI_EMULATOR_DB_USER:si_emulator}
