@@ -7,13 +7,18 @@
 
 ## Локальный запуск
 
-Понадобятся JDK 25 и Node.js 24 с Corepack. Gradle Wrapper закрепляет
+Для полного стенда нужен Docker Compose v2; для демокоманды и тестов —
+Node.js 24 с Corepack. При запуске Java вне контейнеров нужен JDK 25.
+Gradle Wrapper закрепляет
 Gradle 9.9.1, `frontend/package.json` — pnpm 12.19.0. CI использует
 Temurin 25.0.5 и Node.js 24.19.0. Backend собран на Spring Boot 4.1.2.
 
-Дополнительно нужен Docker Compose v2. В корне скопируйте `.env.example`
+В корне скопируйте `.env.example`
 в `.env` и задайте шесть разных локальных паролей. `SI_DEMO_PASSWORD`
 должен содержать не меньше 12 символов. Файл `.env` исключён из Git.
+
+Полный запуск в контейнерах описан в [сборке и проверках](#сборка-и-проверки).
+Команды ниже запускают приложения отдельно для разработки.
 
 ```sh
 docker compose up -d --wait postgres
@@ -103,14 +108,14 @@ docker compose --profile app up -d --wait
 Соберите backend из каталога `backend/`.
 
 ```sh
-sh ./gradlew --no-daemon --max-workers=2 check bootJar
+sh ./gradlew --no-daemon --max-workers=2 :test :bootJar :emulator:bootJar
 ```
 
 Транзакционные и API-тесты отдельно используют настоящий PostgreSQL `si_test`.
 После запуска Compose и загрузки `.env`, из `backend/`:
 
 ```sh
-sh ./gradlew --no-daemon --max-workers=2 integrationTest
+sh ./gradlew --no-daemon --max-workers=2 :integrationTest :emulator:integrationTest
 ```
 
 Команда требует `SI_TEST_DB_PASSWORD` и `SI_EMULATOR_TEST_DB_PASSWORD`,
@@ -177,6 +182,15 @@ Gradle перед компиляцией генерирует Spring MVC инт�
   по единому расписанию очереди. После ошибки протокола оператор сверяет
   состояние и решает возобновить либо прекратить отправку с причиной.
   [Правила доставки](docs/analysis.md#доставка-и-повтор)
+
+## Ограничения локального стенда
+
+Некорректная структура или курсор внешней ленты останавливают её чтение.
+После исправления источника перезапустите backend: он продолжит с сохранённой
+позиции. Ошибки отдельных результатов оформляются как проблемы и не блокируют
+другие операции. Служебные команды сбоев включены профилем `test-faults` и
+предназначены для локальной проверки; порты Compose доступны только с этого
+компьютера. Публичный домен и TLS конфигурация запуска не настраивает.
 
 ## Документация
 

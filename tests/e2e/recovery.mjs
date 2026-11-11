@@ -148,13 +148,15 @@ try {
   mark('Emulator executes a durably accepted operation after restart', { taskId: pending.taskId, operationId: pending.operationId });
 
   const publishLatch = await hold('emulator', 'SELECT last_cursor FROM feed_position WHERE id = 1 FOR UPDATE;'); await publishLatch.ready;
-  const unpublished = await create('REQ-830004');
+  // This mode commits execution in PUT, independently of the publisher waiting on the latch.
+  const unpublished = await create('REQ-830004', 'DROP_RESPONSE_AFTER_EXECUTION');
   const executed = await waitFor('execution committed before publication', async () => {
     const response = await fetch(external + '/operations/' + unpublished.operationId, { signal: AbortSignal.timeout(5000) });
     if (response.status === 404) return false;
     assert.equal(response.status, 200); const state = await response.json(); return state.executions === 1 && state;
   });
   assert.equal(query('emulator', `SELECT count(*) FROM result_events WHERE operation_id = ${sqlQuote(unpublished.operationId)} AND cursor IS NULL;`), '2');
+  await fault('REQ-830004');
   composeRun(['kill', '-s', 'SIGKILL', 'emulator']); await publishLatch.release();
   composeRun(['up', '-d', '--no-build', '--no-deps', '--wait', 'emulator']); await completed(unpublished);
   assert.deepEqual(await inspect(unpublished.operationId), executed);
@@ -169,6 +171,14 @@ try {
   });
   assert.deepEqual(await Promise.all(probes.map(task => inspect(task.operationId))), states);
   assert.deepEqual(queryJson('app', 'SELECT json_build_object(\'cursor\',last_cursor) FROM incoming_position WHERE id = 1;'), cursors);
+  // Replayed delivery after both process and database restarts must still return the same operation.
+  const original = states[0];
+  const replays = await Promise.all([1, 2].map(() => fetch(external + '/operations/' + original.operationId, {
+    method: 'PUT', signal: AbortSignal.timeout(10_000), headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(original.request),
+  })));
+  for (const response of replays) assert.equal(response.status, 200);
+  assert.deepEqual(await inspect(original.operationId), original);
   mark('PostgreSQL restart preserves results and feed position', { operations: states.map(state => ({ operationId: state.operationId, executions: state.executions, completedAt: state.result.completedAt })) });
   receipt.passed = true;
 } catch (error) {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 const backend = process.env.SI_BACKEND_URL ?? 'http://127.0.0.1:19580';
-const frontend = process.env.SI_FRONTEND_URL ?? 'http://127.0.0.1:4173';
+const frontend = process.env.SI_FRONTEND_URL ?? 'http://127.0.0.1:19573';
 
 test('backend is healthy', async () => {
   const response = await fetch(new URL('/actuator/health', backend), {

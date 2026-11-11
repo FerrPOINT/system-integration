@@ -48,6 +48,28 @@ test('TC-08: logout clears owner data and another initiator cannot open a foreig
   await expect(page.getByRole('button', { name: 'Изменить название' })).toHaveCount(0);
 });
 
+test('TC-01 / TC-09: business rejection, visible loading and recovery to the filtered registry', async ({ page }) => {
+  await login(page);
+  await page.getByRole('link', { name: 'Создать задание' }).click();
+  const name = 'E2E отказ ' + crypto.randomUUID();
+  await page.getByLabel('Название', { exact: true }).fill(name);
+  await page.getByLabel('Номер заявки').fill('REQ-800004');
+  await page.getByLabel('Количество', { exact: true }).fill('150');
+  await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+  await expect(page.getByText('Отклонено', { exact: true })).toBeVisible();
+  await expect(page.getByText('Количество превышает 100 единиц', { exact: true })).toBeVisible();
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/tasks?*', async route => { await held; await route.continue(); });
+  try {
+    await page.goto('/tasks?businessStatus=REJECTED');
+    await expect(page.getByRole('status')).toContainText('Загрузка');
+  } finally { release(); }
+  await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('TC-09 / TC-12: empty filter, server error recovery and UTC rendering', async ({ page }) => {
   await login(page);
   const csrf = await (await page.request.get('/api/csrf')).json();

@@ -93,17 +93,27 @@ await Promise.all(clients.map(async client => {
 
 const finishedAt = new Date().toISOString();
 const p95 = values => { const sorted = [...values].sort((a, b) => a - b); return sorted.length ? sorted[Math.ceil(0.95 * sorted.length) - 1] : null; };
-const durations = []; const externalErrors = {}; let pending = 0;
+const durations = []; const externalErrors = {}; let pending = 0, notAccepted = 0;
 const externalCheckStartedAt = new Date().toISOString();
 await parallel(created, 8, async item => {
   try {
     const task = await clients[item.client].session.get('/api/tasks/' + item.taskId);
     const response = await fetch(externalOrigin + '/operations/' + task.operationId, { signal: AbortSignal.timeout(10_000) });
+    if (response.status === 404) {
+      const problem = await response.json();
+      if (problem.status !== 404 || problem.code !== 'OPERATION_NOT_FOUND' || typeof problem.title !== 'string' ||
+          task.deliveryStatus === 'ACKNOWLEDGED' || task.businessStatus !== 'PENDING')
+        throw new ApiFailure(404, 'EXTERNAL_STATE_CONTRADICTS_LOCAL');
+      pending++; notAccepted++; return;
+    }
     if (!response.ok) throw new ApiFailure(response.status, 'EXTERNAL_STATE_READ_FAILED');
     const state = await response.json();
     if (state.operationId !== task.operationId || state.request?.reference !== task.request.reference || state.request?.quantity !== task.request.quantity || state.executions > 1)
       throw new ApiFailure(0, 'EXTERNAL_IDENTITY_OR_EXECUTION_CONFLICT');
-    if (state.executions === 0) { pending++; return; }
+    if (state.executions === 0) {
+      if (state.result !== null) throw new ApiFailure(0, 'RESULT_WITHOUT_EXECUTION');
+      pending++; return;
+    }
     if (state.executions !== 1 || state.result?.status !== 'SUCCEEDED' || !state.result.completedAt)
       throw new ApiFailure(0, 'INVALID_EXTERNAL_RESULT');
     if (state.result.operationId !== task.operationId || state.result.request?.reference !== task.request.reference || state.result.request?.quantity !== task.request.quantity)
@@ -126,7 +136,8 @@ const report = {
   operations: measurements.map(stat => ({ operation: stat.operation, count: stat.latencies.length, share: stat.latencies.length / counts.reduce((a, b) => a + b, 0),
     successes: stat.successes, errors: stat.errors, p95Ms: p95(stat.latencies) })),
   readP95Ms: p95(reads), writeP95Ms: p95(writes), errors,
-  external: { checked: created.length, completed: durations.length, pending, pendingShare: created.length ? pending / created.length : null,
+  external: { checked: created.length, completed: durations.length, pending, notAccepted, acceptedPending: pending - notAccepted,
+    pendingShare: created.length ? pending / created.length : null,
     errors: externalErrors, p95Ms: p95(durations), checkStartedAt: externalCheckStartedAt, checkFinishedAt: new Date().toISOString() },
 };
 report.sourceUnchanged = git('rev-parse', 'HEAD') === sourceCommit && !git('status', '--porcelain');
