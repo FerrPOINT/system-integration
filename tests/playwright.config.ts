@@ -10,7 +10,8 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   use: {
     baseURL: process.env.SI_FRONTEND_URL || 'http://127.0.0.1:19573',
-    trace: 'retain-on-failure',
+    // Browser traces capture login passwords and session headers.
+    trace: 'off',
     screenshot: 'only-on-failure',
     timezoneId: 'Asia/Novosibirsk',
   },

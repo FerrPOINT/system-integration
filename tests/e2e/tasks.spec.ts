@@ -50,6 +50,13 @@ test('TC-08: logout clears owner data and another initiator cannot open a foreig
 
 test('TC-09 / TC-12: empty filter, server error recovery and UTC rendering', async ({ page }) => {
   await login(page);
+  const csrf = await (await page.request.get('/api/csrf')).json();
+  const created = await page.request.post('/api/tasks', {
+    headers: { 'X-CSRF-TOKEN': csrf.token, 'Idempotency-Key': crypto.randomUUID() },
+    data: { title: 'E2E UTC ' + crypto.randomUUID(), request: { reference: 'REQ-800003', quantity: 25 } },
+  });
+  expect(created.status()).toBe(201);
+  const { taskId } = await created.json();
   await page.goto('/tasks?createdFrom=2000-01-01T00%3A00%3A00Z&createdTo=2000-01-02T00%3A00%3A00Z');
   await expect(page.getByRole('heading', { name: 'Заданий пока нет' })).toBeVisible();
   await page.route('**/api/tasks?*', route => route.fulfill({ status: 503, contentType: 'application/problem+json',
@@ -61,4 +68,25 @@ test('TC-09 / TC-12: empty filter, server error recovery and UTC rendering', asy
   await expect(page.getByRole('heading', { name: 'Заданий пока нет' })).toBeVisible();
   await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Создать задание' })).toBeVisible();
+  await page.goto('/tasks/' + taskId);
+  const task = await (await page.request.get('/api/tasks/' + taskId)).json();
+  const time = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' }).format(new Date(task.createdAt)) + ' UTC';
+  await expect(page.getByText(time, { exact: true }).first()).toBeVisible();
+  const otherZone = await page.context().browser()!.newContext({ baseURL: new URL(page.url()).origin, timezoneId: 'America/Los_Angeles' });
+  try {
+    const other = await otherZone.newPage();
+    await login(other);
+    await other.goto('/tasks/' + taskId);
+    await expect(other.getByText(time, { exact: true }).first()).toBeVisible();
+  } finally { await otherZone.close(); }
+});
+
+test('TC-08 / TC-09: expired server session clears protected screens and allows another login', async ({ page }) => {
+  await login(page);
+  const token = await (await page.request.get('/api/csrf')).json();
+  expect((await page.request.post('/api/logout', { headers: { 'X-CSRF-TOKEN': token.token } })).status()).toBe(204);
+  await page.getByRole('button', { name: 'Обновить', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toHaveCount(0);
+  await login(page, 'initiator.two');
 });

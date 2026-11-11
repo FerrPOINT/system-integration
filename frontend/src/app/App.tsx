@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, NavLink, Route, Routes } from 'react-router-dom';
-import { csrf, data, keys } from './api';
+import { clearSession, csrf, data, keys } from './api';
 import { getSession, logIn, logOut } from '../../build/generated/openapi/client';
 import type { GetSession200 } from '../../build/generated/openapi/client';
 import { ErrorMessage, Loading } from '../ui/Feedback';
@@ -48,10 +48,9 @@ function Login() {
 }
 
 function Shell({ user }: { user: GetSession200 }) {
-  const client = useQueryClient();
   const logout = useMutation({
     mutationFn: async () => { await data(logOut(await csrf())); await csrf(); },
-    onSuccess: () => { client.clear(); client.setQueryData(keys.session, null); },
+    onSuccess: clearSession,
   });
   return <>
     <a className="skip-link" href="#main">К содержимому</a>

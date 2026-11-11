@@ -44,6 +44,17 @@ class EmulatorWorkflowTest {
     }
 
     @Test
+    void invalidQuantityTypesCannotBecomeAnAcceptedOperation() throws Exception {
+        for (String quantity : java.util.List.of("25.5", "\"25\"", "null", "0", "1001")) {
+            var response = mvc.perform(put("/operations/" + UUID.randomUUID()).contentType("application/json")
+                .content("{\"reference\":\"REQ-000001\",\"quantity\":" + quantity + "}")).andReturn();
+            assertEquals(400, response.getResponse().getStatus());
+        }
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM operations", Integer.class));
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM result_events", Integer.class));
+    }
+
+    @Test
     void httpAcceptReplayConflictAndIndependentState() throws Exception {
         var id = UUID.randomUUID();
         var body = "{\"reference\":\"REQ-000001\",\"quantity\":25}";

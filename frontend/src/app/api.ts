@@ -39,11 +39,16 @@ export const keys = {
   reconciliation: (task: string, id: string) => ['reconciliations', task, id] as const,
 };
 
+export async function clearSession() {
+  await queryClient.cancelQueries();
+  // Keep the observed session query: removing it would detach App from future updates.
+  queryClient.removeQueries({ predicate: query => query.queryKey[0] !== keys.session[0] });
+  queryClient.getMutationCache().clear();
+  queryClient.setQueryData(keys.session, null);
+}
+
 function expireSession(error: Error) {
-  if (error instanceof ApiError && error.status === 401) {
-    queryClient.clear();
-    queryClient.setQueryData(keys.session, null);
-  }
+  if (error instanceof ApiError && error.status === 401) void clearSession();
 }
 
 export const queryClient = new QueryClient({

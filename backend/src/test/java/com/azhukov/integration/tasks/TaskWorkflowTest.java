@@ -163,7 +163,8 @@ class TaskWorkflowTest extends PostgresTest {
     @Test
     void invalidFieldsAndUnknownPropertiesDoNotCreatePartialState() throws Exception {
         var owner = login("initiator.one");
-        for (String invalid : List.of(CREATE.replace("25", "0"), CREATE.replace("REQ-000001", "other"),
+        for (String invalid : List.of(CREATE.replace("25", "0"), CREATE.replace("25", "25.5"),
+            CREATE.replace("25", "\"25\""), CREATE.replace("REQ-000001", "other"),
             CREATE.replace("Проверка заявки", "  "), CREATE.replace("\"title\":", "\"ownerId\":\"" + second + "\",\"title\":"))) {
             status(400, create(owner, UUID.randomUUID(), invalid));
         }

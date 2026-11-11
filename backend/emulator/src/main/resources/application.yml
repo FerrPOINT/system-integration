@@ -11,7 +11,10 @@ spring:
     hikari:
       maximum-pool-size: 4
   jackson:
+    mapper:
+      allow-coercion-of-scalars: false
     deserialization:
+      accept-float-as-int: false
       fail-on-unknown-properties: true
 management:
   endpoints:
