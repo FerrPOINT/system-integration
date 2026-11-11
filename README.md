@@ -30,11 +30,13 @@ PostgreSQL 18.6 хранит данные в томе `system-integration_postgr
 В PowerShell из корня репозитория:
 
 ```powershell
-Get-Content .env | ForEach-Object {
-    if ($_ -match '^(SI_[A-Z_]+)=(.+)$') {
-        [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
-    }
+$settings = docker compose --profile app config --format json | ConvertFrom-Json
+foreach ($name in 'SI_DB_PASSWORD', 'SI_EMULATOR_DB_PASSWORD',
+    'SI_TEST_DB_PASSWORD', 'SI_EMULATOR_TEST_DB_PASSWORD') {
+    [Environment]::SetEnvironmentVariable($name,
+        [string]$settings.services.postgres.environment.$name, 'Process')
 }
+$env:SI_DEMO_PASSWORD = [string]$settings.services.backend.environment.SI_DEMO_PASSWORD
 ```
 
 В POSIX shell выполните `set -a`, затем `. ./.env` и `set +a`.
