@@ -31,7 +31,10 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
   await expect(page).not.toHaveURL(/businessStatus=/);
   const from = page.getByLabel('Создано с (UTC, включительно)', { exact: true });
   const to = page.getByLabel('Создано до (UTC, не включая)', { exact: true });
+  const dated = page.waitForResponse(response => new URL(response.url()).pathname === '/api/tasks' &&
+    new URL(response.url()).searchParams.has('createdFrom') && response.status() === 200);
   await from.fill('2026-11-01T00:00');
+  await dated;
   await expect(page).toHaveURL(/createdFrom=/);
   await expect(from).toBeFocused();
   await to.fill('2026-10-01T00:00');

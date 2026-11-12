@@ -143,10 +143,14 @@ export function useChoiceTab(
   const tabbing = useRef(false);
   return {
     onCloseAutoFocus: (event: Event) => {
-      if (tabbing.current) {
-        event.preventDefault();
-        tabbing.current = false;
-      }
+      // A delayed popup close must not steal focus from the next field.
+      const owner = trigger?.ownerDocument;
+      const active = owner?.activeElement;
+      const closingScope = event.currentTarget;
+      const movedOutside = active && active !== owner?.body && active !== trigger &&
+        closingScope instanceof Node && !closingScope.contains(active);
+      if (tabbing.current || movedOutside) event.preventDefault();
+      tabbing.current = false;
     },
     onKeyDown: (event: KeyboardEvent) => {
       if (event.key !== "Tab") return;
