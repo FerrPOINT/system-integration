@@ -162,8 +162,20 @@ public class ExchangeIssues {
 
     public SavedReconciliation reconciliation(UUID task,UUID id) {
         return jdbc.query("SELECT snapshot::text,exchange_version FROM reconciliations WHERE id = ? AND task_id = ?",
-            (rs,n) -> new SavedReconciliation(json.readValue(rs.getString(1),Reconciliation.class),rs.getLong(2)),id,task)
+            this::mapReconciliation,id,task)
             .stream().findFirst().orElseThrow(ApiProblem::notFound);
+    }
+
+    private SavedReconciliation mapReconciliation(java.sql.ResultSet rs,int n) throws java.sql.SQLException {
+        return new SavedReconciliation(json.readValue(rs.getString(1),Reconciliation.class),rs.getLong(2));
+    }
+
+    public Map<UUID,SavedReconciliation> reconciliations(List<UUID> ids) {
+        if (ids.isEmpty()) return Map.of();
+        var placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+        return jdbc.query("SELECT snapshot::text,exchange_version FROM reconciliations WHERE id IN (" + placeholders + ")",
+            this::mapReconciliation,ids.toArray()).stream()
+            .collect(java.util.stream.Collectors.toMap(row -> row.value().getReconciliationId(),row -> row));
     }
 
     public void resumeProtocol(UUID id) {

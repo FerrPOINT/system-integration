@@ -10,6 +10,8 @@ const appSql = [
   "'pending',(SELECT count(*) FROM tasks WHERE business_status NOT IN ('SUCCEEDED','REJECTED')),",
   "'oldestPendingSeconds',coalesce((SELECT extract(epoch FROM clock_timestamp()-min(created_at)) FROM tasks WHERE business_status NOT IN ('SUCCEEDED','REJECTED')),0),",
   "'queued',(SELECT count(*) FROM delivery_queue),",
+  "'oldestQueuedSeconds',coalesce((SELECT extract(epoch FROM clock_timestamp()-min(t.created_at)) FROM delivery_queue q JOIN tasks t ON t.operation_id=q.operation_id),0),",
+  "'lastCursor',(SELECT last_cursor FROM incoming_position WHERE id=1),",
   "'activeClaims',(SELECT count(*) FROM delivery_queue WHERE claimed_until > statement_timestamp()),",
   "'waits',(SELECT coalesce(json_agg(w),'[]'::json) FROM (SELECT datname,wait_event_type,count(*) FROM pg_stat_activity WHERE datname IN ('si_test','si_emulator_test') AND pid<>pg_backend_pid() AND state='active' GROUP BY datname,wait_event_type) w),",
   "'database',(SELECT json_agg(d) FROM (SELECT datname,xact_commit,xact_rollback,blks_hit,blks_read,deadlocks,temp_bytes FROM pg_stat_database WHERE datname IN ('si_test','si_emulator_test')) d),",
@@ -19,6 +21,9 @@ const emulatorSql = [
   "SELECT json_build_object(",
   "'accepted',(SELECT count(*) FROM operations),",
   "'executed',(SELECT count(*) FROM operations WHERE executions=1),",
+  "'awaitingExecution',(SELECT count(*) FROM operations WHERE executions=0),",
+  "'oldestUnexecutedSeconds',coalesce((SELECT extract(epoch FROM clock_timestamp()-min(accepted_at)) FROM operations WHERE executions=0),0),",
+  "'lastCursor',(SELECT last_cursor FROM feed_position WHERE id=1),",
   "'duplicateExecutions',(SELECT count(*) FROM operations WHERE executions>1),",
   "'unpublished',(SELECT count(*) FROM result_events WHERE cursor IS NULL));",
 ].join('\n');
@@ -64,4 +69,34 @@ export async function observeLoad(resources) {
     await pending;
     try { await collect(); } catch (error) { errors.push(error.code || error.name); }
   } };
+}
+
+
+// Detailed aggregation runs after measurement, so it does not add work to the timed profile.
+export async function pipelineSummary(resources, since) {
+  if (new Date(since).toISOString() !== since) throw new Error('Expected an ISO measurement start');
+  const postgres = resources.find(item => item.service === 'postgres').containerId;
+  const [app, emulator] = await Promise.all([
+    sql(postgres, 'si_test', `
+      SELECT json_build_object(
+        'firstAttemptDelayP95Ms',(SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM a.started_at-t.created_at)*1000)
+          FROM tasks t JOIN delivery_attempts a ON a.operation_id=t.operation_id AND a.number=1
+          WHERE t.created_at >= '${since}'::timestamptz),
+        'attemptDurationP95Ms',(SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM finished_at-started_at)*1000)
+          FROM delivery_attempts WHERE started_at >= '${since}'::timestamptz AND finished_at IS NOT NULL),
+        'resultApplyDelayP95Ms',(SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM h.occurred_at-(t.accepted_result->>'completedAt')::timestamptz)*1000)
+          FROM tasks t JOIN task_history h ON h.task_id=t.id AND h.event_type='RESULT_APPLIED' AND h.details->>'resultVersion'='2'
+          WHERE t.created_at >= '${since}'::timestamptz),
+        'attemptsByOutcome',(SELECT coalesce(json_object_agg(outcome,n),'{}'::json) FROM
+          (SELECT coalesce(outcome,'IN_FLIGHT') outcome,count(*) n FROM delivery_attempts
+           WHERE started_at >= '${since}'::timestamptz GROUP BY outcome) counts));
+    `),
+    sql(postgres, 'si_emulator_test', `
+      SELECT json_build_object(
+        'accepted',count(*),'executed',count(*) FILTER (WHERE executions=1),
+        'executionDelayP95Ms',percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM completed_at-accepted_at)*1000)
+      ) FROM operations WHERE accepted_at >= '${since}'::timestamptz;
+    `),
+  ]);
+  return { since, measuredAt: new Date().toISOString(), app, emulator };
 }

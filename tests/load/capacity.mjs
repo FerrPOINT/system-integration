@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { ApiSession, ApiFailure, localOrigin, parallel } from '../support/http.mjs';
 import { qualifiedLoadEnvironment } from './environment.mjs';
-import { loadSnapshot, observeLoad } from './metrics.mjs';
+import { loadSnapshot, observeLoad, pipelineSummary } from './metrics.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
@@ -182,7 +182,7 @@ async function stage(mode, count) {
     operations: operations.map(item => ({ ...item, count: item.latencies.length, p95Ms: p95(item.latencies), latencies: undefined })),
     warmupErrors, observation: { samples: observation.samples, errors: observation.errors },
     drain: { startedAt: drainStartedAt, finishedAt: new Date().toISOString(), drained, samples: drain },
-    external, stoppedFor: reason || null, passed: !reason };
+    external, pipeline: await pipelineSummary(resources, startedAt), stoppedFor: reason || null, passed: !reason };
   console.log(mode + ' ' + count + ' clients: ' + (result.passed ? 'PASS' : reason) + ', read p95=' + result.readP95Ms + ', pending=' + after.app.pending);
   return result;
 }

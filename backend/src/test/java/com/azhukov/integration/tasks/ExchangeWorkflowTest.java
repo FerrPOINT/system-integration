@@ -59,6 +59,39 @@ class ExchangeWorkflowTest extends PostgresTest {
     }
 
     @Test
+    void prolongedOutageKeepsDurableBackoffAndRecoversWithoutAnOperator() throws Exception {
+        UUID id=created(login("initiator.one"),UUID.randomUUID());
+        UUID operation=jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id = ?",UUID.class,id);
+        for (int n=1;n<=8;n++) {
+            dueNow();
+            var attempt=exchange.claim();
+            assertNotNull(attempt);
+            assertEquals(n,attempt.number());
+            assertEquals(operation,attempt.operationId());
+            assertEquals(n==1 ? "PUT" : "GET",attempt.step());
+            exchange.finish(attempt,new ExchangeReply(503,null,false));
+            int delay=ExchangeTasks.delay(n);
+            double remaining=jdbc.queryForObject(
+                "SELECT extract(epoch FROM due_at-clock_timestamp()) FROM delivery_queue WHERE operation_id = ?",
+                Double.class,operation);
+            assertTrue(remaining>delay-1 && remaining<=delay,"The next attempt must use durable backoff");
+            assertNull(exchange.claim(),"A temporary failure must not cause an immediate retry");
+        }
+        assertEquals(1,count("exchange_issues"));
+        assertEquals("DELIVERY_DELAYED",jdbc.queryForObject("SELECT kind FROM exchange_issues",String.class));
+        dueNow();
+        var check=exchange.claim();
+        var state=ack(check).put("executions",0).putNull("result");
+        exchange.finish(check,new ExchangeReply(200,state,false));
+        assertEquals("ACKNOWLEDGED",delivery(id));
+        assertEquals(0,count("delivery_queue"));
+        assertEquals("RESOLVED",jdbc.queryForObject("SELECT status FROM exchange_issues",String.class));
+        exchange.consume(0,page(1,result(check,2,"SUCCEEDED")));
+        assertEquals("SUCCEEDED",business(id));
+        assertEquals(9,count("delivery_attempts"));
+    }
+
+    @Test
     void expiredLeaseIsCountedAndCannotApplyALateResponse() throws Exception {
         UUID id = created(login("initiator.one"),UUID.randomUUID());
         var old = exchange.claim();
@@ -199,7 +232,7 @@ class ExchangeWorkflowTest extends PostgresTest {
         if (status.equals("REJECTED")) result.put("rejectionCode","QUANTITY_LIMIT_EXCEEDED");
         return result;
     }
-    private tools.jackson.databind.JsonNode ack(ExchangeTasks.Claim claim) {
+    private tools.jackson.databind.node.ObjectNode ack(ExchangeTasks.Claim claim) {
         return json.createObjectNode().put("operationId",claim.operationId().toString())
             .set("request",json.valueToTree(claim.request())).put("acceptedAt","2026-11-12T00:00:00Z");
     }

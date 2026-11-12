@@ -54,7 +54,19 @@ public class OperationsTransactions {
         var rows=issues.list(page,status);
         long total=issues.count(status);
         long pages=(total+19)/20;
-        return new IssuePage(rows.stream().map(row -> view(context(row,user,false),user)).toList(),page,(long)page+1<pages,total,pages);
+        var states=tasks.exchangeByTask(rows.stream().map(row -> row.value().getTaskId()).filter(Objects::nonNull).distinct().toList());
+        var snapshots=issues.reconciliations(rows.stream().map(row -> row.value().getLatestReconciliationId()).filter(Objects::nonNull).distinct().toList());
+        var items=rows.stream().map(row -> {
+            var taskId=row.value().getTaskId();
+            var state=taskId==null ? null : states.get(taskId);
+            var snapshotId=row.value().getLatestReconciliationId();
+            var snapshot=snapshotId==null ? null : snapshots.get(snapshotId);
+            if ((taskId!=null && state==null) || (snapshotId!=null && snapshot==null) ||
+                (snapshot!=null && !snapshot.value().getTaskId().equals(taskId)))
+                throw ApiProblem.notFound();
+            return view(new Context(row,state,snapshot),user);
+        }).toList();
+        return new IssuePage(items,page,(long)page+1<pages,total,pages);
     }
 
     @Transactional(readOnly=true)

@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -24,6 +26,7 @@ class OperationsWorkflowTest extends PostgresTest {
     @MockitoBean ExchangeClient client;
     @Autowired ExchangeTasks exchange;
     @Autowired PlatformTransactionManager transactions;
+    @MockitoSpyBean JdbcTemplate observedSql;
 
     @Test
     void countedIssuePagesRespectTheStatusFilter() throws Exception {
@@ -39,6 +42,52 @@ class OperationsWorkflowTest extends PostgresTest {
         var beyond=mvc.perform(get("/api/exchange/issues").param("status","OPEN").param("page","999").session(op.session())).andReturn();
         assertEquals(0,body(beyond).get("items").size());
         assertEquals(1,body(beyond).get("totalItems").asLong());
+    }
+
+    @Test
+    void issuePageUsesBoundedSqlAndKeepsTheSameActionsAsEachCard() throws Exception {
+        var scenario=difference();
+        var op=scenario.op();
+        clearInvocations(observedSql);
+        var one=mvc.perform(get("/api/exchange/issues").session(op.session())).andReturn();
+        status(200,one);
+        long oneRowReads=selectCalls();
+
+        var initiator=login("initiator.two");
+        for (int n=0;n<18;n++) {
+            created(initiator,UUID.randomUUID());
+            var claim=exchange.claim();
+            assertNotNull(claim);
+            exchange.finish(claim,new ExchangeReply(400,null,false));
+        }
+        jdbc.update("""
+            INSERT INTO exchange_issues(id,scope,fingerprint,kind,summary,evidence)
+            VALUES (?,'feed','list-test','RESULT_CONFLICT','Проблема ленты','{}')
+            """,UUID.randomUUID());
+        clearInvocations(observedSql);
+        var page=mvc.perform(get("/api/exchange/issues").session(op.session())).andReturn();
+        status(200,page);
+        long twentyRowReads=selectCalls();
+        assertEquals(oneRowReads,twentyRowReads,"SQL count must not grow with the page size");
+        assertTrue(twentyRowReads<=10,"A page needs only issue/count/task/reconciliation reads");
+        assertEquals(20,body(page).get("items").size());
+        for (var row:body(page).get("items")) {
+            var card=issue(op,UUID.fromString(row.get("issueId").asString()));
+            status(200,card);
+            assertEquals(body(card),row,"List and card must expose the same evidence and actions");
+        }
+        var empty=mvc.perform(get("/api/exchange/issues").param("page","1").session(op.session())).andReturn();
+        status(200,empty);
+        assertTrue(body(empty).get("items").isEmpty());
+        assertEquals(20,body(empty).get("totalItems").asLong());
+        status(403,mvc.perform(get("/api/exchange/issues").session(initiator.session())).andReturn());
+    }
+
+    private long selectCalls() {
+        return mockingDetails(observedSql).getInvocations().stream()
+            .filter(call -> call.getMethod().getName().equals("query") && call.getArguments().length>0 &&
+                call.getArguments()[0] instanceof String sql && sql.stripLeading().startsWith("SELECT"))
+            .count();
     }
 
     @Test

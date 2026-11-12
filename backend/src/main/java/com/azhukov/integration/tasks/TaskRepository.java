@@ -17,6 +17,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Repository
@@ -61,10 +62,21 @@ public class TaskRepository {
 
     public ExchangeTask exchange(UUID operationId, boolean lock) {
         return jdbc.query("SELECT * FROM tasks WHERE operation_id = ?" + (lock ? " FOR UPDATE" : ""),
-            (rs,n) -> new ExchangeTask(taskRow.mapRow(rs,n), rs.getLong("exchange_version"),
-                rs.getString("accepted_result") == null ? null : json.readValue(rs.getString("accepted_result"),
-                    com.azhukov.integration.contract.external.model.Result.class)), operationId)
+            this::mapExchange, operationId)
             .stream().findFirst().orElseThrow(ApiProblem::notFound);
+    }
+
+    private ExchangeTask mapExchange(java.sql.ResultSet rs, int n) throws java.sql.SQLException {
+        return new ExchangeTask(taskRow.mapRow(rs,n), rs.getLong("exchange_version"),
+            rs.getString("accepted_result") == null ? null : json.readValue(rs.getString("accepted_result"),
+                com.azhukov.integration.contract.external.model.Result.class));
+    }
+
+    public Map<UUID,ExchangeTask> exchangeByTask(List<UUID> ids) {
+        if (ids.isEmpty()) return Map.of();
+        var placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+        return jdbc.query("SELECT * FROM tasks WHERE id IN (" + placeholders + ")", this::mapExchange, ids.toArray())
+            .stream().collect(java.util.stream.Collectors.toMap(row -> row.task().getTaskId(), row -> row));
     }
 
     public List<Task> list(AppUser user, int page, BusinessStatus status,
