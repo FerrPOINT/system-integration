@@ -105,3 +105,29 @@ test('UI-11: changing account outside the SPA clears the previous private card',
   await expect(page.getByRole('heading', { name: title, exact: true })).toHaveCount(0);
   await expect(page.getByRole('alert')).toBeVisible();
 });
+
+
+test('UI-12: storage unavailability keeps the form, session and command key for a safe retry', async ({ page }) => {
+  await login(page);
+  const before = await (await page.request.get('/api/tasks')).json();
+  const keys: string[] = [];
+  await page.route('**/api/tasks', async route => {
+    if (route.request().method() !== 'POST') { await route.continue(); return; }
+    keys.push(route.request().headers()['idempotency-key']);
+    if (keys.length === 1) await route.fulfill({ status: 503, contentType: 'application/problem+json',
+      body: JSON.stringify({ title: 'SERVICE_UNAVAILABLE', status: 503, code: 'SERVICE_UNAVAILABLE' }) });
+    else await route.continue();
+  });
+  await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
+  const title = 'E2E storage retry ' + crypto.randomUUID();
+  await page.getByLabel('Название *', { exact: true }).fill(title);
+  await page.getByLabel('Номер заявки').fill('REQ-880003');
+  await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Сервис временно недоступен. Повторите запрос позже');
+  await expect(page.getByLabel('Название *', { exact: true })).toHaveValue(title);
+  await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  expect(keys).toHaveLength(2);
+  expect(keys[0]).toBe(keys[1]);
+  expect((await (await page.request.get('/api/tasks')).json()).totalItems).toBe(before.totalItems + 1);
+});

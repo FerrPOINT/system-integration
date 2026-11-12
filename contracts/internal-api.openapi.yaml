@@ -132,6 +132,8 @@ paths:
             type: string
             format: date-time
       responses:
+        '503':
+          $ref: '#/components/responses/Unavailable'
         '200':
           description: Доступная страница из 20 записей или меньше.
           content:
@@ -189,6 +191,8 @@ paths:
                 request:
                   $ref: '#/components/schemas/Request'
       responses:
+        '503':
+          $ref: '#/components/responses/Unavailable'
         '201':
           description: Первичное создание или повтор исходного результата команды.
           content:
@@ -222,6 +226,8 @@ paths:
       tags: [Tasks]
       summary: Прочитать карточку задания
       responses:
+        '503':
+          $ref: '#/components/responses/Unavailable'
         '200':
           description: Доступное задание.
           content:
@@ -256,6 +262,8 @@ paths:
                 expectedTitleRevision:
                   $ref: '#/components/schemas/TitleRevision'
       responses:
+        '503':
+          $ref: '#/components/responses/Unavailable'
         '200':
           description: Зафиксированное название и его версия. Повтор команды возвращает тот же результат.
           content:
@@ -290,6 +298,8 @@ paths:
       parameters:
         - $ref: '#/components/parameters/Page'
       responses:
+        '503':
+          $ref: '#/components/responses/Unavailable'
         '200':
           description: Страница истории.
           content:
@@ -316,6 +326,8 @@ paths:
         - $ref: '#/components/parameters/Csrf'
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
+        '503':
+          $ref: '#/components/responses/Unavailable'
         '200':
           description: Сохранённая сверка.
           content:
@@ -347,6 +359,8 @@ paths:
       summary: Прочитать сохранённую сверку
       description: Только оператор. Проверяет принадлежность сверки заданию и возвращает исходные снимки.
       responses:
+        '503':
+          $ref: '#/components/responses/Unavailable'
         '200':
           description: Сохранённая сверка.
           content:
@@ -374,6 +388,8 @@ paths:
           schema:
             $ref: '#/components/schemas/IssueStatus'
       responses:
+        '503':
+          $ref: '#/components/responses/Unavailable'
         '200':
           description: Страница проблем.
           content:
@@ -395,6 +411,8 @@ paths:
       summary: Прочитать проблему обмена
       description: Только оператор. Доступные действия рассчитаны для текущей версии проблемы.
       responses:
+        '503':
+          $ref: '#/components/responses/Unavailable'
         '200':
           description: Проблема и последний известный исход.
           content:
@@ -427,6 +445,8 @@ paths:
             schema:
               $ref: '#/components/schemas/TakeIssueRequest'
       responses:
+        '503':
+          $ref: '#/components/responses/Unavailable'
         '200':
           description: Проблема после назначения.
           content:
@@ -468,6 +488,8 @@ paths:
             schema:
               $ref: '#/components/schemas/RetryRequest'
       responses:
+        '503':
+          $ref: '#/components/responses/Unavailable'
         '202':
           description: Шаг назначен в существующей очереди. Исход виден по доставке задания и истории.
           content:
@@ -506,6 +528,8 @@ paths:
             schema:
               $ref: '#/components/schemas/ResolveIssueRequest'
       responses:
+        '503':
+          $ref: '#/components/responses/Unavailable'
         '200':
           description: Сохранённое решение.
           content:
@@ -565,6 +589,12 @@ components:
         type: string
         format: uuid
   responses:
+    Unavailable:
+      description: SERVICE_UNAVAILABLE. БД временно недоступна или истекло ожидание соединения. Повтор команды использует прежний Idempotency-Key.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     Invalid:
       description: VALIDATION_FAILED. Запрос не соответствует контракту.
       content:

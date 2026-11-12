@@ -14,10 +14,15 @@ import org.springframework.web.bind.MissingRequestValueException;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestControllerAdvice
 public class ProblemResponses {
-
+    private static final Logger log = LoggerFactory.getLogger(ProblemResponses.class);
     private final ObjectMapper json;
 
     public ProblemResponses(ObjectMapper json) { this.json = json; }
@@ -26,6 +31,13 @@ public class ProblemResponses {
     ResponseEntity<Problem> handle(ApiProblem error) {
         return ResponseEntity.status(error.status()).contentType(MediaType.APPLICATION_PROBLEM_JSON)
             .body(new Problem(error.code(),error.status(),Problem.CodeEnum.fromValue(error.code())).detail(error.getMessage()));
+    }
+
+    @ExceptionHandler({CannotCreateTransactionException.class, DataAccessResourceFailureException.class})
+    ResponseEntity<Problem> unavailable(Exception error, HttpServletRequest request) {
+        log.warn("database unavailable method={} path={} exception={}",
+            request.getMethod(),request.getRequestURI(),error.getClass().getSimpleName());
+        return handle(new ApiProblem(503,"SERVICE_UNAVAILABLE","Хранилище временно недоступно. Повторите действие позже"));
     }
 
     @ExceptionHandler({BindException.class, HandlerMethodValidationException.class, jakarta.validation.ConstraintViolationException.class,

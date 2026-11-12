@@ -6,7 +6,7 @@ export class ApiError extends Error {
   constructor(readonly status: number, readonly problem?: Problem) {
     const messages: Partial<Record<Problem['code'], string>> = {
       INVALID_CREDENTIALS: 'Неверный логин или пароль',
-      SERVICE_UNAVAILABLE: 'Сервис временно недоступен. Повторите вход позже',
+      SERVICE_UNAVAILABLE: 'Сервис временно недоступен. Повторите запрос позже',
       SESSION_REQUIRED: 'Сессия завершена. Войдите снова',
       CSRF_INVALID: 'Защитный токен устарел. Повторите действие',
       ACCESS_DENIED: 'Недостаточно прав для этого действия',

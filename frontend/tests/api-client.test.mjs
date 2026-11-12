@@ -136,3 +136,15 @@ test('saved reconciliation can be read again by its task and snapshot id', async
   assert.equal(response.status, 200);
   assert.deepEqual(response.data, snapshot);
 });
+
+
+test('createTask exposes a temporary storage failure without treating it as an authorization error', async (t) => {
+  const problem = { title: 'SERVICE_UNAVAILABLE', status: 503, code: 'SERVICE_UNAVAILABLE' };
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(problem), {
+    status: 503, headers: { 'content-type': 'application/problem+json' },
+  }));
+  const reply = await createTask({ title: 'Retry', request: { reference: 'REQ-123456', quantity: 25 } },
+    { 'X-CSRF-TOKEN': 'token', 'Idempotency-Key': '40ad5299-2e09-4d7f-9a14-f02ca60f55ef' });
+  assert.equal(reply.status, 503);
+  assert.deepEqual(reply.data, problem);
+});

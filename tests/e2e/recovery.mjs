@@ -236,6 +236,22 @@ try {
     assert.equal((await inspect(item.operationId)).executions, 1);
   }
   mark('Graceful stop preserves eight queued operations and resumes each exactly once', { exits, operations: burst.length });
+  const poolLatch = await hold('app', 'LOCK TABLE tasks IN ACCESS EXCLUSIVE MODE;');
+  await poolLatch.ready;
+  const reads = Array.from({ length: 16 }, () => api.get('/api/tasks/' + task.taskId)
+    .then(() => ({ status: 200 }), error => ({ status: error.status || 0, code: error.code || error.name })));
+  try {
+    const first = await Promise.race(reads);
+    assert.equal(first.status, 503, 'Pool exhaustion must not become an authorization error');
+    assert.equal(first.code, 'SERVICE_UNAVAILABLE');
+  } finally { await poolLatch.release(); }
+  const outcomes = await Promise.all(reads);
+  assert.ok(outcomes.some(result => result.status === 503));
+  assert.ok(outcomes.every(result => result.status === 200 || (result.status === 503 && result.code === 'SERVICE_UNAVAILABLE')));
+  assert.equal((await api.get('/api/tasks/' + task.taskId)).taskId, task.taskId);
+  mark('HTTP pool exhaustion returns 503 and the same session recovers after release',
+    { requests: outcomes.length, unavailable: outcomes.filter(result => result.status === 503).length });
+
   receipt.passed = true;
 } catch (error) {
   receipt.error = { name: error.name, message: error.message };
