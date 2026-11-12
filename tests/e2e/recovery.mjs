@@ -128,7 +128,7 @@ try {
   const beforeCursor = Number(query('app', 'SELECT last_cursor FROM incoming_position WHERE id = 1;'));
   const cursorLatch = await hold('app', 'SELECT last_cursor FROM incoming_position WHERE id = 1 FOR UPDATE;'); await cursorLatch.ready;
   await fault('REQ-830002');
-  await waitFor('consumer waiting before applying cursor', () => query('app', "SELECT count(*) FROM pg_stat_activity WHERE usename = 'si_app' AND wait_event_type = 'Lock' AND query LIKE 'SELECT last_cursor FROM incoming_position%';") !== '0');
+  await waitFor('consumer waiting before applying cursor', () => query('app', "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND usename = current_user AND wait_event_type = 'Lock' AND query LIKE 'SELECT last_cursor FROM incoming_position%';") !== '0');
   composeRun(['kill', '-s', 'SIGKILL', 'backend']);
   assert.equal(Number(query('app', 'SELECT last_cursor FROM incoming_position WHERE id = 1;')), beforeCursor);
   assert.equal(query('app', `SELECT business_status FROM tasks WHERE id = ${sqlQuote(applying.taskId)};`), 'PENDING');
