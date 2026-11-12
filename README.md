@@ -10,7 +10,7 @@
 Для полного стенда нужен Docker Compose v2; для демокоманды и тестов —
 Node.js 24 с Corepack. При запуске Java вне контейнеров нужен JDK 25.
 Gradle Wrapper закрепляет
-Gradle 9.9.1, `frontend/package.json` — pnpm 12.19.0. CI использует
+Gradle 9.9.1, `frontend/package.json` — pnpm 12.19.0. Контейнерные сборки используют
 Temurin 25.0.5 и Node.js 24.19.0. Backend собран на Spring Boot 4.1.2.
 
 В корне скопируйте `.env.example`
@@ -156,7 +156,6 @@ corepack pnpm build
 corepack pnpm test:api
 ```
 
-Те же шаги выполняет [CI workflow](.github/workflows/ci.yml).
 Проверка HTTP после сборки описана в [инструкции для тестов](tests/README.md).
 
 ## Генерация из OpenAPI
