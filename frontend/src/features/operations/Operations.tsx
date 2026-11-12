@@ -58,7 +58,7 @@ export function IssueList() {
   const status = search.get('status') || 'OPEN';
   const valid = Number.isSafeInteger(page) && page >= 0 && ['OPEN', 'RESOLVED'].includes(status);
   const issues = useQuery({ queryKey: [...keys.issues, 'list', page, status], enabled: valid,
-    queryFn: () => data(listExchangeIssues({ page, status: status as IssueStatus })) });
+    queryFn: ({ signal }) => data(listExchangeIssues({ page, status: status as IssueStatus }, { signal })) });
   return <>
     <PageHeader title="Разбор обмена" context="Доставка, конфликты и решения операторов." actions={<Button onClick={() => issues.refetch()} disabled={issues.isFetching || !valid}>Обновить</Button>} />
     <div className="readable"><FormField id="issue-status" label="Состояние разбора">{attrs => <Select {...attrs} value={status}
@@ -72,7 +72,7 @@ export function IssueList() {
           <div className="issue-meta"><small>{timestamp(issue.openedAt)}</small><small>{issue.assignedTo ? 'Ответственный: ' + issue.assignedTo : 'Ответственный пока не назначен'}</small>
           {issue.nextAttemptAt && <small>Следующая попытка: {timestamp(issue.nextAttemptAt)}</small>}</div>
         </CardContent></li></Card>)}</ul>}
-      <Pagination page={page} hasNext={issues.data.hasNext} pending={issues.isFetching}
+      <Pagination page={page} totalItems={issues.data.totalItems} totalPages={issues.data.totalPages} pending={issues.isFetching}
         onChange={next => setSearch({ status, page: String(next) })} />
     </>}
   </>;

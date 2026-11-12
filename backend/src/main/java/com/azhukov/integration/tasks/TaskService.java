@@ -5,6 +5,7 @@ import com.azhukov.integration.contract.internal.model.*;
 import com.azhukov.integration.http.ApiProblem;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -23,7 +24,7 @@ public class TaskService {
     @Transactional(readOnly = true)
     public Task get(AppUser user, UUID id) { return tasks.get(id, user, false); }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public TaskPage list(AppUser user, int page, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
         checkPage(page);
         if ((from != null && !from.getOffset().equals(ZoneOffset.UTC)) ||
@@ -31,7 +32,9 @@ public class TaskService {
             (from != null && to != null && !to.isAfter(from)))
             throw ApiProblem.invalid("Укажите корректный период в UTC: начало включено, конец исключён");
         var rows = tasks.list(user, page, status, from, to);
-        return new TaskPage(rows.stream().limit(20).toList(), page, rows.size() > 20);
+        long total = tasks.countTasks(user, status, from, to);
+        long pages = (total + 19) / 20;
+        return new TaskPage(rows, page, (long) page + 1 < pages, total, pages);
     }
 
     @Transactional
@@ -64,12 +67,14 @@ public class TaskService {
             });
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public HistoryPage history(AppUser user, UUID id, int page) {
         checkPage(page);
         tasks.get(id, user, false);
         var rows = tasks.history(id, page);
-        return new HistoryPage(rows.stream().limit(20).toList(), page, rows.size() > 20);
+        long total = tasks.countHistory(id);
+        long pages = (total + 19) / 20;
+        return new HistoryPage(rows, page, (long) page + 1 < pages, total, pages);
     }
 
     private static void requireInitiator(AppUser user) {

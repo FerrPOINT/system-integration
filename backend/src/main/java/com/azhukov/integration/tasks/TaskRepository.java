@@ -69,15 +69,27 @@ public class TaskRepository {
 
     public List<Task> list(AppUser user, int page, BusinessStatus status,
                            OffsetDateTime from, OffsetDateTime to) {
-        var sql = new StringBuilder("SELECT * FROM tasks WHERE true");
         var args = new ArrayList<Object>();
-        if (!user.isOperator()) { sql.append(" AND owner_id = ?"); args.add(user.id()); }
-        if (status != null) { sql.append(" AND business_status = ?"); args.add(status.getValue()); }
-        if (from != null) { sql.append(" AND created_at >= ?"); args.add(from); }
-        if (to != null) { sql.append(" AND created_at < ?"); args.add(to); }
-        sql.append(" ORDER BY created_at DESC, id DESC LIMIT 21 OFFSET ?");
+        var sql = "SELECT * FROM tasks" + taskConditions(user, status, from, to, args)
+            + " ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?";
         args.add((long) page * 20);
-        return jdbc.query(sql.toString(), taskRow, args.toArray());
+        return jdbc.query(sql, taskRow, args.toArray());
+    }
+
+    public long countTasks(AppUser user, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
+        var args = new ArrayList<Object>();
+        return jdbc.queryForObject("SELECT count(*) FROM tasks" + taskConditions(user, status, from, to, args),
+            Long.class, args.toArray());
+    }
+
+    private static String taskConditions(AppUser user, BusinessStatus status,
+                                         OffsetDateTime from, OffsetDateTime to, List<Object> args) {
+        var where = new StringBuilder(" WHERE true");
+        if (!user.isOperator()) { where.append(" AND owner_id = ?"); args.add(user.id()); }
+        if (status != null) { where.append(" AND business_status = ?"); args.add(status.getValue()); }
+        if (from != null) { where.append(" AND created_at >= ?"); args.add(from); }
+        if (to != null) { where.append(" AND created_at < ?"); args.add(to); }
+        return where.toString();
     }
 
     public Task insert(UUID owner, CreateTaskRequest input) {
@@ -122,10 +134,14 @@ public class TaskRepository {
         });
     }
 
+    public long countHistory(UUID id) {
+        return jdbc.queryForObject("SELECT count(*) FROM task_history WHERE task_id = ?", Long.class, id);
+    }
+
     public List<HistoryEvent> history(UUID id, int page) {
         return jdbc.query("""
             SELECT * FROM task_history WHERE task_id = ?
-            ORDER BY occurred_at DESC, id DESC LIMIT 21 OFFSET ?
+            ORDER BY occurred_at DESC, id DESC LIMIT 20 OFFSET ?
             """, (rs, row) -> {
                 var event = json.readValue(rs.getString("details"), HistoryEvent.class);
                 return event.eventId(rs.getObject("id", UUID.class)).taskId(id)

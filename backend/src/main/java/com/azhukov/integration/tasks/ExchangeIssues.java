@@ -133,8 +133,14 @@ public class ExchangeIssues {
             .stream().findFirst().orElseThrow(ApiProblem::notFound);
     }
 
+    public long count(IssueStatus status) {
+        return status == null
+            ? jdbc.queryForObject("SELECT count(*) FROM exchange_issues", Long.class)
+            : jdbc.queryForObject("SELECT count(*) FROM exchange_issues WHERE status = ?", Long.class, status.getValue());
+    }
+
     public List<StoredIssue> list(int page,IssueStatus status) {
-        return jdbc.query(ISSUE_SELECT + (status == null ? "" : " WHERE i.status = ?") + " ORDER BY i.opened_at DESC,i.id DESC LIMIT 21 OFFSET ?",
+        return jdbc.query(ISSUE_SELECT + (status == null ? "" : " WHERE i.status = ?") + " ORDER BY i.opened_at DESC,i.id DESC LIMIT 20 OFFSET ?",
             this::mapIssue,status == null ? new Object[]{(long)page*20} : new Object[]{status.getValue(),(long)page*20});
     }
 

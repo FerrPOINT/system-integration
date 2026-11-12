@@ -20,6 +20,7 @@ test('TC-16: public HTTPS, secure session, roles and private service boundaries'
   receipt.asset = { path: asset, sha256: createHash('sha256').update(Buffer.from(await script.arrayBuffer())).digest('hex') };
   const csrf = await fetch(origin + '/api/csrf', { signal: AbortSignal.timeout(10_000) });
   assert.equal(csrf.status, 200);
+  assert.ok(csrf.headers.get('cache-control')?.includes('no-store'), 'Session-bound API responses must not be stored by HTTP caches');
   const cookies = csrf.headers.getSetCookie().join('; ');
   for (const flag of [/;\s*Secure(?:;|$)/i, /;\s*HttpOnly(?:;|$)/i, /SameSite=Strict/i])
     assert.ok(flag.test(cookies), 'Public session cookie must be Secure, HttpOnly and SameSite=Strict');

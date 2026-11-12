@@ -129,6 +129,11 @@ class TaskWorkflowTest extends PostgresTest {
         assertEquals(first.toString(), event.get("actorUserId").asString());
         assertThrows(DataAccessException.class, () -> jdbc.update("UPDATE task_history SET summary = 'forged'"));
         assertThrows(DataAccessException.class, () -> jdbc.update("DELETE FROM task_history"));
+        for (int i = 1; i <= 20; i++) status(200, rename(owner, id, UUID.randomUUID(), "История " + i, i));
+        var history = mvc.perform(get("/api/tasks/" + id + "/history").param("page", "1").session(owner.session())).andReturn();
+        assertEquals(21, body(history).get("totalItems").asLong());
+        assertEquals(2, body(history).get("totalPages").asLong());
+        assertEquals(1, body(history).get("items").size());
         status(405, mvc.perform(post("/api/tasks/" + id + "/history").session(owner.session())
             .header("X-CSRF-TOKEN", owner.csrf()).contentType(MediaType.APPLICATION_JSON).content("{}")).andReturn());
     }
@@ -148,13 +153,27 @@ class TaskWorkflowTest extends PostgresTest {
         status(200, result);
         assertEquals(20, body(result).get("items").size());
         assertTrue(body(result).get("hasNext").asBoolean());
+        assertEquals(21, body(result).get("totalItems").asLong());
+        assertEquals(2, body(result).get("totalPages").asLong());
         assertEquals(at.plusSeconds(20).toInstant(), OffsetDateTime.parse(body(result).at("/items/0/createdAt").asString()).toInstant());
         var next = mvc.perform(get("/api/tasks").session(owner.session()).param("page", "1")
             .param("createdFrom", at.toString()).param("createdTo", at.plusSeconds(21).toString())).andReturn();
         assertEquals(1, body(next).get("items").size());
         assertFalse(body(next).get("hasNext").asBoolean());
+        assertEquals(21, body(next).get("totalItems").asLong());
+        var beyond = mvc.perform(get("/api/tasks").session(owner.session()).param("page", "999")
+            .param("createdFrom", at.toString()).param("createdTo", at.plusSeconds(21).toString())).andReturn();
+        assertEquals(0, body(beyond).get("items").size());
+        assertEquals(21, body(beyond).get("totalItems").asLong());
+        assertEquals(2, body(beyond).get("totalPages").asLong());
+        var privateCount = mvc.perform(get("/api/tasks").session(login("initiator.two").session())).andReturn();
+        assertEquals(0, body(privateCount).get("totalItems").asLong());
+        var allCount = mvc.perform(get("/api/tasks").session(login("operator").session())).andReturn();
+        assertEquals(22, body(allCount).get("totalItems").asLong());
         var filtered = mvc.perform(get("/api/tasks").session(owner.session()).param("businessStatus", "SUCCEEDED")).andReturn();
         assertEquals(0, body(filtered).get("items").size());
+        assertEquals(0, body(filtered).get("totalItems").asLong());
+        assertEquals(0, body(filtered).get("totalPages").asLong());
         status(400, mvc.perform(get("/api/tasks").session(owner.session()).param("page", "-1")).andReturn());
         status(400, mvc.perform(get("/api/tasks").session(owner.session()).param("createdFrom", at.toString())
             .param("createdTo", at.toString())).andReturn());

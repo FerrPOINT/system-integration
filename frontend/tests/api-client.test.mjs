@@ -53,18 +53,20 @@ test('createTask sends both command headers and exposes a conflict response', as
 });
 
 test('listTasks serializes filters and keeps page zero', async (t) => {
+  const controller = new AbortController();
   const filters = { page: 0, businessStatus: 'SUCCEEDED', createdFrom: '2026-11-11T00:00:00Z' };
-  const page = { items: [], page: 0, hasNext: false };
+  const page = { items: [], page: 0, hasNext: false, totalItems: 0, totalPages: 0 };
 
   t.mock.method(globalThis, 'fetch', async (url, init) => {
     const request = new URL(url, 'http://localhost');
     assert.equal(request.pathname, '/api/tasks');
     assert.equal(init.method, 'GET');
+    assert.equal(init.signal, controller.signal);
     assert.deepEqual(Object.fromEntries(request.searchParams), { ...filters, page: '0' });
     return Response.json(page);
   });
 
-  assert.deepEqual((await listTasks(filters)).data, page);
+  assert.deepEqual((await listTasks(filters, { signal: controller.signal })).data, page);
 });
 
 test('operator decision sends its snapshot and returns a stale-snapshot conflict', async (t) => {

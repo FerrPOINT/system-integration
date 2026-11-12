@@ -9,6 +9,7 @@ import com.azhukov.integration.contract.ExchangeProtocol;
 import com.azhukov.integration.http.ApiProblem;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.OffsetDateTime;
@@ -46,12 +47,14 @@ public class OperationsTransactions {
     @Transactional(readOnly=true)
     public Issue get(AppUser user,UUID id) { requireOperator(user); return view(context(id,user,false),user); }
 
-    @Transactional(readOnly=true)
+    @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
     public IssuePage list(AppUser user,int page,IssueStatus status) {
         requireOperator(user);
         if (page < 0) throw ApiProblem.invalid("Номер страницы не может быть отрицательным");
         var rows=issues.list(page,status);
-        return new IssuePage(rows.stream().limit(20).map(row -> view(context(row,user,false),user)).toList(),page,rows.size()>20);
+        long total=issues.count(status);
+        long pages=(total+19)/20;
+        return new IssuePage(rows.stream().map(row -> view(context(row,user,false),user)).toList(),page,(long)page+1<pages,total,pages);
     }
 
     @Transactional(readOnly=true)

@@ -32,11 +32,22 @@ export function TaskList({ user }: { user: GetSession200 }) {
   const [search, setSearch] = useSearchParams();
   const page = Number(search.get('page') || 0);
   const status = search.get('businessStatus') || undefined;
-  const valid = Number.isSafeInteger(page) && page >= 0 && (!status || status in businessLabels);
+  const validPage = Number.isSafeInteger(page) && page >= 0 && (!status || status in businessLabels);
   const params = { page, businessStatus: status as BusinessStatus | undefined,
     createdFrom: search.get('createdFrom') || undefined, createdTo: search.get('createdTo') || undefined };
-  const tasks = useQuery({ queryKey: [...keys.tasks, 'list', params], queryFn: () => data(listTasks(params)), enabled: valid });
+  const validPeriod = !params.createdFrom || !params.createdTo || Date.parse(params.createdFrom) < Date.parse(params.createdTo);
+  const valid = validPage && validPeriod;
+  function changeFilters(changes: Record<string, string | undefined>) {
+    const updated = new URLSearchParams(search);
+    updated.delete('page');
+    for (const [key, value] of Object.entries(changes)) {
+      if (value) updated.set(key, value); else updated.delete(key);
+    }
+    setSearch(updated, { replace: true });
+  }
+  const tasks = useQuery({ queryKey: [...keys.tasks, 'list', params], queryFn: ({ signal }) => data(listTasks(params, { signal })), enabled: valid });
   const mobile = useMediaQuery('(max-width: 760px)');
+  const [filtersOpen, setFiltersOpen] = useState(!mobile || Boolean(status || params.createdFrom || params.createdTo));
   function changePage(next: number) {
     const updated = new URLSearchParams(search); updated.set('page', String(next)); setSearch(updated);
   }
@@ -44,22 +55,18 @@ export function TaskList({ user }: { user: GetSession200 }) {
     <PageHeader title={user.role === 'OPERATOR' ? 'Все задания' : 'Мои задания'}
       context="Приём задания, доставка и результат исполнения показаны отдельно."
       actions={user.role === 'INITIATOR' && <Button asChild variant="default"><Link to="/tasks/new">Создать задание</Link></Button>} />
-    <Disclosure className="filter-panel" key={search.toString()} open={!mobile || Boolean(status || params.createdFrom || params.createdTo)} summary={<>Фильтры <span className="muted">{status || params.createdFrom || params.createdTo ? 'Заданы условия' : 'Результат и период'}</span></>}>
-    <form className="base-form filters" onSubmit={event => {
-      event.preventDefault(); const form = new FormData(event.currentTarget); const next = new URLSearchParams();
-      if (form.get('businessStatus') !== 'ALL') next.set('businessStatus', String(form.get('businessStatus')));
-      for (const name of ['createdFrom', 'createdTo']) {
-        if (form.get(name)) next.set(name, String(form.get(name)) + ':00Z');
-      }
-      setSearch(next);
-    }}>
-      <FormField id="business-status" label="Результат">{attrs => <Select {...attrs} name="businessStatus" defaultValue={status || 'ALL'}
+    <Disclosure className="filter-panel" open={filtersOpen} onToggle={event => setFiltersOpen(event.currentTarget.open)} summary={<>Фильтры <span className="muted">{status || params.createdFrom || params.createdTo ? 'Заданы условия' : 'Результат и период'}</span></>}>
+    <div className="base-form filters">
+      <FormField id="business-status" label="Результат">{attrs => <Select {...attrs} value={status || 'ALL'}
+        onValueChange={value => changeFilters({ businessStatus: value === 'ALL' ? undefined : value })}
         options={[{ value: 'ALL', label: 'Все результаты' }, ...Object.entries(businessLabels).map(([value, label]) => ({ value, label }))]} />}</FormField>
-      <FormField id="field-createdFrom" label="Создано с (UTC, включительно)">{attrs => <Input {...attrs} type="datetime-local" name="createdFrom" defaultValue={params.createdFrom?.slice(0,16)} />}</FormField>
-      <FormField id="field-createdTo" label="Создано до (UTC, не включая)">{attrs => <Input {...attrs} type="datetime-local" name="createdTo" defaultValue={params.createdTo?.slice(0,16)} />}</FormField>
-      <ActionGroup align="start" className="filter-actions"><Button variant="default">Применить</Button><Button type="button" onClick={() => setSearch({})}>Сбросить</Button></ActionGroup>
-    </form></Disclosure>
-    {!valid ? <Notice role="alert" tone="danger">Некорректные параметры страницы. Сбросьте фильтры.</Notice> : tasks.isPending ? <Loading /> :
+      <FormField id="field-createdFrom" label="Создано с (UTC, включительно)">{attrs => <Input {...attrs} type="datetime-local" name="createdFrom" value={params.createdFrom?.slice(0,16) || ''}
+        onChange={event => changeFilters({ createdFrom: event.target.value ? event.target.value + ':00Z' : undefined })} />}</FormField>
+      <FormField id="field-createdTo" label="Создано до (UTC, не включая)">{attrs => <Input {...attrs} type="datetime-local" name="createdTo" value={params.createdTo?.slice(0,16) || ''}
+        onChange={event => changeFilters({ createdTo: event.target.value ? event.target.value + ':00Z' : undefined })} />}</FormField>
+      <Button type="button" onClick={() => setSearch({}, { replace: true })}>Сбросить</Button>
+    </div></Disclosure>
+    {!valid ? <Notice role="alert" tone="danger">{validPage ? 'Начало периода должно быть раньше конца.' : 'Некорректные параметры страницы. Сбросьте фильтры.'}</Notice> : tasks.isPending ? <Loading /> :
       tasks.isError ? <><ErrorMessage error={tasks.error} /><Button onClick={() => tasks.refetch()}>Повторить</Button></> :
       <><div className="list-heading"><span>{tasks.isFetching ? 'Обновляем…' : 'Сохранённые задания'}</span>
         <Button type="button" onClick={() => tasks.refetch()} disabled={tasks.isFetching}>Обновить</Button></div>
@@ -79,7 +86,7 @@ export function TaskList({ user }: { user: GetSession200 }) {
               <small>{task.request.reference} · {task.request.quantity} ед.</small></td><td>{deliveryLabels[task.deliveryStatus]}</td>
               <td><BusinessBadge status={task.businessStatus} /></td><td>{timestamp(task.createdAt)}</td></tr>)}</tbody>
           </Table></Card>}
-        <Pagination page={page} hasNext={tasks.data.hasNext} pending={tasks.isFetching} onChange={changePage} />
+        <Pagination page={page} totalItems={tasks.data.totalItems} totalPages={tasks.data.totalPages} pending={tasks.isFetching} onChange={changePage} />
       </>}
   </>;
 }
@@ -178,7 +185,7 @@ function RenameForm({ task, onClose }: { task: Task; onClose: () => void }) {
 
 function History({ id, canReview }: { id: string; canReview: boolean }) {
   const [page, setPage] = useState(0);
-  const history = useQuery({ queryKey: keys.history(id, page), queryFn: () => data(listTaskHistory(id, { page })) });
+  const history = useQuery({ queryKey: keys.history(id, page), queryFn: ({ signal }) => data(listTaskHistory(id, { page }, { signal })) });
   return <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>История</h2></CardTitle>
     {history.isPending ? <Loading /> : history.isError ? <><ErrorMessage error={history.error} />
       <Button onClick={() => history.refetch()}>Повторить</Button></> : <>
@@ -188,7 +195,7 @@ function History({ id, canReview }: { id: string; canReview: boolean }) {
         {canReview && event.reconciliationId && <Link to={'/tasks/' + id + '/reconciliations/' + event.reconciliationId}>Открыть сохранённую сверку</Link>}
         {canReview && event.issueId && <Link to={'/issues/' + event.issueId}>Открыть разбор</Link>}
       </TimelineContent></TimelineItem>)}</Timeline>
-      <Pagination page={page} hasNext={history.data.hasNext} pending={history.isFetching} onChange={setPage} />
+      <Pagination page={page} totalItems={history.data.totalItems} totalPages={history.data.totalPages} pending={history.isFetching} onChange={setPage} />
     </>}
   </CardContent></section></Card>;
 }

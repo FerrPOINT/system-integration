@@ -59,7 +59,7 @@ await Promise.all(clients.map(async client => {
     try {
       if (client.action === 0) {
         const result = await client.session.get('/api/tasks?businessStatus=SUCCEEDED&page=0');
-        if (result.items?.length !== 20 || result.items.some(task => task.businessStatus !== 'SUCCEEDED')) throw new ApiFailure(200, 'INVALID_LIST_PAGE');
+        if (result.items?.length !== 20 || result.totalItems < 2500 || result.totalPages !== Math.ceil(result.totalItems / 20) || result.items.some(task => task.businessStatus !== 'SUCCEEDED')) throw new ApiFailure(200, 'INVALID_LIST_PAGE');
       }
       if (client.action === 1) {
         const result = await client.session.get('/api/tasks/' + client.task.taskId);
@@ -145,13 +145,35 @@ await parallel(created, 8, async item => {
     externalErrors[code] = (externalErrors[code] || 0) + 1;
   }
 });
+// The measured generator has stopped; repeated commands must add only one record.
+const repeatedKey = crypto.randomUUID();
+const repeatedInput = { title: 'NF08 concurrent idempotency', request: { reference: 'REQ-999991', quantity: 25 } };
+const sameOwner = clients.filter(client => client.index % 2 === 0);
+const beforeRepeated = await sameOwner[0].session.get('/api/tasks');
+const replies = await Promise.all(Array.from({ length: 20 }, (_, i) =>
+  sameOwner[i % sameOwner.length].session.command('POST', '/api/tasks', repeatedInput, repeatedKey)));
+const repeatedIds = new Set(replies.map(reply => reply.taskId));
+const replay = await sameOwner[0].session.command('POST', '/api/tasks', repeatedInput, repeatedKey);
+let conflictRejected = false;
+try {
+  await sameOwner[0].session.command('POST', '/api/tasks', { ...repeatedInput, title: 'Different command' }, repeatedKey);
+} catch (error) {
+  if (!(error instanceof ApiFailure) || error.status !== 409 || error.code !== 'IDEMPOTENCY_CONFLICT') throw error;
+  conflictRejected = true;
+}
+const afterRepeated = await sameOwner[0].session.get('/api/tasks');
+const idempotency = { concurrentRequests: 20, uniqueTaskIds: repeatedIds.size,
+  countIncrease: afterRepeated.totalItems - beforeRepeated.totalItems, conflictRejected,
+  replaySameTask: replay.taskId === replies[0].taskId };
+idempotency.passed = idempotency.uniqueTaskIds === 1 && idempotency.countIncrease === 1 && idempotency.conflictRejected && idempotency.replaySameTask;
+
 const counts = measurements.map(stat => stat.latencies.length);
 const reads = measurements.slice(0, 2).flatMap(stat => stat.latencies);
 const writes = measurements.slice(2).flatMap(stat => stat.latencies);
 const errors = measurements.reduce((total, stat) => total + Object.values(stat.errors).reduce((a, b) => a + b, 0), 0);
 const report = {
   sourceCommit, startedAt, finishedAt, clients: 20, warmupSeconds: 30, measuredSeconds: 120, initialCount: 5000, resources, warmupErrors,
-  resourceTotal,
+  resourceTotal, idempotency,
   operations: measurements.map(stat => ({ operation: stat.operation, count: stat.latencies.length, share: stat.latencies.length / counts.reduce((a, b) => a + b, 0),
     successes: stat.successes, errors: stat.errors, p95Ms: p95(stat.latencies) })),
   readP95Ms: p95(reads), writeP95Ms: p95(writes), errors,
@@ -161,7 +183,7 @@ const report = {
     checkStartedAt: externalCheckStartedAt, checkFinishedAt: new Date().toISOString() },
 };
 report.sourceUnchanged = git('rev-parse', 'HEAD') === sourceCommit && !git('status', '--porcelain');
-report.passed = report.sourceUnchanged && errors === 0 && Object.keys(warmupErrors).length === 0 && counts.every(count => count > 0) && Math.max(...counts) - Math.min(...counts) <= 20 &&
+report.passed = idempotency.passed && report.sourceUnchanged && errors === 0 && Object.keys(warmupErrors).length === 0 && counts.every(count => count > 0) && Math.max(...counts) - Math.min(...counts) <= 20 &&
   report.readP95Ms <= 2000 && report.writeP95Ms <= 3000 && Object.keys(externalErrors).length === 0 && durations.length > 0;
 await mkdir(new URL('../results/', import.meta.url), { recursive: true });
 const output = new URL('../results/nf08.json', import.meta.url);

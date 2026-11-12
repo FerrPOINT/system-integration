@@ -720,3 +720,10 @@ dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
   line-height: var(--base-line-body); color: var(--color-text-muted); overflow-wrap: anywhere;
 }
 .base-page-stack > .base-button { align-self: flex-start; }
+
+.base-page-navigation { justify-content: flex-end; }
+.base-page-summary { color: var(--color-text-muted); font-size: var(--base-font-body); }
+@media (max-width: 760px) {
+  .base-page-navigation { justify-content: center; }
+  .base-page-summary { flex-basis: 100%; text-align: center; }
+}

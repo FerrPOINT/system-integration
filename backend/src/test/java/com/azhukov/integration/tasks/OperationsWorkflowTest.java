@@ -26,6 +26,22 @@ class OperationsWorkflowTest extends PostgresTest {
     @Autowired PlatformTransactionManager transactions;
 
     @Test
+    void countedIssuePagesRespectTheStatusFilter() throws Exception {
+        difference();
+        var op=login("operator");
+        var open=mvc.perform(get("/api/exchange/issues").param("status","OPEN").session(op.session())).andReturn();
+        status(200,open);
+        assertEquals(1,body(open).get("totalItems").asLong());
+        assertEquals(1,body(open).get("totalPages").asLong());
+        var empty=mvc.perform(get("/api/exchange/issues").param("status","RESOLVED").session(op.session())).andReturn();
+        assertEquals(0,body(empty).get("totalItems").asLong());
+        assertEquals(0,body(empty).get("totalPages").asLong());
+        var beyond=mvc.perform(get("/api/exchange/issues").param("status","OPEN").param("page","999").session(op.session())).andReturn();
+        assertEquals(0,body(beyond).get("items").size());
+        assertEquals(1,body(beyond).get("totalItems").asLong());
+    }
+
+    @Test
     void comparisonIsOutsideTheTransactionAndOldSnapshotsRemainReadable() throws Exception {
         UUID task=created(login("initiator.one"),UUID.randomUUID());
         var claim=exchange.claim();

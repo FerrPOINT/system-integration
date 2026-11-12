@@ -1,0 +1,64 @@
+import { test, expect } from '@playwright/test';
+import { login, selectChoice } from './support';
+
+test('UI-09: counted pages preserve filters and filters apply without a submit button', async ({ page }, info) => {
+  await login(page);
+  let initial = await (await page.request.get('/api/tasks')).json();
+  if (initial.totalItems < 21) {
+    const csrf = await (await page.request.get('/api/csrf')).json();
+    for (let i = initial.totalItems; i < 21; i++) {
+      const reply = await page.request.post('/api/tasks', { headers: { 'X-CSRF-TOKEN': csrf.token, 'Idempotency-Key': crypto.randomUUID() },
+        data: { title: 'E2E pagination ' + crypto.randomUUID(), request: { reference: 'REQ-880001', quantity: 25 } } });
+      expect(reply.status()).toBe(201);
+    }
+    await page.reload();
+    initial = await (await page.request.get('/api/tasks')).json();
+  }
+  await expect(page.getByText('Страница 1 из ' + initial.totalPages + ' · Всего записей: ' + initial.totalItems, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Страница 2', exact: true }).click();
+  await expect(page).toHaveURL(/page=1/);
+  await expect(page.getByText('Страница 2 из ' + initial.totalPages + ' · Всего записей: ' + initial.totalItems, { exact: true })).toBeVisible();
+  const filters = page.locator('.filter-panel');
+  if (info.project.name === 'mobile') await filters.locator('summary').click();
+  const filtered = page.waitForResponse(response => response.url().includes('/api/tasks?') && response.url().includes('businessStatus=SUCCEEDED') && response.status() === 200);
+  await selectChoice(page, 'Результат', 'Выполнено');
+  const result = await (await filtered).json();
+  await expect(page).toHaveURL(/businessStatus=SUCCEEDED/);
+  await expect(page).not.toHaveURL(/page=/);
+  await expect(page.getByRole('button', { name: 'Применить', exact: true })).toHaveCount(0);
+  if (result.totalPages) await expect(page.getByText('Страница 1 из ' + result.totalPages + ' · Всего записей: ' + result.totalItems, { exact: true })).toBeVisible();
+  await selectChoice(page, 'Результат', 'Все результаты');
+  await expect(page).not.toHaveURL(/businessStatus=/);
+  await page.goto('/tasks?page=999999');
+  await expect(page.getByText('Страница 1000000 не найдена · Всего страниц: ' + initial.totalPages, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Страница 1', exact: true }).click();
+  await expect(page).toHaveURL(/page=0/);
+});
+
+test('UI-10: lost create response keeps the command key and invalidates the cached registry', async ({ page }) => {
+  await login(page);
+  const before = await (await page.request.get('/api/tasks')).json();
+  const keys: string[] = [];
+  const ids: string[] = [];
+  await page.route('**/api/tasks', async route => {
+    if (route.request().method() !== 'POST') { await route.continue(); return; }
+    keys.push(route.request().headers()['idempotency-key']);
+    const response = await route.fetch();
+    ids.push((await response.json()).taskId);
+    if (keys.length === 1) await route.fulfill({ status: 503, contentType: 'text/html', body: 'Reply lost after commit' });
+    else await route.fulfill({ response });
+  });
+  await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
+  const title = 'E2E command replay ' + crypto.randomUUID();
+  await page.getByLabel('Название *', { exact: true }).fill(title);
+  await page.getByLabel('Номер заявки').fill('REQ-880002');
+  await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  expect(keys).toHaveLength(2); expect(keys[0]).toBe(keys[1]); expect(ids[0]).toBe(ids[1]);
+  expect((await (await page.request.get('/api/tasks')).json()).totalItems).toBe(before.totalItems + 1);
+  await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
+  await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();
+  await page.unrouteAll({ behavior: 'wait' });
+});

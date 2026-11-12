@@ -32,7 +32,7 @@ test('UI-07: exchange loading, error, empty and ready states keep the filter sep
   await page.route('**/api/exchange/issues?*', async route => {
     if (mode === 'loading') await held;
     if (mode === 'error') await route.fulfill({ status: 502, contentType: 'text/html', body: 'Temporarily unavailable' });
-    else if (mode === 'empty') await route.fulfill({ json: { items: [], hasNext: false } });
+    else if (mode === 'empty') await route.fulfill({ json: { items: [], page: 0, hasNext: false, totalItems: 0, totalPages: 0 } });
     else await route.continue();
   });
   try {
