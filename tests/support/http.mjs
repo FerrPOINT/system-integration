@@ -7,12 +7,16 @@ export class ApiFailure extends Error {
 export class ApiSession {
   #cookies = new Map();
   #csrf;
-  constructor(base) { this.base = new URL(base); }
+  #requestHeaders;
+  constructor(base, requestHeaders = {}) {
+    this.base = new URL(base);
+    this.#requestHeaders = { ...requestHeaders };
+  }
 
   async request(method, path, body, headers = {}) {
     const response = await fetch(new URL(path, this.base), {
       method, redirect: 'manual', signal: AbortSignal.timeout(10_000),
-      headers: { Accept: 'application/json', Cookie: [...this.#cookies].map(([k, v]) => `${k}=${v}`).join('; '), ...headers },
+      headers: { Accept: 'application/json', ...this.#requestHeaders, Cookie: [...this.#cookies].map(([k, v]) => `${k}=${v}`).join('; '), ...headers },
       body,
     });
     for (const value of response.headers.getSetCookie()) {

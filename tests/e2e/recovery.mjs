@@ -38,15 +38,15 @@ async function waitFor(label, condition, milliseconds = 60_000) {
 }
 async function login() {
   if (!process.env.SI_DEMO_PASSWORD) throw new Error('SI_DEMO_PASSWORD is required');
-  const session = new ApiSession(origin); await session.login('initiator.one', process.env.SI_DEMO_PASSWORD); return session;
+  const session = new ApiSession(origin, { Connection: 'close' }); await session.login('initiator.one', process.env.SI_DEMO_PASSWORD); return session;
 }
 async function fault(reference, mode) {
   const response = await fetch(external + '/test/faults/' + reference, { method: mode ? 'PUT' : 'DELETE',
-    signal: AbortSignal.timeout(10_000), headers: { 'Content-Type': 'application/json' }, body: mode ? JSON.stringify({ mode }) : undefined });
+    signal: AbortSignal.timeout(10_000), headers: { 'Content-Type': 'application/json', Connection: 'close' }, body: mode ? JSON.stringify({ mode }) : undefined });
   assert.equal(response.status, 204);
 }
 async function inspect(operation) {
-  const response = await fetch(external + '/operations/' + operation, { signal: AbortSignal.timeout(10_000) });
+  const response = await fetch(external + '/operations/' + operation, { headers: { Connection: 'close' }, signal: AbortSignal.timeout(10_000) });
   assert.equal(response.status, 200); return response.json();
 }
 async function hold(database, acquisition) {
@@ -108,7 +108,7 @@ try {
   const task = await api.get('/api/tasks/' + accepted.taskId); probes.push(task);
   await claimLatch.ready;
   await waitFor('external commit', async () => {
-    const response = await fetch(external + '/operations/' + task.operationId, { signal: AbortSignal.timeout(5000) });
+    const response = await fetch(external + '/operations/' + task.operationId, { headers: { Connection: 'close' }, signal: AbortSignal.timeout(5000) });
     if (response.status === 404) return false;
     assert.equal(response.status, 200); const state = await response.json(); return state.executions === 1 && state;
   });
@@ -138,10 +138,11 @@ try {
   mark('API replays the uncommitted feed page once after restart', { taskId: applying.taskId, previousCursor: beforeCursor });
 
   const disabledWorker = "services:\n  emulator:\n    environment:\n      SI_EMULATOR_WORKER_ENABLED: 'false'\n";
-  docker(['compose', '-f', 'compose.yml', '-f', '-', '--profile', 'app', 'up', '-d', '--no-build', '--no-deps', '--wait', 'emulator'], { input: disabledWorker });
+  docker([...compose, '-f', '-', 'up', '-d', '--no-build', '--no-deps', '--wait', 'emulator'], { input: disabledWorker });
+  loadEnvironment();
   const pending = await create('REQ-830003');
   const acceptedState = await waitFor('external acceptance without execution', async () => {
-    const response = await fetch(external + '/operations/' + pending.operationId, { signal: AbortSignal.timeout(5000) });
+    const response = await fetch(external + '/operations/' + pending.operationId, { headers: { Connection: 'close' }, signal: AbortSignal.timeout(5000) });
     if (response.status === 404) return false;
     assert.equal(response.status, 200); const state = await response.json(); assert.equal(state.executions, 0); assert.equal(state.result, null); return state;
   });
@@ -155,7 +156,7 @@ try {
   // Normal execution must continue while the independent publisher waits on the counter.
   const unpublished = await create('REQ-830004');
   const executed = await waitFor('execution committed before publication', async () => {
-    const response = await fetch(external + '/operations/' + unpublished.operationId, { signal: AbortSignal.timeout(5000) });
+    const response = await fetch(external + '/operations/' + unpublished.operationId, { headers: { Connection: 'close' }, signal: AbortSignal.timeout(5000) });
     if (response.status === 404) return false;
     assert.equal(response.status, 200); const state = await response.json(); return state.executions === 1 && state;
   });
@@ -177,7 +178,7 @@ try {
   // Replayed delivery after both process and database restarts must still return the same operation.
   const original = states[0];
   const replays = await Promise.all([1, 2].map(() => fetch(external + '/operations/' + original.operationId, {
-    method: 'PUT', signal: AbortSignal.timeout(10_000), headers: { 'Content-Type': 'application/json' },
+    method: 'PUT', signal: AbortSignal.timeout(10_000), headers: { 'Content-Type': 'application/json', Connection: 'close' },
     body: JSON.stringify(original.request),
   })));
   for (const response of replays) assert.equal(response.status, 200);
@@ -200,7 +201,7 @@ try {
     assert.notEqual(newAddress, oldAddress);
     const frontend = 'http://127.0.0.1:19573';
     await waitFor('frontend discovers the new backend address', async () => {
-      const response = await fetch(frontend + '/api/session', { signal: AbortSignal.timeout(5000) });
+      const response = await fetch(frontend + '/api/session', { headers: { Connection: 'close' }, signal: AbortSignal.timeout(5000) });
       return response.status === 401 && (await response.json()).code === 'SESSION_REQUIRED';
     }, 20_000);
     assert.equal(composeRun(['ps', '-q', 'frontend']).trim(), frontendId);
