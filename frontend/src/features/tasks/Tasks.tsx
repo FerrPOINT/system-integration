@@ -30,7 +30,9 @@ export function TaskList({ user }: { user: GetSession200 }) {
     <div className="page-heading"><div><h1>{user.role === 'OPERATOR' ? 'Все задания' : 'Мои задания'}</h1>
       <p className="muted">Приём задания, доставка и результат исполнения показаны отдельно.</p></div>
       {user.role === 'INITIATOR' && <Link className="button primary" to="/tasks/new">Создать задание</Link>}</div>
-    <form className="panel filters" key={search.toString()} onSubmit={event => {
+    <details className="filter-panel" key={search.toString()} open={!mobile || Boolean(status || params.createdFrom || params.createdTo)}>
+    <summary>Фильтры <span>{status || params.createdFrom || params.createdTo ? 'Заданы условия' : 'Результат и период'}</span></summary>
+    <form className="filters" onSubmit={event => {
       event.preventDefault(); const form = new FormData(event.currentTarget); const next = new URLSearchParams();
       if (form.get('businessStatus')) next.set('businessStatus', String(form.get('businessStatus')));
       for (const name of ['createdFrom', 'createdTo']) {
@@ -42,17 +44,18 @@ export function TaskList({ user }: { user: GetSession200 }) {
         {Object.entries(businessLabels).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
       <label>Создано с (UTC, включительно)<input type="datetime-local" name="createdFrom" defaultValue={params.createdFrom?.slice(0,16)} /></label>
       <label>Создано до (UTC, не включая)<input type="datetime-local" name="createdTo" defaultValue={params.createdTo?.slice(0,16)} /></label>
-      <button>Применить</button><button type="button" onClick={() => setSearch({})}>Сбросить</button>
-    </form>
+      <div className="filter-actions"><button className="primary">Применить</button><button type="button" onClick={() => setSearch({})}>Сбросить</button></div>
+    </form></details>
     {!valid ? <p role="alert">Некорректные параметры страницы. Сбросьте фильтры.</p> : tasks.isPending ? <Loading /> :
       tasks.isError ? <><ErrorMessage error={tasks.error} /><button onClick={() => tasks.refetch()}>Повторить</button></> :
       <><div className="list-heading"><span>{tasks.isFetching ? 'Обновляем…' : 'Сохранённые задания'}</span>
         <button type="button" onClick={() => tasks.refetch()} disabled={tasks.isFetching}>Обновить</button></div>
-        {tasks.data.items.length === 0 ? <section className="panel empty"><h2>Заданий пока нет</h2>
-          <p>Создайте задание или измените фильтры.</p></section> : mobile ?
-          <ul className="task-cards">{tasks.data.items.map(task => <li className="panel" key={task.taskId}>
+        {tasks.data.items.length === 0 ? <section className="panel empty"><h2>{status || params.createdFrom || params.createdTo ? 'Ничего не найдено' : 'Заданий пока нет'}</h2>
+          <p>{status || params.createdFrom || params.createdTo ? 'Измените условия или сбросьте фильтры, чтобы увидеть задания.' : 'Создайте первое задание. Здесь появятся доставка и результат исполнения.'}</p>
+          {(status || params.createdFrom || params.createdTo) && <button onClick={() => setSearch({})}>Сбросить фильтры</button>}</section> : mobile ?
+          <ul className="task-cards">{tasks.data.items.map(task => <li className="panel task-card" key={task.taskId}>
             <h2><Link to={'/tasks/' + task.taskId}>{task.title}</Link></h2>
-            <BusinessBadge status={task.businessStatus} /><p>{deliveryLabels[task.deliveryStatus]}</p>
+            <div className="task-card-status"><BusinessBadge status={task.businessStatus} /><span>{deliveryLabels[task.deliveryStatus]}</span></div>
             <dl><dt>Заявка</dt><dd>{task.request.reference}</dd><dt>Количество</dt><dd>{task.request.quantity}</dd>
               <dt>Создано</dt><dd>{timestamp(task.createdAt)}</dd></dl>
           </li>)}</ul> :

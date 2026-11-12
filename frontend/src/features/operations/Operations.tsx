@@ -168,7 +168,9 @@ export function ReconciliationCard() {
     <Link className="back-link" to={'/tasks/' + taskId}>← К заданию</Link>
     <div className="page-heading"><h1>Сохранённая сверка</h1><ReconcileButton taskId={taskId} /></div>
     <ErrorMessage error={snapshot.error} />
-    <section className="panel"><h2>{outcomes[item.outcome]}</h2><p>{timestamp(item.checkedAt)} · Оператор {item.checkedBy}</p>
+    <section className="panel reconciliation-panel" data-outcome={item.outcome}><div className="reconciliation-summary">
+      <span className="outcome-mark" aria-hidden="true">{item.outcome === 'MATCH' ? '✓' : item.outcome === 'DIFFERENCE' ? '≠' : '!'}</span>
+      <div><h2>{outcomes[item.outcome]}</h2><p className="muted">{timestamp(item.checkedAt)} · Оператор {item.checkedBy}</p></div></div>
       <p className="muted">Это сохранённые данные на момент проверки. Новая сверка создаст отдельную запись.</p>
       <div className="comparison-grid"><Snapshot title="В приложении" value={item.local} />
         {item.external ? <Snapshot title="У исполнителя" value={item.external} /> : <section><h3>У исполнителя</h3>
