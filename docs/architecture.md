@@ -407,6 +407,11 @@ PostgreSQL 18.6. Образ `postgres:18.6-alpine` закреплён в
 и внутреннюю недоступность сервиса (503 SERVICE_UNAVAILABLE). Внутренняя причина
 не попадает в ответ; API и frontend используют один контракт OpenAPI.
 
+Внутренний servlet ERROR-dispatch разрешён штатным правилом Spring Security,
+чтобы 404/405/500 не превращались в 403 при обработке ошибки контейнером.
+Прямой HTTP-запрос к /error остаётся закрыт. Это проверяет HttpErrorRoutingTest
+через настоящий Tomcat, включая транзакционный откат и соседние 401/403.
+
 ## Фильтры и страницы
 
 URL — единственный источник применённых фильтров и номера страницы.
@@ -536,7 +541,7 @@ build.gradle, Dockerfile, packageManager и pnpm-lock.yaml. Плавающие l
 | React / React DOM | 19.3.1 | Установленные версии совпали с npm latest. |
 | React Query / Router | 5.107.1 / 7.18.5 | Установленные версии совпали с npm latest. |
 | TypeScript / Orval | 7.0.2 / 8.47.0 | Установленные версии совпали с npm latest. |
-| Vite | 8.3.8 | package.json, lockfile и установка обновлены; типы и пять API-client тестов проходят на Node 26.13.1. |
+| Vite | 8.3.8 | package.json, lockfile и установка обновлены; типы и шесть API-client тестов проходят на Node 26.13.1. |
 | pnpm | 12.19.0 | Точная версия опубликована; corepack pnpm --version подтвердил pin. |
 
 Источники: [Spring Boot](https://docs.spring.io/spring-boot/reference/index.html),
