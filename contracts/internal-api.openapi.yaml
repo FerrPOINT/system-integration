@@ -51,6 +51,12 @@ paths:
                   format: password
                   writeOnly: true
       responses:
+        '503':
+          description: Сервис авторизации временно недоступен. Не является ошибкой пароля.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '204':
           description: Сессия создана. Идентификатор передаётся в Set-Cookie.
         '401':
@@ -614,6 +620,7 @@ components:
             - VALIDATION_FAILED
             - SESSION_REQUIRED
             - INVALID_CREDENTIALS
+            - SERVICE_UNAVAILABLE
             - ACCESS_DENIED
             - CSRF_INVALID
             - NOT_FOUND

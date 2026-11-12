@@ -11,6 +11,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -63,7 +64,11 @@ public class SecurityConfiguration {
             .anyRequest().denyAll());
         http.formLogin(form -> form.loginProcessingUrl("/api/login")
             .successHandler((req, res, auth) -> res.setStatus(204))
-            .failureHandler((req, res, error) -> problems.write(res, 401, "INVALID_CREDENTIALS")));
+            .failureHandler((req, res, error) -> {
+                if (error instanceof AuthenticationServiceException)
+                    problems.write(res, 503, "SERVICE_UNAVAILABLE");
+                else problems.write(res, 401, "INVALID_CREDENTIALS");
+            }));
         http.logout(logout -> logout.logoutUrl("/api/logout")
             .deleteCookies("JSESSIONID")
             .logoutSuccessHandler((req, res, auth) -> res.setStatus(204)));

@@ -29,13 +29,16 @@ const stages = [], integrityErrors = [];
 let serial = 300000;
 
 async function clientsFor(count) {
-  return Promise.all(Array.from({ length: count }, async (_, index) => {
+  const clients = new Array(count);
+  // Authentication is preparation, not an unbounded BCrypt burst in the API profile.
+  await parallel(Array.from({ length: count }, (_, index) => index), 4, async index => {
     const account = dataset.accounts[index % 2];
     const session = new ApiSession(origin);
     await session.login(account.username, process.env.SI_DEMO_PASSWORD);
     const task = await session.get('/api/tasks/' + account.tasks[Math.floor(index / 2)]);
-    return { index, session, task, counter: 0 };
-  }));
+    clients[index] = { index, session, task, counter: 0 };
+  });
+  return clients;
 }
 
 async function checkCreated(created, clients, drained) {
