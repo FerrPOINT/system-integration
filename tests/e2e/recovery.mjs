@@ -215,13 +215,17 @@ try {
     });
     return api.get('/api/tasks/' + created.taskId);
   }));
+  const shutdownSince = new Date().toISOString();
   composeRun(['stop', 'backend', 'emulator']);
   const exits = ['backend', 'emulator'].map(service => {
     const id = composeRun(['ps', '--all', '-q', service]).trim();
     const state = JSON.parse(docker(['inspect', '--format', '{{json .State}}', id]));
-    assert.equal(state.ExitCode, 0, service + ' did not stop gracefully');
+    assert.ok([0, 143].includes(state.ExitCode), service + ' exited unexpectedly: ' + state.ExitCode);
     assert.equal(state.OOMKilled, false);
-    return { service, exitCode: state.ExitCode };
+    const shutdownLog = docker(['logs', '--since', shutdownSince, id]);
+    assert.match(shutdownLog, /Graceful shutdown complete/, service + ' HTTP shutdown did not finish');
+    assert.match(shutdownLog, /HikariPool-1 - Shutdown completed/, service + ' database pool did not close');
+    return { service, exitCode: state.ExitCode, httpShutdownComplete: true, databasePoolClosed: true };
   });
   composeRun(['up', '-d', '--no-build', '--no-deps', '--wait', 'backend', 'emulator']);
   api = await login();
