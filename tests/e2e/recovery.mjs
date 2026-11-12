@@ -181,6 +181,29 @@ try {
   for (const response of replays) assert.equal(response.status, 200);
   assert.deepEqual(await inspect(original.operationId), original);
   mark('PostgreSQL restart preserves results and feed position', { operations: states.map(state => ({ operationId: state.operationId, executions: state.executions, completedAt: state.result.completedAt })) });
+  const frontendId = composeRun(['ps', '-q', 'frontend']).trim();
+  const gateway = JSON.parse(docker(['inspect', frontendId]))[0];
+  const backend = JSON.parse(docker(['inspect', composeRun(['ps', '-q', 'backend']).trim()]))[0];
+  const network = Object.keys(backend.NetworkSettings.Networks)[0];
+  const oldAddress = backend.NetworkSettings.Networks[network].IPAddress;
+  composeRun(['rm', '--stop', '--force', 'backend']);
+  // Reserve the released address so this checks DNS changes rather than address reuse.
+  const fixture = docker(['run', '--detach', '--name', 'system-integration-dns-' + randomUUID(),
+    '--label', 'com.azhukov.integration.test=recovery-dns', '--network', network, '--ip', oldAddress,
+    '--memory', '16m', '--cpus', '0.05', '--read-only', '--entrypoint', '/bin/sleep', gateway.Image, '120']).trim();
+  try {
+    composeRun(['up', '-d', '--no-build', '--no-deps', '--wait', 'backend']);
+    const current = JSON.parse(docker(['inspect', composeRun(['ps', '-q', 'backend']).trim()]))[0];
+    const newAddress = current.NetworkSettings.Networks[network].IPAddress;
+    assert.notEqual(newAddress, oldAddress);
+    const frontend = 'http://127.0.0.1:19573';
+    await waitFor('frontend discovers the new backend address', async () => {
+      const response = await fetch(frontend + '/api/session', { signal: AbortSignal.timeout(5000) });
+      return response.status === 401 && (await response.json()).code === 'SESSION_REQUIRED';
+    }, 20_000);
+    assert.equal(composeRun(['ps', '-q', 'frontend']).trim(), frontendId);
+    mark('Frontend follows a changed backend IP without restarting', { oldAddress, newAddress, frontendUnchanged: true });
+  } finally { docker(['rm', '--force', fixture]); }
   receipt.passed = true;
 } catch (error) {
   receipt.error = { name: error.name, message: error.message };

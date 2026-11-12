@@ -29,3 +29,10 @@ test('frontend serves the built application and its JavaScript', async () => {
   assert.equal(script.status, 200);
   assert.match(script.headers.get('content-type') ?? '', /javascript/);
 });
+
+
+test('frontend proxies protected API routes to the backend', async () => {
+  const response = await fetch(new URL('/api/session', frontend), { signal: AbortSignal.timeout(5000) });
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).code, 'SESSION_REQUIRED');
+});
