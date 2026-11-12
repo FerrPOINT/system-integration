@@ -256,7 +256,7 @@ node --test tests/e2e/public.test.mjs
 | Что нужно | Где смотреть |
 | --- | --- |
 | Исходное задание и критерии | [ТЗ 2.1](docs/original-specification.md), [требования](docs/requirements.md). |
-| Правила, экраны и модель данных | [Аналитика](docs/analysis.md), [архитектура](docs/architecture.md). |
+| Правила, экраны и модель данных | [Аналитика](docs/analysis.md), [архитектура](docs/architecture.md), [поток задания](docs/architecture.md#типичный-поток-задания). |
 | Контракты REST | [Приложение](contracts/internal-api.openapi.yaml), [эмулятор](contracts/external-exchange.openapi.yaml). |
 | План и состояние работы | [Роадмап](docs/roadmap.md), [задачи](docs/decomposition.md), [текущая стадия](docs/current-stage.md). |
 | Проверки и сдача | [Сценарии приёмки](docs/test-cases.md), [план эксплуатации и комплект сдачи](docs/roadmap.md#эксплуатация-и-сдача). |
