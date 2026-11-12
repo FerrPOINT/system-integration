@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './support';
+import { login, selectChoice } from './support';
 
 const external = process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19581';
 
@@ -38,7 +38,7 @@ test('TC-03 / TC-07: lost reply, independent execution, reconciliation and opera
   await page.getByRole('button', { name: 'Взять разбор', exact: true }).click();
   await expect(page.getByText(operator.userId, { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Взять разбор', exact: true })).toHaveCount(0);
-  await page.getByRole('combobox', { name: 'Действие', exact: true }).selectOption('APPLY_EXTERNAL_RESULT');
+  await selectChoice(page, 'Действие', 'Принять внешний результат');
   await page.getByLabel('Причина решения', { exact: true }).fill('Проверено фактическое исполнение, принимаю сохранённый результат');
   await page.getByRole('button', { name: 'Принять внешний результат', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
@@ -73,7 +73,7 @@ test('TC-06 / TC-07: conflicting external input is stopped explicitly without ac
   await expect(page.getByRole('heading', { name: 'Обнаружено расхождение' })).toBeVisible();
   await page.getByRole('link', { name: 'Перейти к разбору и решению' }).click();
   await expect(page.getByRole('option', { name: 'Принять внешний результат', exact: true })).toHaveCount(0);
-  await page.getByRole('combobox', { name: 'Действие', exact: true }).selectOption('ACKNOWLEDGE_DIFFERENCE');
+  await selectChoice(page, 'Действие', 'Завершить разбор');
   await page.getByLabel('Причина решения', { exact: true }).fill('ID занят операцией с другим запросом, прекращаю отправку');
   await page.getByRole('button', { name: 'Завершить разбор', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Разбор завершён' })).toBeVisible();

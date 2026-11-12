@@ -1,3 +1,7 @@
+import { Badge } from '../../ui/badge';
+import { Select } from '../../ui/select';
+import { Input } from '../../ui/input';
+import { Button } from '../../ui/button';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -11,7 +15,7 @@ import { businessLabels, deliveryLabels, timestamp } from '../../app/format';
 import { ReconcileButton } from '../operations/Operations';
 
 function BusinessBadge({ status }: { status: BusinessStatus }) {
-  return <span className={`badge status-${status.toLowerCase()}`}>{businessLabels[status]}</span>;
+  return <Badge tone={status === 'SUCCEEDED' ? 'success' : status === 'REJECTED' ? 'danger' : status === 'RUNNING' ? 'info' : 'neutral'}>{businessLabels[status]}</Badge>;
 }
 
 export function TaskList({ user }: { user: GetSession200 }) {
@@ -29,30 +33,30 @@ export function TaskList({ user }: { user: GetSession200 }) {
   return <>
     <div className="page-heading"><div><h1>{user.role === 'OPERATOR' ? 'Все задания' : 'Мои задания'}</h1>
       <p className="muted">Приём задания, доставка и результат исполнения показаны отдельно.</p></div>
-      {user.role === 'INITIATOR' && <Link className="button primary" to="/tasks/new">Создать задание</Link>}</div>
+      {user.role === 'INITIATOR' && <Button asChild variant="default"><Link to="/tasks/new">Создать задание</Link></Button>}</div>
     <details className="filter-panel" key={search.toString()} open={!mobile || Boolean(status || params.createdFrom || params.createdTo)}>
     <summary>Фильтры <span>{status || params.createdFrom || params.createdTo ? 'Заданы условия' : 'Результат и период'}</span></summary>
     <form className="filters" onSubmit={event => {
       event.preventDefault(); const form = new FormData(event.currentTarget); const next = new URLSearchParams();
-      if (form.get('businessStatus')) next.set('businessStatus', String(form.get('businessStatus')));
+      if (form.get('businessStatus') !== 'ALL') next.set('businessStatus', String(form.get('businessStatus')));
       for (const name of ['createdFrom', 'createdTo']) {
         if (form.get(name)) next.set(name, String(form.get(name)) + ':00Z');
       }
       setSearch(next);
     }}>
-      <label>Результат<select name="businessStatus" defaultValue={status || ''}><option value="">Все результаты</option>
-        {Object.entries(businessLabels).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
-      <label>Создано с (UTC, включительно)<input type="datetime-local" name="createdFrom" defaultValue={params.createdFrom?.slice(0,16)} /></label>
-      <label>Создано до (UTC, не включая)<input type="datetime-local" name="createdTo" defaultValue={params.createdTo?.slice(0,16)} /></label>
-      <div className="filter-actions"><button className="primary">Применить</button><button type="button" onClick={() => setSearch({})}>Сбросить</button></div>
+      <label htmlFor="business-status">Результат<Select id="business-status" name="businessStatus" defaultValue={status || 'ALL'}
+        options={[{ value: 'ALL', label: 'Все результаты' }, ...Object.entries(businessLabels).map(([value, label]) => ({ value, label }))]} /></label>
+      <label>Создано с (UTC, включительно)<Input type="datetime-local" name="createdFrom" defaultValue={params.createdFrom?.slice(0,16)} /></label>
+      <label>Создано до (UTC, не включая)<Input type="datetime-local" name="createdTo" defaultValue={params.createdTo?.slice(0,16)} /></label>
+      <div className="filter-actions"><Button variant="default">Применить</Button><Button type="button" onClick={() => setSearch({})}>Сбросить</Button></div>
     </form></details>
     {!valid ? <p role="alert">Некорректные параметры страницы. Сбросьте фильтры.</p> : tasks.isPending ? <Loading /> :
-      tasks.isError ? <><ErrorMessage error={tasks.error} /><button onClick={() => tasks.refetch()}>Повторить</button></> :
+      tasks.isError ? <><ErrorMessage error={tasks.error} /><Button onClick={() => tasks.refetch()}>Повторить</Button></> :
       <><div className="list-heading"><span>{tasks.isFetching ? 'Обновляем…' : 'Сохранённые задания'}</span>
-        <button type="button" onClick={() => tasks.refetch()} disabled={tasks.isFetching}>Обновить</button></div>
+        <Button type="button" onClick={() => tasks.refetch()} disabled={tasks.isFetching}>Обновить</Button></div>
         {tasks.data.items.length === 0 ? <section className="panel empty"><h2>{status || params.createdFrom || params.createdTo ? 'Ничего не найдено' : 'Заданий пока нет'}</h2>
           <p>{status || params.createdFrom || params.createdTo ? 'Измените условия или сбросьте фильтры, чтобы увидеть задания.' : 'Создайте первое задание. Здесь появятся доставка и результат исполнения.'}</p>
-          {(status || params.createdFrom || params.createdTo) && <button onClick={() => setSearch({})}>Сбросить фильтры</button>}</section> : mobile ?
+          {(status || params.createdFrom || params.createdTo) && <Button onClick={() => setSearch({})}>Сбросить фильтры</Button>}</section> : mobile ?
           <ul className="task-cards">{tasks.data.items.map(task => <li className="panel task-card" key={task.taskId}>
             <h2><Link to={'/tasks/' + task.taskId}>{task.title}</Link></h2>
             <div className="task-card-status"><BusinessBadge status={task.businessStatus} /><span>{deliveryLabels[task.deliveryStatus]}</span></div>
@@ -89,13 +93,13 @@ export function NewTask() {
   return <><Link className="back-link" to="/tasks">← К заданиям</Link><h1>Новое задание</h1>
     <section className="panel readable"><p className="muted">Задание сохраняется сразу. Отправка исполнителю продолжится в фоне.</p>
       <form onSubmit={event => { event.preventDefault(); create.mutate(new FormData(event.currentTarget)); }}>
-        <label>Название<input name="title" required maxLength={160} pattern=".*\S.*" autoFocus /></label>
-        <div className="field"><label>Номер заявки<input name="reference" required pattern="REQ-[0-9]{6}" placeholder="REQ-000001" aria-describedby="reference-hint" /></label>
+        <label>Название<Input name="title" required maxLength={160} pattern=".*\S.*" autoFocus /></label>
+        <div className="field"><label>Номер заявки<Input name="reference" required pattern="REQ-[0-9]{6}" placeholder="REQ-000001" aria-describedby="reference-hint" /></label>
           <small id="reference-hint">REQ- и шесть цифр. После создания изменить нельзя.</small></div>
-        <div className="field"><label>Количество<input name="quantity" type="number" min={1} max={1000} step={1} required defaultValue={25} aria-describedby="quantity-hint" /></label>
+        <div className="field"><label>Количество<Input name="quantity" type="number" min={1} max={1000} step={1} required defaultValue={25} aria-describedby="quantity-hint" /></label>
           <small id="quantity-hint">Демонстрационное правило: до 100 единиц включительно — успех, больше — отказ.</small></div>
         <ErrorMessage error={create.error} />
-        <div className="actions"><button className="primary" disabled={create.isPending}>{create.isPending ? 'Сохраняем…' : 'Создать'}</button>
+        <div className="actions"><Button variant="default" disabled={create.isPending}>{create.isPending ? 'Сохраняем…' : 'Создать'}</Button>
           <Link to="/tasks">Отмена</Link></div>
       </form>
     </section></>;
@@ -117,10 +121,10 @@ export function TaskCard({ user }: { user: GetSession200 }) {
   const [editing, setEditing] = useState(false);
   if (task.isPending) return <Loading />;
   if (!task.data) return <><Link to="/tasks">← К заданиям</Link><ErrorMessage error={task.error} />
-    <button onClick={() => task.refetch()}>Повторить</button></>;
+    <Button onClick={() => task.refetch()}>Повторить</Button></>;
   const item = task.data;
   return <><Link className="back-link" to="/tasks">← К заданиям</Link>
-    <div className="page-heading"><h1>{item.title}</h1><button onClick={() => task.refetch()} disabled={task.isFetching}>Обновить</button></div>
+    <div className="page-heading"><h1>{item.title}</h1><Button onClick={() => task.refetch()} disabled={task.isFetching}>Обновить</Button></div>
     <ErrorMessage error={task.error} />
     <section className="panel"><h2>Состояние задания</h2>
       <dl className="details"><dt>Доставка</dt><dd>{deliveryLabels[item.deliveryStatus]}</dd>
@@ -132,7 +136,7 @@ export function TaskCard({ user }: { user: GetSession200 }) {
           {item.result.rejectionCode && <><dt>Причина отказа</dt><dd>Количество превышает 100 единиц</dd></>}</>}
       </dl>
       {user.role === 'INITIATOR' && (editing ? <RenameForm task={item} onClose={() => setEditing(false)} /> :
-        <button onClick={() => setEditing(true)}>Изменить название</button>)}
+        <Button onClick={() => setEditing(true)}>Изменить название</Button>)}
       {user.role === 'OPERATOR' && <ReconcileButton taskId={id} />}
     </section>
     <History id={id} canReview={user.role === 'OPERATOR'} />
@@ -156,11 +160,11 @@ function RenameForm({ task, onClose }: { task: Task; onClose: () => void }) {
   });
   const conflict = rename.error instanceof ApiError && rename.error.status === 409;
   return <form className="edit-form" onSubmit={event => { event.preventDefault(); rename.mutate(new FormData(event.currentTarget)); }}>
-    <label>Новое название<input name="title" required maxLength={160} pattern=".*\S.*" defaultValue={task.title} autoFocus /></label>
+    <label>Новое название<Input name="title" required maxLength={160} pattern=".*\S.*" defaultValue={task.title} autoFocus /></label>
     <ErrorMessage error={rename.error} />
-    <div className="actions"><button className="primary" disabled={rename.isPending || conflict}>Сохранить</button>
-      <button type="button" onClick={async () => { await client.invalidateQueries({ queryKey: keys.task(task.taskId) }); onClose(); }}>
-        {conflict ? 'Обновить карточку' : 'Отмена'}</button></div>
+    <div className="actions"><Button variant="default" disabled={rename.isPending || conflict}>Сохранить</Button>
+      <Button type="button" onClick={async () => { await client.invalidateQueries({ queryKey: keys.task(task.taskId) }); onClose(); }}>
+        {conflict ? 'Обновить карточку' : 'Отмена'}</Button></div>
   </form>;
 }
 
@@ -169,7 +173,7 @@ function History({ id, canReview }: { id: string; canReview: boolean }) {
   const history = useQuery({ queryKey: keys.history(id, page), queryFn: () => data(listTaskHistory(id, { page })) });
   return <section className="panel history"><h2>История</h2>
     {history.isPending ? <Loading /> : history.isError ? <><ErrorMessage error={history.error} />
-      <button onClick={() => history.refetch()}>Повторить</button></> : <>
+      <Button onClick={() => history.refetch()}>Повторить</Button></> : <>
       <ol>{history.data.items.map(event => <li key={event.eventId}>
         <p>{event.summary}</p><small><time dateTime={event.occurredAt}>{timestamp(event.occurredAt)}</time> ·
           {event.actor === 'SYSTEM' ? ' Система' : ` Пользователь ${event.actorUserId}`}</small>

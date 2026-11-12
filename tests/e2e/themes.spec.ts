@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { login } from './support';
+import { login, selectChoice } from './support';
 
+const themeLabels: Record<string, string> = { dark: 'Тёмная', light: 'Светлая', gray: 'Серая' };
 const key = 'system-integration.theme';
 
 test('UI-01: dark default, all palettes and readable controls', async ({ page }) => {
@@ -9,8 +10,8 @@ test('UI-01: dark default, all palettes and readable controls', async ({ page })
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   const picker = page.getByRole('combobox', { name: 'Цветовая тема', exact: true });
-  for (const theme of ['dark', 'light', 'gray']) {
-    await picker.selectOption(theme);
+  for (const theme of ['light', 'gray', 'dark']) {
+    await selectChoice(page, 'Цветовая тема', themeLabels[theme]);
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     expect(await page.evaluate(key => localStorage.getItem(key), key)).toBe(theme);
     const contrasts = await page.evaluate(() => {
@@ -21,7 +22,7 @@ test('UI-01: dark default, all palettes and readable controls', async ({ page })
         const color = getComputedStyle(el).backgroundColor;
         return color !== 'transparent' && !color.endsWith(', 0)') ? color : background(el.parentElement!);
       };
-      return ['.login-panel h2', '.login-panel > .muted', '.login-panel .primary', '.theme-control select', '.login-panel input'].map(selector => {
+      return ['.login-panel h2', '.login-panel > .muted', '.login-panel .base-button[data-variant="default"]', '.theme-control .base-choice-trigger', '.login-panel input'].map(selector => {
         const el = document.querySelector(selector)!;
         const colors = [luminance(rgb(getComputedStyle(el).color)), luminance(rgb(background(el)))].sort((a, b) => a - b);
         return { selector, ratio: (colors[1] + .05) / (colors[0] + .05) };
@@ -31,15 +32,15 @@ test('UI-01: dark default, all palettes and readable controls', async ({ page })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   await page.reload();
-  await expect(picker).toHaveValue('gray');
+  await expect(picker).toHaveAttribute('data-value', 'dark');
 });
 
 test('UI-02: theme survives navigation and logout, synchronizes tabs and preserves the form', async ({ page, context }, info) => {
   await page.goto('/');
   const picker = page.getByRole('combobox', { name: 'Цветовая тема', exact: true });
-  await picker.selectOption('gray');
+  await selectChoice(page, 'Цветовая тема', themeLabels['gray']);
   await login(page);
-  await expect(picker).toHaveValue('gray');
+  await expect(picker).toHaveAttribute('data-value', 'gray');
   if (info.project.name === 'mobile') {
     const brand = await page.locator('.app-header > .brand').boundingBox();
     expect(brand!.width).toBeGreaterThan(150);
@@ -48,24 +49,27 @@ test('UI-02: theme survives navigation and logout, synchronizes tabs and preserv
   const filters = page.locator('.filter-panel');
   await expect(filters).toHaveJSProperty('open', info.project.name !== 'mobile');
   if (info.project.name === 'mobile') await filters.locator('summary').click();
-  await page.getByRole('combobox', { name: 'Результат', exact: true }).selectOption('SUCCEEDED');
+  await selectChoice(page, 'Результат', 'Выполнено');
   await page.getByRole('button', { name: 'Применить', exact: true }).click();
   await expect(page).toHaveURL(/businessStatus=SUCCEEDED/);
+  await selectChoice(page, 'Результат', 'Все результаты');
+  await page.getByRole('button', { name: 'Применить', exact: true }).click();
+  await expect(page).not.toHaveURL(/businessStatus=/);
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
   await page.getByLabel('Название', { exact: true }).fill('Черновик сохраняется при смене темы');
-  await picker.selectOption('light');
+  await selectChoice(page, 'Цветовая тема', themeLabels['light']);
   await expect(page.getByLabel('Название', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');
   const other = await context.newPage();
   try {
     await other.goto('/tasks');
-    await expect(other.getByRole('combobox', { name: 'Цветовая тема', exact: true })).toHaveValue('light');
-    await other.getByRole('combobox', { name: 'Цветовая тема', exact: true }).selectOption('dark');
-    await expect(picker).toHaveValue('dark');
+    await expect(other.getByRole('combobox', { name: 'Цветовая тема', exact: true })).toHaveAttribute('data-value', 'light');
+    await selectChoice(other, 'Цветовая тема', 'Тёмная');
+    await expect(picker).toHaveAttribute('data-value', 'dark');
     await expect(page.getByLabel('Название', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');
   } finally { await other.close(); }
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
-  await expect(picker).toHaveValue('dark');
+  await expect(picker).toHaveAttribute('data-value', 'dark');
 });
 
 test('UI-03: invalid saved preference is explained and can be corrected', async ({ page }) => {
@@ -73,7 +77,7 @@ test('UI-03: invalid saved preference is explained and can be corrected', async 
   await page.goto('/');
   await expect(page.getByText('Сохранённая тема не распознана. Выберите тему заново.')).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await page.getByRole('combobox', { name: 'Цветовая тема', exact: true }).selectOption('gray');
+  await selectChoice(page, 'Цветовая тема', themeLabels['gray']);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'gray');
   await expect(page.getByText('Сохранённая тема не распознана. Выберите тему заново.')).toHaveCount(0);
 });
@@ -82,7 +86,45 @@ test('UI-04: blocked storage keeps the chosen theme usable and explains persiste
   await page.addInitScript(() => Object.defineProperty(window, 'localStorage', { get() { throw new DOMException('Storage is blocked', 'SecurityError'); } }));
   await page.goto('/');
   await expect(page.getByText('Браузер не сохраняет тему. Выбор действует в этой вкладке.')).toBeVisible();
-  await page.getByRole('combobox', { name: 'Цветовая тема', exact: true }).selectOption('light');
+  await selectChoice(page, 'Цветовая тема', themeLabels['light']);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
+});
+
+test('UI-05: Base popup uses the selected palette, safe arrow spacing and keyboard focus', async ({ page }) => {
+  await page.goto('/');
+  const picker = page.getByRole('combobox', { name: 'Цветовая тема', exact: true });
+  for (const theme of ['dark', 'light', 'gray']) {
+    await selectChoice(page, 'Цветовая тема', themeLabels[theme]);
+    const gap = await picker.evaluate(el => {
+      const button = el.getBoundingClientRect();
+      const icon = el.querySelector('svg')!.getBoundingClientRect();
+      return button.right - icon.right;
+    });
+    expect(gap).toBeGreaterThanOrEqual(16);
+    await picker.press('Enter');
+    const popup = page.getByRole('listbox');
+    await expect(popup).toBeVisible();
+    await expect(popup.getByRole('option', { selected: true })).toHaveText(themeLabels[theme]);
+    const palette = await popup.evaluate(el => ({
+      background: getComputedStyle(el).backgroundColor,
+      right: el.getBoundingClientRect().right,
+    }));
+    const surface = await page.locator('.login-panel').evaluate(el => getComputedStyle(el).backgroundColor);
+    expect(palette.background).toBe(surface);
+    expect(palette.right).toBeLessThanOrEqual(page.viewportSize()!.width);
+    await popup.press('Escape');
+    await expect(picker).toBeFocused();
+  }
+  await picker.press('Enter');
+  await page.keyboard.press('Home');
+  await expect(page.getByRole('option', { name: 'Тёмная', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(picker).toHaveAttribute('data-value', 'dark');
+  await expect(picker).toBeFocused();
+  await picker.press('Enter');
+  await expect(page.getByRole('option', { selected: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('listbox')).toHaveCount(0);
+  await expect(page.getByLabel('Логин', { exact: true })).toBeFocused();
 });

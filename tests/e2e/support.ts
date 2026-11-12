@@ -9,3 +9,8 @@ export async function login(page: Page, username = 'initiator.one') {
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(page.getByRole('heading', { name: username === 'operator' ? 'Все задания' : 'Мои задания', exact: true })).toBeVisible();
 }
+
+export async function selectChoice(page: Page, name: string, option: string) {
+  await page.getByRole('combobox', { name, exact: true }).click();
+  await page.getByRole('option', { name: option, exact: true }).click();
+}

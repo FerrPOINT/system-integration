@@ -1,3 +1,6 @@
+import { Select } from '../../ui/select';
+import { Textarea } from '../../ui/textarea';
+import { Button } from '../../ui/button';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -38,8 +41,8 @@ export function ReconcileButton({ taskId }: { taskId: string }) {
       navigate('/tasks/' + taskId + '/reconciliations/' + snapshot.reconciliationId);
     },
   });
-  return <div className="inline-action"><button onClick={() => reconcile.mutate()} disabled={reconcile.isPending}>
-    {reconcile.isPending ? 'Сверяем…' : 'Выполнить сверку'}</button><ErrorMessage error={reconcile.error} /></div>;
+  return <div className="inline-action"><Button onClick={() => reconcile.mutate()} disabled={reconcile.isPending}>
+    {reconcile.isPending ? 'Сверяем…' : 'Выполнить сверку'}</Button><ErrorMessage error={reconcile.error} /></div>;
 }
 
 export function IssueList() {
@@ -51,11 +54,11 @@ export function IssueList() {
     queryFn: () => data(listExchangeIssues({ page, status: status as IssueStatus })) });
   return <>
     <div className="page-heading"><div><h1>Разбор обмена</h1><p className="muted">Доставка, конфликты и решения операторов.</p></div>
-      <button onClick={() => issues.refetch()} disabled={issues.isFetching || !valid}>Обновить</button></div>
-    <label className="readable">Состояние разбора<select value={status} onChange={event => setSearch({ status: event.target.value })}>
-      <option value="OPEN">Открытые</option><option value="RESOLVED">Завершённые</option></select></label>
+      <Button onClick={() => issues.refetch()} disabled={issues.isFetching || !valid}>Обновить</Button></div>
+    <label className="readable" htmlFor="issue-status">Состояние разбора<Select id="issue-status" value={status}
+      onValueChange={status => setSearch({ status })} options={[{ value: 'OPEN', label: 'Открытые' }, { value: 'RESOLVED', label: 'Завершённые' }]} /></label>
     {!valid ? <p role="alert">Некорректные параметры страницы.</p> : issues.isPending ? <Loading /> : !issues.data ?
-      <><ErrorMessage error={issues.error} /><button onClick={() => issues.refetch()}>Повторить</button></> : <>
+      <><ErrorMessage error={issues.error} /><Button onClick={() => issues.refetch()}>Повторить</Button></> : <>
       <ErrorMessage error={issues.error} />
       {issues.data.items.length === 0 ? <p className="panel empty">Проблем в выбранном состоянии нет.</p> :
         <ul className="issue-cards">{issues.data.items.map(issue => <li className="panel" key={issue.issueId}>
@@ -74,11 +77,11 @@ export function IssueCard() {
   const issue = useQuery({ queryKey: keys.issue(id), queryFn: () => data(getExchangeIssue(id)) });
   if (issue.isPending) return <Loading />;
   if (!issue.data) return <><Link to="/issues">← К разбору обмена</Link><ErrorMessage error={issue.error} />
-    <button onClick={() => issue.refetch()}>Повторить</button></>;
+    <Button onClick={() => issue.refetch()}>Повторить</Button></>;
   const item = issue.data;
   return <>
     <Link className="back-link" to="/issues">← К разбору обмена</Link>
-    <div className="page-heading"><h1>{kinds[item.kind]}</h1><button onClick={() => issue.refetch()} disabled={issue.isFetching}>Обновить</button></div>
+    <div className="page-heading"><h1>{kinds[item.kind]}</h1><Button onClick={() => issue.refetch()} disabled={issue.isFetching}>Обновить</Button></div>
     <ErrorMessage error={issue.error} />
     <section className="panel"><h2>{item.status === 'OPEN' ? 'Открытый разбор' : 'Разбор завершён'}</h2><p>{item.summary}</p>
       <dl><dt>Открыт</dt><dd>{timestamp(item.openedAt)}</dd><dt>Ответственный</dt><dd className="technical">{item.assignedTo || 'Не назначен'}</dd>
@@ -95,8 +98,8 @@ export function IssueCard() {
         {item.evidence.received && <ReceivedResult value={item.evidence.received} />}
       </div>
     </section>}
-    {item.latestReconciliationId && item.taskId && <p className="history"><Link className="button" to={'/tasks/' + item.taskId + '/reconciliations/' + item.latestReconciliationId}>
-      Открыть последнюю сверку</Link></p>}
+    {item.latestReconciliationId && item.taskId && <p className="history"><Button asChild><Link to={'/tasks/' + item.taskId + '/reconciliations/' + item.latestReconciliationId}>
+      Открыть последнюю сверку</Link></Button></p>}
     {item.resolution && <section className="panel history"><h2>Решение</h2><p>{actionLabels[item.resolution.action]}</p><p>{item.resolution.reason}</p>
       <small>{timestamp(item.resolution.decidedAt)} · Оператор {item.resolution.decidedBy}</small>
       {item.taskId && <Link to={'/tasks/' + item.taskId + '/reconciliations/' + item.resolution.reconciliationId}>Сверка, на которой основано решение</Link>}
@@ -118,8 +121,8 @@ function IssueActions({ issue }: { issue: Issue }) {
   const decisions = issue.allowedActions.filter((action): action is DecisionAction => action === 'RETRY' || action === 'APPLY_EXTERNAL_RESULT' || action === 'ACKNOWLEDGE_DIFFERENCE');
   return <div className="history">
     <div className="actions">
-      {issue.allowedActions.includes('TAKE_OWNERSHIP') && <button onClick={() => take.mutate()} disabled={take.isPending}>
-        {take.isPending ? 'Сохраняем…' : issue.assignedTo ? 'Перенять разбор' : 'Взять разбор'}</button>}
+      {issue.allowedActions.includes('TAKE_OWNERSHIP') && <Button onClick={() => take.mutate()} disabled={take.isPending}>
+        {take.isPending ? 'Сохраняем…' : issue.assignedTo ? 'Перенять разбор' : 'Взять разбор'}</Button>}
       {issue.taskId && issue.allowedActions.includes('RECONCILE') && <ReconcileButton taskId={issue.taskId} />}
     </div>
     <ErrorMessage error={take.error} />
@@ -145,14 +148,14 @@ function DecisionForm({ issue, actions }: { issue: Issue; actions: DecisionActio
     onSuccess: async () => { await refresh(); command.reset(); setReason(''); setAction(''); },
   });
   return <form className="edit-form" onSubmit={event => { event.preventDefault(); decide.mutate(); }}>
-    <label>Действие<select value={action} required onChange={event => setAction(event.target.value as DecisionAction | '')}>
-      <option value="">Выберите действие</option>{actions.map(value => <option key={value} value={value}>{actionLabels[value]}</option>)}</select></label>
+    <label htmlFor="decision-action">Действие<Select id="decision-action" value={action} required placeholder="Выберите действие"
+      onValueChange={value => setAction(value as DecisionAction)} options={actions.map(value => ({ value, label: actionLabels[value] }))} /></label>
     {action === 'ACKNOWLEDGE_DIFFERENCE' && <p className="message">Локальный результат сохранится. Приостановленная из-за ошибки протокола отправка будет окончательно остановлена.</p>}
     {issue.latestReconciliationId && issue.taskId && <Link to={'/tasks/' + issue.taskId + '/reconciliations/' + issue.latestReconciliationId}>Сверка для этого решения</Link>}
-    <label>Причина решения<textarea value={reason} required maxLength={500} rows={3} onChange={event => setReason(event.target.value)} /></label>
+    <label>Причина решения<Textarea value={reason} required maxLength={500} rows={3} onChange={event => setReason(event.target.value)} /></label>
     <ErrorMessage error={decide.error} />
-    <button className="primary" disabled={decide.isPending || !reason.trim() || !action || !actions.includes(action)}>
-      {decide.isPending ? 'Сохраняем решение…' : action ? actionLabels[action] : 'Выполнить'}</button>
+    <Button variant="default" disabled={decide.isPending || !reason.trim() || !action || !actions.includes(action)}>
+      {decide.isPending ? 'Сохраняем решение…' : action ? actionLabels[action] : 'Выполнить'}</Button>
   </form>;
 }
 
@@ -162,7 +165,7 @@ export function ReconciliationCard() {
     queryFn: () => data(getTaskReconciliation(taskId, reconciliationId)) });
   if (snapshot.isPending) return <Loading />;
   if (!snapshot.data) return <><Link to={'/tasks/' + taskId}>← К заданию</Link><ErrorMessage error={snapshot.error} />
-    <button onClick={() => snapshot.refetch()}>Повторить</button></>;
+    <Button onClick={() => snapshot.refetch()}>Повторить</Button></>;
   const item = snapshot.data;
   return <>
     <Link className="back-link" to={'/tasks/' + taskId}>← К заданию</Link>
@@ -176,7 +179,7 @@ export function ReconciliationCard() {
         {item.external ? <Snapshot title="У исполнителя" value={item.external} /> : <section><h3>У исполнителя</h3>
           <p>{item.externalAvailability === 'NOT_FOUND' ? 'Операция с таким ID отсутствует' : 'Не удалось получить корректное состояние'}</p></section>}
       </div>
-      {item.issueId && <Link className="button primary" to={'/issues/' + item.issueId}>Перейти к разбору и решению</Link>}
+      {item.issueId && <Button asChild variant="default"><Link to={'/issues/' + item.issueId}>Перейти к разбору и решению</Link></Button>}
     </section>
   </>;
 }

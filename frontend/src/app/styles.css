@@ -1,30 +1,11 @@
-/* Semantic palettes: dark is the initial theme, including before React mounts. */
-:root, :root[data-theme="dark"] {
-  color-scheme: dark;
-  --page: #0d1015; --surface: #151a22; --raised: #1c2431; --input: #10151d; --hover: #222d3d;
-  --text: #e9eef7; --muted: #a9b6ca; --border: #303c4f; --control-border: #64748b;
-  --accent: #9bbdff; --accent-soft: #203352; --primary: #97baff; --primary-hover: #b3cdff; --on-primary: #101e36;
-  --focus: #b3cdff; --positive: #96e1af; --positive-bg: #173325;
-  --negative: #ffadb5; --negative-bg: #391f29; --negative-border: #874956;
-  --running: #b0ceff; --running-bg: #223653; --pending: #d7e0ee; --pending-bg: #2a3547;
-}
-:root[data-theme="light"] {
-  color-scheme: light;
-  --page: #f3f5f8; --surface: #ffffff; --raised: #f1f4f9; --input: #ffffff; --hover: #eaf0f9;
-  --text: #1d2a3d; --muted: #526278; --border: #d8e0eb; --control-border: #7e8ea6;
-  --accent: #2453bf; --accent-soft: #e7eefc; --primary: #285ecb; --primary-hover: #204da9; --on-primary: #ffffff;
-  --focus: #3c68ce; --positive: #14633a; --positive-bg: #e4f3e9;
-  --negative: #9c2638; --negative-bg: #fff0f2; --negative-border: #d4919c;
-  --running: #244f9e; --running-bg: #e7efff; --pending: #4b5d74; --pending-bg: #edf1f7;
-}
-:root[data-theme="gray"] {
-  color-scheme: dark;
-  --page: #272b32; --surface: #333841; --raised: #3c434e; --input: #292f37; --hover: #444e5d;
-  --text: #f4f6f9; --muted: #c5cdd9; --border: #5a6474; --control-border: #909eaf;
-  --accent: #b6cfff; --accent-soft: #405779; --primary: #b4ceff; --primary-hover: #cfdeff; --on-primary: #15223b;
-  --focus: #d6e3ff; --positive: #b0edc2; --positive-bg: #244735;
-  --negative: #ffc2ca; --negative-bg: #58343f; --negative-border: #c1818f;
-  --running: #d2e2ff; --running-bg: #405777; --pending: #eee4c7; --pending-bg: #554d38;
+:root {
+  --page: var(--color-background); --surface: var(--color-surface); --raised: var(--color-surface-raised);
+  --input: var(--color-surface); --hover: var(--color-surface-raised); --text: var(--color-text-primary);
+  --muted: var(--color-text-muted); --border: var(--color-border); --control-border: var(--color-border-strong);
+  --accent: var(--color-accent); --accent-soft: var(--color-selection); --focus: var(--color-focus);
+  --positive: var(--color-success); --positive-bg: color-mix(in srgb, var(--color-success) 12%, var(--color-surface));
+  --negative: var(--color-danger); --negative-bg: color-mix(in srgb, var(--color-danger) 12%, var(--color-surface)); --negative-border: var(--color-danger);
+  --pending: var(--color-text-secondary); --pending-bg: var(--color-surface-raised);
 }
 :root {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -33,24 +14,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; }
 a { color: var(--accent); text-underline-offset: 3px; overflow-wrap: anywhere; }
-button, input, select, textarea { font: inherit; }
-button, .button {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px;
-  border: 1px solid var(--border); border-radius: 8px; padding: 9px 15px;
-  background: var(--surface); color: var(--text); font-weight: 600; cursor: pointer; text-decoration: none;
-}
-button:hover, .button:hover { background: var(--hover); }
-button:disabled { cursor: default; opacity: .5; }
-.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
-.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
-input, select, textarea {
-  width: 100%; min-height: 44px; border: 1px solid var(--control-border); border-radius: 7px;
-  padding: 9px 11px; background: var(--input); color: var(--text);
-}
-select, summary { cursor: pointer; }
-input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
-textarea { resize: vertical; }
 label { display: grid; gap: 7px; font-size: 14px; font-weight: 600; min-width: 0; }
 .field { display: grid; gap: 7px; }
 label small { font-weight: 400; }
@@ -77,7 +41,7 @@ small { display: block; font-size: 12px; line-height: 1.5; }
 .account button { padding-inline: 12px; font-size: 13px; }
 .theme-picker { position: relative; flex-shrink: 0; }
 .theme-control { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); font-weight: 500; }
-.theme-control select { width: 119px; font-size: 13px; font-weight: 550; }
+.theme-control .base-choice-trigger { width: 136px; font-size: 13px; font-weight: 550; }
 .theme-notice { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; width: min(280px, 80vw); padding: 12px; background: var(--surface); color: var(--text); border: 1px solid var(--control-border); border-radius: 8px; }
 main { max-width: 1280px; padding: 26px 24px 56px; margin: 0 auto; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
@@ -86,7 +50,7 @@ label.readable { max-width: 320px; }
 .page-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 22px; }
 .page-heading h1 { margin-bottom: 8px; }
 .page-heading p { margin-bottom: 0; max-width: 650px; }
-.page-heading .button, .page-heading button { flex-shrink: 0; }
+.page-heading .base-button { flex-shrink: 0; }
 .back-link { display: inline-flex; align-items: center; min-height: 32px; margin-bottom: 15px; font-size: 13px; text-decoration: none; }
 .back-link:hover { text-decoration: underline; }
 .filter-panel { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); margin-bottom: 20px; }
@@ -97,7 +61,7 @@ label.readable { max-width: 320px; }
 .filter-actions { display: flex; gap: 8px; }
 .filter-actions button { font-size: 13px; }
 .list-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; color: var(--muted); font-size: 13px; }
-.list-heading button { min-height: 40px; padding-block: 7px; font-size: 13px; }
+.list-heading button { padding-block: 7px; font-size: 13px; }
 .task-table { width: 100%; border-collapse: separate; border-spacing: 0; padding: 0; table-layout: fixed; overflow: hidden; }
 .task-table th, .task-table td { text-align: left; padding: 15px 18px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
 .task-table th { background: var(--raised); color: var(--muted); font-size: 12px; font-weight: 550; }
@@ -120,10 +84,6 @@ dt { color: var(--muted); }
 dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
 .details { max-width: 850px; }
 .technical { font-family: ui-monospace, monospace; font-size: 13px; }
-.badge { display: inline-flex; align-items: center; font-size: 12px; font-weight: 650; padding: 4px 9px; border-radius: 5px; color: var(--pending); background: var(--pending-bg); }
-.status-succeeded { color: var(--positive); background: var(--positive-bg); }
-.status-rejected { color: var(--negative); background: var(--negative-bg); }
-.status-running { color: var(--running); background: var(--running-bg); }
 .pagination, .actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .pagination { margin-top: 18px; justify-content: flex-end; font-size: 13px; }
 .pagination button { font-size: 13px; }
@@ -166,7 +126,7 @@ dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
 .login-panel h2 { font-size: 23px; letter-spacing: -.015em; }
 .login-panel > p { font-size: 14px; }
 .login-panel form { margin-top: 24px; }
-.login-panel .primary { width: 100%; }
+.login-panel .base-button[data-variant="default"] { width: 100%; }
 .skip-link, .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .skip-link:focus { clip-path: none; width: auto; height: auto; left: 10px; top: 10px; padding: 10px; background: var(--surface); z-index: 50; }
 @media (max-width: 1150px) {
@@ -179,11 +139,11 @@ dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
 @media (max-width: 760px) {
   main { padding: 20px 16px 40px; }
   .app-header { padding: 12px 16px; gap: 9px 12px; }
-  .app-header > .brand { flex: 1 1 calc(100% - 120px); font-size: 13px; gap: 8px; order: 0; }
+  .app-header > .brand { flex: 1 1 calc(100% - 140px); font-size: 13px; gap: 8px; order: 0; }
   .app-header > .brand .brand-mark { width: 28px; height: 28px; }
   .header-controls { display: contents; }
   .theme-picker { order: 1; }
-  .theme-control select { width: 108px; }
+  .theme-control .base-choice-trigger { width: 128px; }
   .main-nav { order: 2; flex: 1; }
   .main-nav a { padding-inline: 8px; font-size: 13px; }
   .account { order: 3; gap: 8px; font-size: 12px; }
@@ -206,6 +166,6 @@ dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
   .workflow-steps { display: none; }
   .login-panel { padding: 22px; }
   .login-panel h2 { font-size: 21px; }
-  input, select, textarea { font-size: 16px; }
-  .theme-control select { font-size: 14px; }
+  .base-input, .base-textarea { font-size: 16px; }
+  .theme-control .base-choice-trigger { font-size: 14px; }
 }

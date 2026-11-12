@@ -3,6 +3,8 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './app/App';
 import { queryClient } from './app/api';
+import './ui/design-tokens.css';
+import './ui/controls.css';
 import './app/styles.css';
 
 const container = document.getElementById('root');

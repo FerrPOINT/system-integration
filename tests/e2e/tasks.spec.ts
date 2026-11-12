@@ -159,7 +159,7 @@ test('TC-09: history follows automatic task updates without reopening the card',
     await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
     await expect(page.getByText('Задание принято и поставлено в очередь', { exact: true })).toBeVisible();
-    await expect(page.getByText('В очереди', { exact: true })).toBeVisible();
+    await expect(page.getByText('Ожидает исполнения', { exact: true })).toBeVisible();
     expect((await request.delete(`${external}/test/faults/${reference}`)).status()).toBe(204);
     await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
     await expect(page.getByText('Принят внешний результат: SUCCEEDED', { exact: true })).toBeVisible();

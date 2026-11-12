@@ -1,3 +1,5 @@
+import { Input } from '../ui/input';
+import { Button } from '../ui/button';
 import type { ReactNode } from 'react';
 import { ThemePicker, useThemePreference } from './theme';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -18,7 +20,7 @@ export function App() {
   });
   if (session.isPending) return <main><Loading /></main>;
   if (session.isError) return <main><ErrorMessage error={session.error} />
-    <button onClick={() => session.refetch()}>Повторить</button></main>;
+    <Button onClick={() => session.refetch()}>Повторить</Button></main>;
   if (!session.data) return <Login appearance={appearance} />;
   return <Shell user={session.data} appearance={appearance} />;
 }
@@ -47,10 +49,10 @@ function Login({ appearance }: { appearance: ReactNode }) {
       <h2>Вход в систему</h2>
       <p className="muted">Введите логин и пароль вашей учётной записи.</p>
       <form onSubmit={event => { event.preventDefault(); login.mutate(new FormData(event.currentTarget)); }}>
-        <label>Логин<input name="username" autoComplete="username" required maxLength={64} autoFocus /></label>
-        <label>Пароль<input name="password" type="password" autoComplete="current-password" required /></label>
+        <label>Логин<Input name="username" autoComplete="username" required maxLength={64} autoFocus /></label>
+        <label>Пароль<Input name="password" type="password" autoComplete="current-password" required /></label>
         <ErrorMessage error={login.error} />
-        <button className="primary" disabled={login.isPending}>{login.isPending ? 'Входим…' : 'Войти'}</button>
+        <Button variant="default" disabled={login.isPending}>{login.isPending ? 'Входим…' : 'Войти'}</Button>
       </form>
     </section>
   </main>;
@@ -68,7 +70,7 @@ function Shell({ user, appearance }: { user: GetSession200; appearance: ReactNod
       <nav className="main-nav" aria-label="Основная навигация"><NavLink to="/tasks">Задания</NavLink>
         {user.role === 'OPERATOR' && <NavLink to="/issues">Разбор обмена</NavLink>}</nav>
       <div className="header-controls">{appearance}<div className="account"><span>{user.username}<small>{user.role === 'OPERATOR' ? 'Оператор' : 'Инициатор'}</small></span>
-        <button onClick={() => logout.mutate()} disabled={logout.isPending}>Выйти</button></div></div>
+        <Button onClick={() => logout.mutate()} disabled={logout.isPending}>Выйти</Button></div></div>
     </header>
     <main id="main" tabIndex={-1}>
       <ErrorMessage error={logout.error} />

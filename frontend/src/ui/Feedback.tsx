@@ -1,3 +1,4 @@
+import { Button } from './button';
 import { ApiError } from '../app/api';
 
 export function ErrorMessage({ error }: { error: Error | null }) {
@@ -13,8 +14,8 @@ export function Pagination({ page, hasNext, pending, onChange }: {
   page: number; hasNext: boolean; pending: boolean; onChange: (page: number) => void;
 }) {
   return <nav className="pagination" aria-label="Страницы">
-    <button type="button" disabled={page === 0 || pending} onClick={() => onChange(page - 1)}>← Назад</button>
+    <Button type="button" disabled={page === 0 || pending} onClick={() => onChange(page - 1)}>← Назад</Button>
     <span aria-live="polite">Страница {page + 1}</span>
-    <button type="button" disabled={!hasNext || pending} onClick={() => onChange(page + 1)}>Далее →</button>
+    <Button type="button" disabled={!hasNext || pending} onClick={() => onChange(page + 1)}>Далее →</Button>
   </nav>;
 }
