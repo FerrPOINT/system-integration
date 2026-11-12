@@ -16,6 +16,26 @@ class ExchangeWorkflowTest extends PostgresTest {
     @Autowired PlatformTransactionManager transactions;
 
     @Test
+    void claimSkipsFutureWorkAndActiveLeaseWithoutHidingAnotherDueTask() throws Exception {
+        var owner = login("initiator.one");
+        var future = created(owner, UUID.randomUUID());
+        var leased = created(owner, UUID.randomUUID());
+        var ready = created(owner, UUID.randomUUID());
+        jdbc.update("UPDATE delivery_queue SET due_at = clock_timestamp() - interval '1 second'");
+        jdbc.update("UPDATE delivery_queue SET due_at = clock_timestamp() + interval '1 hour' WHERE operation_id = (SELECT operation_id FROM tasks WHERE id = ?)", future);
+        jdbc.update("UPDATE delivery_queue SET claim_id = ?,claimed_until = clock_timestamp() + interval '1 hour' WHERE operation_id = (SELECT operation_id FROM tasks WHERE id = ?)", UUID.randomUUID(), leased);
+        var selected = exchange.claim();
+        assertNotNull(selected);
+        assertEquals(jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id = ?",UUID.class,ready), selected.operationId());
+        assertNull(exchange.claim());
+        jdbc.update("UPDATE delivery_queue SET due_at = clock_timestamp() - interval '1 second' WHERE operation_id = (SELECT operation_id FROM tasks WHERE id = ?)", future);
+        var next = exchange.claim();
+        assertNotNull(next);
+        assertEquals(jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id = ?",UUID.class,future), next.operationId());
+        assertNull(exchange.claim());
+    }
+
+    @Test
     void ambiguityUsesGetAndTheSameAttemptCounter() throws Exception {
         var owner = login("initiator.one");
         UUID id = created(owner,UUID.randomUUID());

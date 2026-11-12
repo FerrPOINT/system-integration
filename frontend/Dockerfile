@@ -1,4 +1,4 @@
-FROM node:24.19.0-alpine AS build
+FROM node:26.13.1-alpine AS build
 RUN npm install --global --no-audit --no-fund corepack@0.35.0
 WORKDIR /work/frontend
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./

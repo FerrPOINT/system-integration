@@ -11,6 +11,11 @@ server:
 spring:
   application:
     name: system-integration
+  threads:
+    virtual:
+      enabled: true
+  main:
+    keep-alive: true
   task:
     scheduling:
       pool:
@@ -20,6 +25,7 @@ spring:
     username: ${SI_DB_USER:si_app}
     password: ${SI_DB_PASSWORD}
     hikari:
+      connection-timeout: 2000
       maximum-pool-size: 8
   jackson:
     mapper:

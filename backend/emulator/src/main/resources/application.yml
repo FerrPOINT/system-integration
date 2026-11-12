@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: system-integration-emulator
+  threads:
+    virtual:
+      enabled: true
+  main:
+    keep-alive: true
   task:
     scheduling:
       pool:
@@ -13,6 +18,7 @@ spring:
     username: ${SI_EMULATOR_DB_USER:si_emulator}
     password: ${SI_EMULATOR_DB_PASSWORD}
     hikari:
+      connection-timeout: 2000
       maximum-pool-size: 4
   jackson:
     mapper:

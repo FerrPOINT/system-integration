@@ -30,15 +30,15 @@ Mini-CRM на Firebat1 выведен из эксплуатации; его ис
 `system-integration-tunnel.service`; после них возвращайте `compose.public.yml`
 и запускайте туннель. Эмулятор и БД остаются доступны только на loopback.
 
-Для команд Node используйте проектный Node 24 из
-`.local/toolchains/node-v24.19.0-linux-x64/bin` и Corepack из
-`.local/toolchains/corepack/bin`. Системные toolchain соседних приложений
+Для команд Node используйте проектный Node 26 из
+`.local/toolchains/node-v26.13.1-linux-x64/bin` и Corepack из
+`.local/toolchains/corepack/node_modules/.bin`. Системные toolchain соседних приложений
 не обновляйте. Сборки и тяжёлые проверки этого проекта выполняйте последовательно.
 
 Из корня проекта:
 
 ```sh
-export PATH="$PWD/.local/toolchains/corepack/bin:$PWD/.local/toolchains/node-v24.19.0-linux-x64/bin:$PATH"
+export PATH="$PWD/.local/toolchains/corepack/node_modules/.bin:$PWD/.local/toolchains/node-v26.13.1-linux-x64/bin:$PATH"
 export COREPACK_HOME="$PWD/.local/toolchains/corepack-cache"
 export PLAYWRIGHT_BROWSERS_PATH="$PWD/.local/browsers"
 ```

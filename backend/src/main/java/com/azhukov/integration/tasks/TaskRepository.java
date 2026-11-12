@@ -159,9 +159,9 @@ public class TaskRepository {
     public UUID lockDueOperation() {
         return jdbc.query("""
             SELECT t.operation_id FROM tasks t JOIN delivery_queue q ON q.operation_id = t.operation_id
-            WHERE t.delivery_status IN ('QUEUED','RETRY_WAIT','UNKNOWN') AND q.due_at <= clock_timestamp()
-              AND (q.claim_id IS NULL OR q.claimed_until <= clock_timestamp())
-            ORDER BY q.due_at,t.id LIMIT 1 FOR UPDATE OF t SKIP LOCKED
+            WHERE t.delivery_status IN ('QUEUED','RETRY_WAIT','UNKNOWN') AND q.due_at <= statement_timestamp()
+              AND (q.claim_id IS NULL OR q.claimed_until <= statement_timestamp())
+            ORDER BY q.due_at,q.operation_id LIMIT 1 FOR UPDATE OF t SKIP LOCKED
             """,(rs,n) -> rs.getObject(1,UUID.class)).stream().findFirst().orElse(null);
     }
 

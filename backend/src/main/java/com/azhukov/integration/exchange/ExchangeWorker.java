@@ -12,7 +12,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 
 @Component
 @ConditionalOnProperty(name = "si.exchange.enabled", havingValue = "true", matchIfMissing = true)
@@ -28,21 +28,28 @@ public class ExchangeWorker implements AutoCloseable {
     public ExchangeWorker(ExchangeTasks tasks, ExchangeClient client) { this.tasks = tasks; this.client = client; }
 
     @Scheduled(fixedDelay = 100)
-    void deliver() throws Exception {
-        var pending = new ArrayList<Future<?>>();
-        for (int n = 0; n < 4; n++) {
-            var claim = tasks.claim();
-            if (claim == null) break;
-            pending.add(senders.submit(() -> {
-                long started = System.nanoTime();
-                var reply = claim.step().equals("PUT") ? client.put(claim.operationId(),claim.request()) : client.get(claim.operationId());
-                tasks.finish(claim,reply);
-                log.info("delivery operationId={} attemptId={} step={} number={} httpStatus={} connectionFailed={} durationMs={}",
-                    claim.operationId(),claim.attemptId(),claim.step(),claim.number(),reply.status(),reply.connectionFailed(),
-                    (System.nanoTime()-started)/1_000_000);
-            }));
+    void deliver() {
+        // Drain a bounded amount before the idle delay, keeping at most four HTTP calls.
+        for (int batch = 0; batch < 8; batch++) {
+            var pending = new ArrayList<CompletableFuture<Void>>();
+            try {
+                for (int n = 0; n < 4; n++) {
+                    var claim = tasks.claim();
+                    if (claim == null) break;
+                    pending.add(CompletableFuture.runAsync(() -> {
+                        long started = System.nanoTime();
+                        var reply = claim.step().equals("PUT") ? client.put(claim.operationId(),claim.request()) : client.get(claim.operationId());
+                        tasks.finish(claim,reply);
+                        log.info("delivery operationId={} attemptId={} step={} number={} httpStatus={} connectionFailed={} durationMs={}",
+                            claim.operationId(),claim.attemptId(),claim.step(),claim.number(),reply.status(),reply.connectionFailed(),
+                            (System.nanoTime()-started)/1_000_000);
+                    }, senders));
+                }
+            } finally {
+                CompletableFuture.allOf(pending.toArray(CompletableFuture[]::new)).join();
+            }
+            if (pending.size() < 4) return;
         }
-        for (var result : pending) result.get();
     }
 
     @Scheduled(fixedDelay = 200)
