@@ -89,10 +89,10 @@ async function create(reference, mode) {
   const task = await api.get('/api/tasks/' + created.taskId); probes.push(task);
   return task;
 }
-async function completed(task) {
+async function completed(task, milliseconds = 60_000) {
   return waitFor('business result', async () => {
     const current = await api.get('/api/tasks/' + task.taskId); return current.businessStatus === 'SUCCEEDED' && current;
-  });
+  }, milliseconds);
 }
 try {
   const reference = 'REQ-830001';
@@ -231,7 +231,8 @@ try {
   api = await login();
   await fault('REQ-830005');
   for (const item of burst) {
-    await completed(item);
+    // Recovery can require GET then PUT, each after the contractual 60 s maximum backoff.
+    await completed(item, 150_000);
     assert.equal((await inspect(item.operationId)).executions, 1);
   }
   mark('Graceful stop preserves eight queued operations and resumes each exactly once', { exits, operations: burst.length });
