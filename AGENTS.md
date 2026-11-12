@@ -31,6 +31,16 @@
 `.local/toolchains/corepack/bin`. Системные toolchain соседних приложений
 не обновляйте. Сборки и тяжёлые проверки этого проекта выполняйте последовательно.
 
+Из корня проекта:
+
+```sh
+export PATH="$PWD/.local/toolchains/corepack/bin:$PWD/.local/toolchains/node-v24.19.0-linux-x64/bin:$PATH"
+export COREPACK_HOME="$PWD/.local/toolchains/corepack-cache"
+export PLAYWRIGHT_BROWSERS_PATH="$PWD/.local/browsers"
+```
+
+Приватный `.env` при переносе на Linux использует LF и права `600`.
+
 ## Общие правила
 
 - У каждого состояния и бизнес-правила один владелец. Начинайте с простого
