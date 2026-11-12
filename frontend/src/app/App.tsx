@@ -10,10 +10,7 @@ import { IssueList, IssueCard, ReconciliationCard } from '../features/operations
 export function App() {
   const session = useQuery({
     queryKey: keys.session,
-    queryFn: async () => {
-      const response = await getSession();
-      return response.status === 401 ? null : data(Promise.resolve(response));
-    },
+    queryFn: () => data(getSession()),
     staleTime: 0,
   });
   if (session.isPending) return <main><Loading /></main>;

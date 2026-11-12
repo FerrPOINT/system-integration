@@ -112,3 +112,35 @@ test('TC-08 / TC-09: expired server session clears protected screens and allows 
   await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toHaveCount(0);
   await login(page, 'initiator.two');
 });
+
+
+test('TC-08: session refresh removes the previous owner cache before an in-place login', async ({ page, context }) => {
+  await page.clock.setFixedTime(new Date());
+  await login(page);
+  const csrf = await (await page.request.get('/api/csrf')).json();
+  const title = 'E2E приватный кеш ' + crypto.randomUUID();
+  const created = await page.request.post('/api/tasks', {
+    headers: { 'X-CSRF-TOKEN': csrf.token, 'Idempotency-Key': crypto.randomUUID() },
+    data: { title, request: { reference: 'REQ-800005', quantity: 25 } },
+  });
+  expect(created.status()).toBe(201);
+  await page.getByRole('button', { name: 'Обновить', exact: true }).click();
+  await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toBeVisible();
+  expect((await page.request.post('/api/logout', { headers: { 'X-CSRF-TOKEN': csrf.token } })).status()).toBe(204);
+  await context.setOffline(true);
+  await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
+  const expired = page.waitForResponse(response => new URL(response.url()).pathname === '/api/session' && response.status() === 401);
+  await context.setOffline(false);
+  await expired;
+  await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
+  // Keep the same SPA: navigating or reloading would hide a stale QueryClient cache.
+  await page.getByLabel('Логин', { exact: true }).fill('initiator.two');
+  await page.getByLabel('Пароль', { exact: true }).fill(process.env.SI_DEMO_PASSWORD!);
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Отмена', exact: true }).click();
+  await expect(page.getByText('Сохранённые задания', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0);
+});
