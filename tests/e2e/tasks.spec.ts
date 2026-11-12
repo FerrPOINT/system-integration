@@ -27,6 +27,20 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
     await expect(page.locator('.task-cards > li').first()).toBeVisible();
   } else await expect(page.getByRole('table')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const widths = testInfo.project.name === 'mobile' ? [390, 480, 481, 759, 760] : [761, 767, 768, 1024, 1150, 1151, 1440];
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect(page.getByRole('link', { name: name + ' обновлено', exact: true })).toBeVisible();
+    if (width <= 760) {
+      await expect(page.getByRole('table')).toHaveCount(0);
+      await expect(page.locator('.task-cards > li').first()).toBeVisible();
+    } else {
+      await expect(page.getByRole('table')).toBeVisible();
+      expect(await page.locator('.base-table-scroll').evaluate(element => element.scrollWidth <= element.clientWidth + 1),
+        'The task table must fit at width ' + width).toBe(true);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Page width ' + width).toBe(true);
+  }
 });
 
 test('TC-08: logout clears owner data and another initiator cannot open a foreign card', async ({ page, context }) => {

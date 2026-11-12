@@ -180,6 +180,35 @@ class TaskWorkflowTest extends PostgresTest {
     }
 
     @Test
+    void utcBoundariesAndEqualTimeOrderingRemainScopedAndUnambiguous() throws Exception {
+        var owner=login("initiator.one");
+        var at=OffsetDateTime.parse("2026-11-10T12:00:00Z");
+        var ids=List.of(UUID.fromString("10000000-0000-4000-8000-000000000001"),
+            UUID.fromString("10000000-0000-4000-8000-000000000002"),UUID.fromString("10000000-0000-4000-8000-000000000003"));
+        for (int n=0;n<3;n++) jdbc.update("""
+            INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,created_at)
+            VALUES (?,?,?,'Граница UTC','REQ-000001',25,?)
+            """,ids.get(n),first,UUID.randomUUID(),n==2 ? at.plusSeconds(1) : at);
+        jdbc.update("""
+            INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,created_at)
+            VALUES (?,?,?,'Другой владелец','REQ-000001',25,?)
+            """,UUID.randomUUID(),second,UUID.randomUUID(),at);
+        var interval=mvc.perform(get("/api/tasks").session(owner.session()).param("createdFrom",at.toString())
+            .param("createdTo",at.plusSeconds(1).toString())).andReturn();
+        status(200,interval);
+        assertEquals(2,body(interval).get("totalItems").asInt());
+        assertEquals(ids.get(1).toString(),body(interval).at("/items/0/taskId").asString());
+        assertEquals(ids.get(0).toString(),body(interval).at("/items/1/taskId").asString());
+        var upper=mvc.perform(get("/api/tasks").session(owner.session()).param("createdTo",at.toString())).andReturn();
+        status(200,upper); assertEquals(0,body(upper).get("totalItems").asInt());
+        var lower=mvc.perform(get("/api/tasks").session(owner.session()).param("createdFrom",at.plusSeconds(1).toString())).andReturn();
+        status(200,lower); assertEquals(1,body(lower).get("totalItems").asInt());
+        for (String invalid:List.of(at.withOffsetSameInstant(java.time.ZoneOffset.ofHours(3)).toString(),
+            "2026-11-10T12:00:00","2026-13-10T12:00:00Z"))
+            status(400,mvc.perform(get("/api/tasks").session(owner.session()).param("createdFrom",invalid)).andReturn());
+    }
+
+    @Test
     void invalidFieldsAndUnknownPropertiesDoNotCreatePartialState() throws Exception {
         var owner = login("initiator.one");
         for (String invalid : List.of(CREATE.replace("25", "0"), CREATE.replace("25", "25.5"),

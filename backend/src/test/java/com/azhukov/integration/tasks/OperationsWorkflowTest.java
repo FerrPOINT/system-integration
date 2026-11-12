@@ -272,6 +272,86 @@ class OperationsWorkflowTest extends PostgresTest {
         assertFalse(body(issue).get("allowedActions").toString().contains("APPLY_EXTERNAL_RESULT"));
     }
 
+    @Test
+    void everyOperatorRouteRejectsBothInitiatorsWithoutReadingExternalStateOrWritingAudit() throws Exception {
+        var scenario=difference();
+        int history=count("task_history"),comparisons=count("reconciliations"),receipts=count("command_receipts");
+        clearInvocations(client);
+        for (var actor:java.util.List.of(login("initiator.one"),login("initiator.two"))) {
+            for (String path:java.util.List.of("/api/exchange/issues","/api/exchange/issues/"+scenario.issue(),
+                "/api/tasks/"+scenario.task()+"/reconciliations/"+scenario.reconciliation()))
+                status(403,mvc.perform(get(path).session(actor.session())).andReturn());
+            status(403,reconcile(actor,scenario.task(),UUID.randomUUID()));
+            status(403,command(actor,"take",scenario.issue(),UUID.randomUUID(),Map.of("expectedIssueRevision",scenario.revision())));
+            status(403,command(actor,"retry",scenario.issue(),UUID.randomUUID(),Map.of(
+                "expectedIssueRevision",scenario.revision(),"reconciliationId",scenario.reconciliation(),"reason","Запрещённая роль")));
+            status(403,command(actor,"resolve",scenario.issue(),UUID.randomUUID(),Map.of(
+                "expectedIssueRevision",scenario.revision(),"reconciliationId",scenario.reconciliation(),
+                "action","ACKNOWLEDGE_DIFFERENCE","reason","Запрещённая роль")));
+        }
+        verifyNoInteractions(client);
+        assertEquals(history,count("task_history"));
+        assertEquals(comparisons,count("reconciliations"));
+        assertEquals(receipts,count("command_receipts"));
+        status(200,issue(scenario.op(),scenario.issue()));
+    }
+
+    @Test
+    void simultaneousOperatorsCannotSilentlyOverwriteTheIssueOwner() throws Exception {
+        var scenario=difference();
+        UUID secondOperator=UUID.randomUUID();
+        jdbc.update("INSERT INTO users VALUES (?,?,?,?)",secondOperator,"operator.two",passwords.encode(PASSWORD),"OPERATOR");
+        var other=login("operator.two");
+        var input=Map.of("expectedIssueRevision",scenario.revision());
+        java.util.List<MvcResult> results;
+        try (var pool=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var first=pool.submit(() -> command(scenario.op(),"take",scenario.issue(),UUID.randomUUID(),input));
+            var second=pool.submit(() -> command(other,"take",scenario.issue(),UUID.randomUUID(),input));
+            results=java.util.List.of(first.get(),second.get());
+        }
+        assertEquals(java.util.List.of(200,409),results.stream().map(r -> r.getResponse().getStatus()).sorted().toList());
+        MvcResult winner=results.get(0).getResponse().getStatus()==200 ? results.get(0) : results.get(1);
+        MvcResult loser=results.get(0).getResponse().getStatus()==409 ? results.get(0) : results.get(1);
+        assertEquals("ISSUE_REVISION_CONFLICT",body(loser).get("code").asString());
+        var current=body(issue(scenario.op(),scenario.issue()));
+        assertEquals(body(winner).get("assignedTo"),current.get("assignedTo"));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='RESPONSIBILITY_CHANGED'",Integer.class));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM command_receipts WHERE command_type='TAKE_ISSUE'",Integer.class));
+        var event=mvc.perform(get("/api/tasks/"+scenario.task()+"/history").session(scenario.op().session())).andReturn();
+        var assignment=java.util.stream.StreamSupport.stream(body(event).get("items").spliterator(),false)
+            .filter(row -> row.get("type").asString().equals("RESPONSIBILITY_CHANGED")).findFirst().orElseThrow();
+        assertEquals(current.get("assignedTo"),assignment.get("assignedTo"));
+        assertEquals(current.get("assignedTo"),assignment.get("actorUserId"));
+    }
+
+    @Test
+    void concurrentComparisonReplaysOneSnapshotWhileAnotherActorHasAnIndependentCommand() throws Exception {
+        UUID task=created(login("initiator.one"),UUID.randomUUID());
+        var claim=exchange.claim();
+        exchange.finish(claim,external(claim,false,25));
+        when(client.get(claim.operationId())).thenReturn(external(claim,true,25));
+        var op=login("operator"); UUID key=UUID.randomUUID();
+        java.util.List<MvcResult> results;
+        try (var pool=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var a=pool.submit(() -> reconcile(op,task,key));
+            var b=pool.submit(() -> reconcile(op,task,key));
+            var c=pool.submit(() -> reconcile(op,task,key));
+            results=java.util.List.of(a.get(),b.get(),c.get());
+        }
+        for (var response:results) { status(200,response); assertEquals(body(results.getFirst()),body(response)); }
+        assertEquals(1,count("reconciliations"));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='RECONCILED'",Integer.class));
+        UUID otherId=UUID.randomUUID();
+        jdbc.update("INSERT INTO users VALUES (?,?,?,?)",otherId,"operator.two",passwords.encode(PASSWORD),"OPERATOR");
+        var independent=reconcile(login("operator.two"),task,key);status(200,independent);
+        assertNotEquals(body(results.getFirst()).get("reconciliationId"),body(independent).get("reconciliationId"));
+        assertEquals(otherId.toString(),body(independent).get("checkedBy").asString());
+        assertEquals(2,count("reconciliations"));
+        var original=mvc.perform(get("/api/tasks/"+task+"/reconciliations/"+body(results.getFirst()).get("reconciliationId").asString())
+            .session(op.session())).andReturn();
+        status(200,original);assertEquals(body(results.getFirst()),body(original));
+    }
+
     private record Scenario(UUID task,ExchangeTasks.Claim claim,Client op,UUID issue,long revision,String reconciliation) {}
     private Scenario difference() throws Exception {
         UUID task=created(login("initiator.one"),UUID.randomUUID());

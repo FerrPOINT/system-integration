@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { ApiSession, ApiFailure, localOrigin, parallel } from '../support/http.mjs';
 import { qualifiedLoadEnvironment } from './environment.mjs';
-import { observeLoad } from './metrics.mjs';
+import { observeLoad, drainLoad, loadIntegrity } from './metrics.mjs';
+import { verifyCreatedTasks, verifyFinishedSnapshot } from './integrity.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
@@ -31,15 +32,16 @@ await Promise.all(dataset.accounts.map(async account => {
     throw new Error('Each initiator needs a full successful first page');
 }));
 
-const clients = await Promise.all(Array.from({ length: 20 }, async (_, index) => {
+const clients = new Array(20);
+await parallel(Array.from({ length: 20 }, (_, index) => index), 4, async index => {
   const owner = index % 2;
   const session = new ApiSession(origin);
-  await session.login(dataset.accounts[owner].username, process.env.SI_DEMO_PASSWORD);
+  const identity = await session.login(dataset.accounts[owner].username, process.env.SI_DEMO_PASSWORD);
   const task = await session.get('/api/tasks/' + dataset.accounts[owner].tasks[Math.floor(index / 2)]);
-  return { index, session, task, action: index % 4, counter: 0 };
-}));
+  clients[index] = { index, session, userId: identity.userId, task, action: index % 4, counter: 0 };
+});
 const measurements = ['list', 'card', 'create', 'rename'].map(operation => ({ operation, latencies: [], successes: 0, errors: {} }));
-const created = [];
+const created = [], allCreated = [];
 const warmupErrors = {};
 let serial = 200000;
 const observation = await observeLoad(resources);
@@ -49,24 +51,26 @@ const measureEnd = warmEnd + 120_000;
 await Promise.all(clients.map(async client => {
   while (performance.now() < measureEnd) {
     const start = performance.now(); const measured = start >= warmEnd;
-    const stat = measurements[client.action]; let createdId;
+    const stat = measurements[client.action]; let createdTask;
     try {
       if (client.action === 0) {
         const result = await client.session.get('/api/tasks?businessStatus=SUCCEEDED&page=0');
-        if (result.items?.length !== 20 || result.totalItems < 2500 || result.totalPages !== Math.ceil(result.totalItems / 20) || result.items.some(task => task.businessStatus !== 'SUCCEEDED')) throw new ApiFailure(200, 'INVALID_LIST_PAGE');
+        if (result.items?.length !== 20 || result.totalItems < 2500 || result.totalPages !== Math.ceil(result.totalItems / 20) || result.items.some(task => task.businessStatus !== 'SUCCEEDED' || task.ownerId !== client.userId)) throw new ApiFailure(200, 'INVALID_LIST_PAGE');
       }
       if (client.action === 1) {
         const result = await client.session.get('/api/tasks/' + client.task.taskId);
-        if (result.taskId !== client.task.taskId || result.titleRevision < client.task.titleRevision) throw new ApiFailure(200, 'INVALID_TASK_STATE');
+        if (result.taskId !== client.task.taskId || result.ownerId !== client.userId || result.titleRevision < client.task.titleRevision) throw new ApiFailure(200, 'INVALID_TASK_STATE');
         client.task = result;
       }
       if (client.action === 2) {
         if (serial > 999999) throw new Error('REFERENCE_RANGE_EXHAUSTED');
-        const result = await client.session.command('POST', '/api/tasks', {
+        const input = {
           title: `NF08 client ${client.index} create ${client.counter}`, request: { reference: `REQ-${serial++}`, quantity: 25 },
-        });
+        };
+        const result = await client.session.command('POST', '/api/tasks', input);
         if (typeof result?.taskId !== 'string') throw new ApiFailure(201, 'INVALID_CREATE_RESULT');
-        createdId = result.taskId;
+        createdTask = { taskId: result.taskId, client: client.index, ownerId: client.userId, title: input.title, reference: input.request.reference };
+        allCreated.push(createdTask);
       }
       if (client.action === 3) {
         const result = await client.session.command('PATCH', '/api/tasks/' + client.task.taskId, {
@@ -74,7 +78,7 @@ await Promise.all(clients.map(async client => {
         });
         client.task.titleRevision = result.titleRevision;
       }
-      if (measured) { stat.successes++; if (createdId) created.push({ taskId: createdId, client: client.index }); }
+      if (measured) { stat.successes++; if (createdTask) created.push(createdTask); }
     } catch (error) {
       const code = error instanceof ApiFailure ? `${error.status}:${error.code}` : error.name;
       if (measured) {
@@ -90,7 +94,7 @@ await Promise.all(clients.map(async client => {
 const finishedAt = new Date().toISOString();
 await observation.stop();
 const p95 = values => { const sorted = [...values].sort((a, b) => a - b); return sorted.length ? sorted[Math.ceil(0.95 * sorted.length) - 1] : null; };
-const durations = []; const externalErrors = {}; let pending = 0, notAccepted = 0;
+const externalErrors = {};
 const progressWaitStartedAt = new Date().toISOString();
 let externalProgressObserved = false;
 if (created.length) {
@@ -109,37 +113,9 @@ if (created.length) {
 }
 const progressWaitFinishedAt = new Date().toISOString();
 const externalCheckStartedAt = new Date().toISOString();
-await parallel(created, 8, async item => {
-  try {
-    const task = await clients[item.client].session.get('/api/tasks/' + item.taskId);
-    const response = await fetch(externalOrigin + '/operations/' + task.operationId, { signal: AbortSignal.timeout(10_000) });
-    if (response.status === 404) {
-      const problem = await response.json();
-      if (problem.status !== 404 || problem.code !== 'OPERATION_NOT_FOUND' || typeof problem.title !== 'string' ||
-          task.deliveryStatus === 'ACKNOWLEDGED' || task.businessStatus !== 'PENDING')
-        throw new ApiFailure(404, 'EXTERNAL_STATE_CONTRADICTS_LOCAL');
-      pending++; notAccepted++; return;
-    }
-    if (!response.ok) throw new ApiFailure(response.status, 'EXTERNAL_STATE_READ_FAILED');
-    const state = await response.json();
-    if (state.operationId !== task.operationId || state.request?.reference !== task.request.reference || state.request?.quantity !== task.request.quantity || state.executions > 1)
-      throw new ApiFailure(0, 'EXTERNAL_IDENTITY_OR_EXECUTION_CONFLICT');
-    if (state.executions === 0) {
-      if (state.result !== null) throw new ApiFailure(0, 'RESULT_WITHOUT_EXECUTION');
-      pending++; return;
-    }
-    if (state.executions !== 1 || state.result?.status !== 'SUCCEEDED' || !state.result.completedAt)
-      throw new ApiFailure(0, 'INVALID_EXTERNAL_RESULT');
-    if (state.result.operationId !== task.operationId || state.result.request?.reference !== task.request.reference || state.result.request?.quantity !== task.request.quantity)
-      throw new ApiFailure(0, 'EXTERNAL_RESULT_IDENTITY_CONFLICT');
-    const elapsed = Date.parse(state.result.completedAt) - Date.parse(task.createdAt);
-    if (!Number.isFinite(elapsed) || elapsed < 0) throw new ApiFailure(0, 'INVALID_EXTERNAL_TIME');
-    durations.push(elapsed);
-  } catch (error) {
-    const code = error instanceof ApiFailure ? error.code : error.name;
-    externalErrors[code] = (externalErrors[code] || 0) + 1;
-  }
-});
+const external = await verifyCreatedTasks(created, clients, externalOrigin, false);
+for (const [code, count] of Object.entries(external.errors)) externalErrors[code] = (externalErrors[code] || 0) + count;
+const externalCheckFinishedAt = new Date().toISOString();
 // The measured generator has stopped; repeated commands must add only one record.
 const repeatedKey = crypto.randomUUID();
 const repeatedInput = { title: 'NF08 concurrent idempotency', request: { reference: 'REQ-999991', quantity: 25 } };
@@ -162,24 +138,37 @@ const idempotency = { concurrentRequests: 20, uniqueTaskIds: repeatedIds.size,
   replaySameTask: replay.taskId === replies[0].taskId };
 idempotency.passed = idempotency.uniqueTaskIds === 1 && idempotency.countIncrease === 1 && idempotency.conflictRejected && idempotency.replaySameTask;
 
+allCreated.push({ taskId: replies[0].taskId, client: sameOwner[0].index, ownerId: sameOwner[0].userId,
+  title: repeatedInput.title, reference: repeatedInput.request.reference });
+const drain = await drainLoad(resources);
+const finalIntegrity = { passed: false, expectedRecords: 5000 + allCreated.length };
+try {
+  finalIntegrity.snapshot = await loadIntegrity(resources);
+  verifyFinishedSnapshot(finalIntegrity.snapshot, finalIntegrity.expectedRecords);
+  finalIntegrity.created = await verifyCreatedTasks(allCreated, clients, externalOrigin, true);
+  const verified = finalIntegrity.created;
+  finalIntegrity.passed = drain.drained && Object.keys(verified.errors).length === 0 &&
+    verified.completed === allCreated.length && verified.pending === 0;
+} catch (error) { finalIntegrity.error = error instanceof ApiFailure ? error.code : error.name; }
+
 const counts = measurements.map(stat => stat.latencies.length);
 const reads = measurements.slice(0, 2).flatMap(stat => stat.latencies);
 const writes = measurements.slice(2).flatMap(stat => stat.latencies);
 const errors = measurements.reduce((total, stat) => total + Object.values(stat.errors).reduce((a, b) => a + b, 0), 0);
 const report = {
   sourceCommit, startedAt, finishedAt, clients: 20, warmupSeconds: 30, measuredSeconds: 120, initialCount: 5000, resources, warmupErrors,
-  resourceTotal, idempotency, observation: { samples: observation.samples, errors: observation.errors },
+  resourceTotal, idempotency, drain, finalIntegrity, observation: { samples: observation.samples, errors: observation.errors },
   operations: measurements.map(stat => ({ operation: stat.operation, count: stat.latencies.length, share: stat.latencies.length / counts.reduce((a, b) => a + b, 0),
     successes: stat.successes, errors: stat.errors, p95Ms: p95(stat.latencies) })),
   readP95Ms: p95(reads), writeP95Ms: p95(writes), errors,
-  external: { checked: created.length, completed: durations.length, pending, notAccepted, acceptedPending: pending - notAccepted,
-    pendingShare: created.length ? pending / created.length : null,
-    errors: externalErrors, p95Ms: p95(durations), progressWaitStartedAt, progressWaitFinishedAt, externalProgressObserved,
-    checkStartedAt: externalCheckStartedAt, checkFinishedAt: new Date().toISOString() },
+  external: { ...external, acceptedPending: external.pending - external.notAccepted,
+    pendingShare: created.length ? external.pending / created.length : null,
+    errors: externalErrors, progressWaitStartedAt, progressWaitFinishedAt, externalProgressObserved,
+    checkStartedAt: externalCheckStartedAt, checkFinishedAt: externalCheckFinishedAt },
 };
 report.sourceUnchanged = git('rev-parse', 'HEAD') === sourceCommit && !git('status', '--porcelain');
 report.passed = observation.errors.length === 0 && observation.samples.every(sample => sample.containers.every(item => item.running && !item.oom && !item.restarted)) && idempotency.passed && report.sourceUnchanged && errors === 0 && Object.keys(warmupErrors).length === 0 && counts.every(count => count > 0) && Math.max(...counts) - Math.min(...counts) <= 20 &&
-  report.readP95Ms <= 2000 && report.writeP95Ms <= 3000 && Object.keys(externalErrors).length === 0 && durations.length > 0;
+  report.readP95Ms <= 2000 && report.writeP95Ms <= 3000 && Object.keys(externalErrors).length === 0 && external.completed > 0 && finalIntegrity.passed;
 await mkdir(new URL('../results/', import.meta.url), { recursive: true });
 const output = new URL('../results/nf08.json', import.meta.url);
 await writeFile(output, JSON.stringify(report, null, 2));

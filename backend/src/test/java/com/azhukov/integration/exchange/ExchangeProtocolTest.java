@@ -58,6 +58,42 @@ class ExchangeProtocolTest {
     }
 
     @Test
+    void allResultStateCombinationsFollowTheThreeDeclaredVariants() {
+        var allowed=java.util.Set.of("1:RUNNING:false:false","2:SUCCEEDED:true:false","2:REJECTED:true:true");
+        for (int version=0;version<=3;version++) {
+            for (String status:new String[]{"RUNNING","SUCCEEDED","REJECTED","UNKNOWN"}) {
+                for (boolean completed:new boolean[]{false,true}) {
+                    for (boolean rejection:new boolean[]{false,true}) {
+                        var body=json.createObjectNode().put("operationId",identity.id().toString())
+                            .set("request",json.valueToTree(identity.request())).put("version",version).put("status",status);
+                        if (completed) body.put("completedAt","2026-11-12T00:00:00Z");
+                        if (rejection) body.put("rejectionCode","QUANTITY_LIMIT_EXCEEDED");
+                        String variant=version+":"+status+":"+completed+":"+rejection;
+                        if (allowed.contains(variant)) assertDoesNotThrow(() -> protocol.result(body),variant);
+                        else assertThrows(IllegalArgumentException.class,() -> protocol.result(body),variant);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void acceptedStateAllowsNullOrRunningBeforeExecutionButOnlyTerminalAfterIt() {
+        var base=json.createObjectNode().put("operationId",identity.id().toString())
+            .set("request",json.valueToTree(identity.request())).put("acceptedAt","2026-11-11T00:00:00Z");
+        var running=json.createObjectNode().put("operationId",identity.id().toString())
+            .set("request",json.valueToTree(identity.request())).put("version",1).put("status","RUNNING");
+        var empty=base.deepCopy().put("executions",0).putNull("result");
+        assertEquals(0,protocol.state(empty).getExecutions().getValue());
+        var active=base.deepCopy().put("executions",0).set("result",running);
+        assertEquals(Result.StatusEnum.RUNNING,((Result)protocol.state(active).getResult()).getStatus());
+        assertThrows(IllegalArgumentException.class,() -> protocol.state(base.deepCopy().put("executions",0)));
+        assertThrows(IllegalArgumentException.class,() -> protocol.state(base.deepCopy().put("executions",1).set("result",running)));
+        assertThrows(IllegalArgumentException.class,() -> protocol.state(base.deepCopy().put("executions",2).set("result",json.readTree(result))));
+        assertThrows(IllegalArgumentException.class,() -> protocol.state(base.deepCopy().put("executions",0).put("result","")));
+    }
+
+    @Test
     void missingOperationRequiresTheWholeProblemContract() {
         var valid=json.readTree("{\"title\":\"Отсутствует\",\"status\":404,\"code\":\"OPERATION_NOT_FOUND\"}");
         assertTrue(ExchangeProtocol.missingOperation(404,valid));

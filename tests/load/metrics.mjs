@@ -100,3 +100,55 @@ export async function pipelineSummary(resources, since) {
   ]);
   return { since, measuredAt: new Date().toISOString(), app, emulator };
 }
+
+
+export async function drainLoad(resources, timeoutMs = 300000) {
+  const startedAt = new Date().toISOString(), deadline = Date.now() + timeoutMs, samples = [];
+  let stoppedFor = null, drained = false;
+  do {
+    const sample = await loadSnapshot(resources); samples.push(sample);
+    if (sample.containers.some(item => !item.running || item.oom || item.restarted)) { stoppedFor = 'container-failure'; break; }
+    drained = sample.app.pending === 0 && sample.app.queued === 0 && sample.emulator.awaitingExecution === 0 &&
+      sample.emulator.unpublished === 0 && sample.app.lastCursor === sample.emulator.lastCursor;
+    if (drained) break;
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  } while (Date.now() < deadline);
+  return { startedAt, finishedAt: new Date().toISOString(), drained, stoppedFor: stoppedFor || (drained ? null : 'drain-time-limit'), samples };
+}
+
+export async function loadIntegrity(resources) {
+  const postgres = resources.find(item => item.service === 'postgres').containerId;
+  const [app, emulator] = await Promise.all([
+    sql(postgres, 'si_test', `
+      SELECT json_build_object(
+        'records',count(*),'pending',count(*) FILTER (WHERE business_status NOT IN ('SUCCEEDED','REJECTED')),
+        'badLocalState',count(*) FILTER (WHERE delivery_status IS DISTINCT FROM 'ACKNOWLEDGED'
+          OR business_status IS DISTINCT FROM accepted_result->>'status'
+          OR accepted_result->>'version' IS DISTINCT FROM '2'),
+        'queued',(SELECT count(*) FROM delivery_queue),'openIssues',(SELECT count(*) FROM exchange_issues WHERE status='OPEN'),
+        'badCreationHistory',(SELECT count(*) FROM tasks t WHERE (SELECT count(*) FROM task_history h WHERE h.task_id=t.id AND h.event_type='CREATED')<>1
+          OR EXISTS (SELECT 1 FROM task_history h WHERE h.task_id=t.id AND h.event_type='CREATED' AND (h.actor<>'USER' OR h.actor_user_id IS DISTINCT FROM t.owner_id))),
+        'badTerminalHistory',(SELECT count(*) FROM tasks t WHERE (SELECT count(*) FROM task_history h WHERE h.task_id=t.id AND h.event_type='RESULT_APPLIED' AND h.details->>'resultVersion'='2')<>1
+          OR EXISTS (SELECT 1 FROM task_history h WHERE h.task_id=t.id AND h.event_type='RESULT_APPLIED' AND h.details->>'resultVersion'='2' AND h.actor<>'SYSTEM')),
+        'lastCursor',(SELECT last_cursor FROM incoming_position WHERE id=1),
+        'ids',md5(string_agg(operation_id::text,',' ORDER BY operation_id)),
+        'requests',md5(string_agg(concat_ws('|',operation_id,request_reference,request_quantity),',' ORDER BY operation_id)),
+        'results',md5(string_agg(concat_ws('|',operation_id,accepted_result->>'operationId',accepted_result->'request'->>'reference',
+          accepted_result->'request'->>'quantity',accepted_result->>'version',accepted_result->>'status',
+          to_char((accepted_result->>'completedAt')::timestamptz AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS.US')),',' ORDER BY operation_id))
+      ) FROM tasks;
+    `),
+    sql(postgres, 'si_emulator_test', `
+      SELECT json_build_object(
+        'accepted',count(*),'executed',count(*) FILTER (WHERE executions=1),'duplicateExecutions',count(*) FILTER (WHERE executions>1),
+        'unpublished',(SELECT count(*) FROM result_events WHERE cursor IS NULL),'lastCursor',(SELECT last_cursor FROM feed_position WHERE id=1),
+        'ids',md5(string_agg(id::text,',' ORDER BY id)),
+        'requests',md5(string_agg(concat_ws('|',id,reference,quantity),',' ORDER BY id)),
+        'results',md5(string_agg(concat_ws('|',id,result->>'operationId',result->'request'->>'reference',
+          result->'request'->>'quantity',result->>'version',result->>'status',
+          to_char(completed_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS.US')),',' ORDER BY id))
+      ) FROM operations;
+    `),
+  ]);
+  return { app, emulator };
+}

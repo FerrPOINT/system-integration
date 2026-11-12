@@ -2,6 +2,7 @@ package com.azhukov.integration.auth;
 
 import com.azhukov.integration.http.ProblemResponses;
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -56,6 +57,7 @@ public class SecurityConfiguration {
             }
         }, CsrfFilter.class);
         http.authorizeHttpRequests(auth -> auth
+            .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
             .requestMatchers("/api/csrf", "/api/login", "/actuator/health/**").permitAll()
             .requestMatchers(HttpMethod.POST, "/api/tasks").hasRole("INITIATOR")
             .requestMatchers(HttpMethod.PATCH, "/api/tasks/*").hasRole("INITIATOR")

@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { ApiSession, ApiFailure, localOrigin, parallel } from '../support/http.mjs';
 import { qualifiedLoadEnvironment } from './environment.mjs';
-import { loadSnapshot, observeLoad, pipelineSummary } from './metrics.mjs';
+import { loadSnapshot, observeLoad, pipelineSummary, drainLoad, loadIntegrity } from './metrics.mjs';
+
+import { verifyCreatedTasks, verifyFinishedSnapshot } from './integrity.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
@@ -34,47 +36,11 @@ async function clientsFor(count) {
   await parallel(Array.from({ length: count }, (_, index) => index), 4, async index => {
     const account = dataset.accounts[index % 2];
     const session = new ApiSession(origin);
-    await session.login(account.username, process.env.SI_DEMO_PASSWORD);
+    const identity = await session.login(account.username, process.env.SI_DEMO_PASSWORD);
     const task = await session.get('/api/tasks/' + account.tasks[Math.floor(index / 2)]);
-    clients[index] = { index, session, task, counter: 0 };
+    clients[index] = { index, session, userId: identity.userId, task, counter: 0 };
   });
   return clients;
-}
-
-async function checkCreated(created, clients, drained) {
-  const durations = [];
-  let pending = 0, notAccepted = 0;
-  await parallel(created, 8, async item => {
-    const task = await clients[item.client].session.get('/api/tasks/' + item.id);
-    if (task.request.reference !== item.reference || task.request.quantity !== 25) throw new Error('SAVED_REQUEST_CHANGED');
-    const response = await fetch(externalOrigin + '/operations/' + task.operationId, { signal: AbortSignal.timeout(10000) });
-    if (response.status === 404) {
-      const problem = await response.json();
-      if (drained || problem.code !== 'OPERATION_NOT_FOUND' || task.deliveryStatus === 'ACKNOWLEDGED' || task.businessStatus !== 'PENDING')
-        throw new Error('EXTERNAL_STATE_CONTRADICTS_LOCAL');
-      pending++; notAccepted++; return;
-    }
-    if (!response.ok) throw new Error('EXTERNAL_STATE_UNAVAILABLE');
-    const state = await response.json();
-    if (state.operationId !== task.operationId || state.request?.reference !== item.reference || state.request?.quantity !== 25)
-      throw new Error('EXTERNAL_IDENTITY_CONFLICT');
-    if (state.executions === 0) {
-      if (drained || state.result !== null || task.businessStatus !== 'PENDING') throw new Error('EXTERNAL_STATE_CONTRADICTS_LOCAL');
-      pending++; return;
-    }
-    if (state.executions !== 1 || state.result?.status !== 'SUCCEEDED' ||
-        state.result.operationId !== task.operationId || state.result.request?.reference !== item.reference ||
-        state.result.request?.quantity !== 25 || (drained && task.businessStatus !== 'SUCCEEDED') || task.businessStatus === 'REJECTED')
-      throw new Error('EXTERNAL_RESULT_OR_EXECUTION_CONFLICT');
-    const elapsed = Date.parse(state.result.completedAt) - Date.parse(task.createdAt);
-    if (!Number.isFinite(elapsed) || elapsed < 0) throw new Error('EXTERNAL_TIME_INVALID');
-    if (task.businessStatus === 'SUCCEEDED') {
-      const history = await clients[item.client].session.get('/api/tasks/' + item.id + '/history');
-      if (!history.items.some(event => event.type === 'RESULT_APPLIED')) throw new Error('RESULT_HISTORY_MISSING');
-    }
-    durations.push(elapsed);
-  });
-  return { checked: created.length, completed: durations.length, pending, notAccepted, p95Ms: p95(durations) };
 }
 
 async function stage(mode, count) {
@@ -98,20 +64,20 @@ async function stage(mode, count) {
           if (action === 0) {
             const result = await client.session.get('/api/tasks?businessStatus=SUCCEEDED&page=0');
             if (result.items?.length !== 20 || result.totalItems < 5000 || result.totalPages !== Math.ceil(result.totalItems / 20) ||
-                result.items.some(task => task.businessStatus !== 'SUCCEEDED')) throw new ApiFailure(200, 'INVALID_LIST_PAGE');
+                result.items.some(task => task.businessStatus !== 'SUCCEEDED' || task.ownerId !== client.userId)) throw new ApiFailure(200, 'INVALID_LIST_PAGE');
           } else if (action === 1) {
             const result = await client.session.get('/api/tasks/' + client.task.taskId);
-            if (result.taskId !== client.task.taskId || result.titleRevision < client.task.titleRevision) throw new ApiFailure(200, 'INVALID_TASK_STATE');
+            if (result.taskId !== client.task.taskId || result.ownerId !== client.userId || result.titleRevision < client.task.titleRevision) throw new ApiFailure(200, 'INVALID_TASK_STATE');
             client.task = result;
           } else if (action === 2) {
             if (serial > 999999) throw new Error('REFERENCE_RANGE_EXHAUSTED');
             const reference = 'REQ-' + serial++;
+            const title = 'Capacity client ' + client.index + ' create ' + client.counter;
             const result = await client.session.command('POST', '/api/tasks', {
-              title: 'Capacity client ' + client.index + ' create ' + client.counter,
-              request: { reference, quantity: 25 },
+              title, request: { reference, quantity: 25 },
             });
             if (typeof result?.taskId !== 'string') throw new ApiFailure(201, 'INVALID_CREATE_RESULT');
-            created.push({ id: result.taskId, client: client.index, reference });
+            created.push({ taskId: result.taskId, client: client.index, ownerId: client.userId, title, reference });
           } else {
             const result = await client.session.command('PATCH', '/api/tasks/' + client.task.taskId, {
               title: 'Capacity client ' + client.index + ' rename ' + client.counter, expectedTitleRevision: client.task.titleRevision,
@@ -139,18 +105,14 @@ async function stage(mode, count) {
   const writes = operations.slice(2).flatMap(item => item.latencies);
   if (!reason && (!reads.length || p95(reads) > 2000 || (mode === 'mixed' && (!writes.length || p95(writes) > 3000))))
     reason = 'latency-limit';
-  const drainStartedAt = new Date().toISOString(), deadline = Date.now() + 180000, drain = [];
-  do {
-    const current = await loadSnapshot(resources); drain.push(current);
-    if (current.app.pending === 0 && current.emulator.unpublished === 0) break;
-    if (current.containers.some(item => !item.running || item.oom || item.restarted)) { reason = 'container-failure'; break; }
-    await pause(2000);
-  } while (Date.now() < deadline);
-  const after = drain.at(-1), drained = after.app.pending === 0 && after.emulator.unpublished === 0;
-  if (!drained) reason ||= 'drain-time-limit';
-  let external;
-  try { external = await checkCreated(created, clients, drained); }
-  catch (error) { integrityErrors.push(error.message); reason = 'integrity-error'; }
+  const drain = await drainLoad(resources, 180000);
+  const after = drain.samples.at(-1), drained = drain.drained;
+  if (!drained) reason ||= drain.stoppedFor;
+  let external, databaseIntegrity;
+  try {
+    external = await verifyCreatedTasks(created, clients, externalOrigin, drained);
+    if (Object.keys(external.errors).length) throw new Error(Object.keys(external.errors).join(','));
+  } catch (error) { integrityErrors.push(error.message); reason = 'integrity-error'; }
   if (drained && reason !== 'integrity-error') {
     try {
       if (after.app.records !== after.emulator.accepted || after.emulator.accepted !== after.emulator.executed || after.emulator.duplicateExecutions)
@@ -174,6 +136,12 @@ async function stage(mode, count) {
       }
       if ((await clients[0].session.get('/api/tasks/' + first.taskId)).businessStatus !== 'SUCCEEDED')
         throw new Error('REPLAY_OPERATION_DID_NOT_COMPLETE');
+      const verifiedReplay = await verifyCreatedTasks([{ taskId: first.taskId, client: 0, ownerId: clients[0].userId,
+        title: input.title, reference: input.request.reference }], clients, externalOrigin, true);
+      if (Object.keys(verifiedReplay.errors).length || verifiedReplay.completed !== 1)
+        throw new Error('REPLAY_INTEGRITY_FAILED');
+      databaseIntegrity = await loadIntegrity(resources);
+      verifyFinishedSnapshot(databaseIntegrity, before.app.records + created.length + 1);
     } catch (error) { integrityErrors.push(error.message); reason = 'integrity-error'; }
   }
   const result = { mode, clients: count, startedAt, finishedAt, warmupSeconds: 15, plannedMeasuredSeconds: 60, measuredSeconds,
@@ -181,8 +149,8 @@ async function stage(mode, count) {
     throughput: measuredSeconds ? operations.reduce((sum, item) => sum + item.latencies.length, 0) / measuredSeconds : 0,
     operations: operations.map(item => ({ ...item, count: item.latencies.length, p95Ms: p95(item.latencies), latencies: undefined })),
     warmupErrors, observation: { samples: observation.samples, errors: observation.errors },
-    drain: { startedAt: drainStartedAt, finishedAt: new Date().toISOString(), drained, samples: drain },
-    external, pipeline: await pipelineSummary(resources, startedAt), stoppedFor: reason || null, passed: !reason };
+    drain,
+    external, databaseIntegrity, pipeline: await pipelineSummary(resources, startedAt), stoppedFor: reason || null, passed: !reason };
   console.log(mode + ' ' + count + ' clients: ' + (result.passed ? 'PASS' : reason) + ', read p95=' + result.readP95Ms + ', pending=' + after.app.pending);
   return result;
 }
