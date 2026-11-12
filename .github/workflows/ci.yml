@@ -21,7 +21,7 @@ jobs:
           POSTGRES_PASSWORD: ci-admin-password-only
         ports: ['19532:5432']
         options: >-
-          --health-cmd 'pg_isready -U si_ci_admin -d postgres'
+          --health-cmd "pg_isready -U si_ci_admin -d postgres"
           --health-interval 3s --health-timeout 3s --health-retries 20
     env:
       SI_TEST_DB_PASSWORD: ci-test-password-only
