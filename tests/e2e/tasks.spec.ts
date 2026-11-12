@@ -144,3 +144,24 @@ test('TC-08: session refresh removes the previous owner cache before an in-place
   await expect(page.getByText('Сохранённые задания', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0);
 });
+
+
+test('TC-09: history follows automatic task updates without reopening the card', async ({ page, request }, info) => {
+  const external = process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19581';
+  const reference = info.project.name === 'mobile' ? 'REQ-800007' : 'REQ-800006';
+  expect((await request.put(`${external}/test/faults/${reference}`, { data: { mode: 'UNAVAILABLE' } })).status()).toBe(204);
+  try {
+    await login(page);
+    await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
+    const title = 'E2E живая история ' + crypto.randomUUID();
+    await page.getByLabel('Название', { exact: true }).fill(title);
+    await page.getByLabel('Номер заявки', { exact: true }).fill(reference);
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
+    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    await expect(page.getByText('Задание принято и поставлено в очередь', { exact: true })).toBeVisible();
+    await expect(page.getByText('В очереди', { exact: true })).toBeVisible();
+    expect((await request.delete(`${external}/test/faults/${reference}`)).status()).toBe(204);
+    await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
+    await expect(page.getByText('Принят внешний результат: SUCCEEDED', { exact: true })).toBeVisible();
+  } finally { expect((await request.delete(`${external}/test/faults/${reference}`)).status()).toBe(204); }
+});

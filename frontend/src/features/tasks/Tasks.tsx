@@ -100,7 +100,12 @@ export function NewTask() {
 
 export function TaskCard({ user }: { user: GetSession200 }) {
   const { id = '' } = useParams();
-  const task = useQuery({ queryKey: keys.task(id), queryFn: () => data(getTask(id)),
+  const client = useQueryClient();
+  const task = useQuery({ queryKey: keys.task(id), queryFn: async () => {
+    const result = await data(getTask(id));
+    void client.invalidateQueries({ queryKey: [...keys.task(id), 'history'] });
+    return result;
+  },
     refetchInterval: query => {
       const current = query.state.data;
       return current && !['SUCCEEDED', 'REJECTED'].includes(current.businessStatus) ? 3000 : false;
