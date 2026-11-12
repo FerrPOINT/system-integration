@@ -69,8 +69,8 @@ export function IssueList() {
       {issues.data.items.length === 0 ? <Card><EmptyState message="Проблем в выбранном состоянии нет." /></Card> :
         <ul className="issue-cards">{issues.data.items.map(issue => <Card asChild key={issue.issueId}><li><CardContent className="base-page-stack">
           <CardTitle asChild><h2><Link to={'/issues/' + issue.issueId}>{kinds[issue.kind]}</Link></h2></CardTitle><p>{issue.summary}</p>
-          <small>{timestamp(issue.openedAt)}</small><small>{issue.assignedTo ? 'Ответственный: ' + issue.assignedTo : 'Ответственный пока не назначен'}</small>
-          {issue.nextAttemptAt && <small>Следующая попытка: {timestamp(issue.nextAttemptAt)}</small>}
+          <div className="issue-meta"><small>{timestamp(issue.openedAt)}</small><small>{issue.assignedTo ? 'Ответственный: ' + issue.assignedTo : 'Ответственный пока не назначен'}</small>
+          {issue.nextAttemptAt && <small>Следующая попытка: {timestamp(issue.nextAttemptAt)}</small>}</div>
         </CardContent></li></Card>)}</ul>}
       <Pagination page={page} hasNext={issues.data.hasNext} pending={issues.isFetching}
         onChange={next => setSearch({ status, page: String(next) })} />
@@ -97,16 +97,16 @@ export function IssueCard() {
       {item.taskId && <Link to={'/tasks/' + item.taskId}>Открыть задание и историю</Link>}
       <IssueActions issue={item} />
     </CardContent></section></Card>
-    {item.evidence && <Card asChild><section className="history"><CardContent className="base-page-stack"><CardTitle asChild><h2>Диагностика первого события</h2></CardTitle><p>{item.evidence.reason}</p>
+    {item.evidence && <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>Диагностика первого события</h2></CardTitle><p>{item.evidence.reason}</p>
       {item.evidence.cursor && <p>Позиция ленты: {item.evidence.cursor}</p>}
       <div className="comparison-grid">
         {item.evidence.local && <Snapshot title="Локальный снимок при ошибке" value={item.evidence.local} />}
         {item.evidence.received && <ReceivedResult value={item.evidence.received} />}
       </div>
     </CardContent></section></Card>}
-    {item.latestReconciliationId && item.taskId && <p className="history"><Button asChild><Link to={'/tasks/' + item.taskId + '/reconciliations/' + item.latestReconciliationId}>
+    {item.latestReconciliationId && item.taskId && <p><Button asChild><Link to={'/tasks/' + item.taskId + '/reconciliations/' + item.latestReconciliationId}>
       Открыть последнюю сверку</Link></Button></p>}
-    {item.resolution && <Card asChild><section className="history"><CardContent className="base-page-stack"><CardTitle asChild><h2>Решение</h2></CardTitle><p>{actionLabels[item.resolution.action]}</p><p>{item.resolution.reason}</p>
+    {item.resolution && <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>Решение</h2></CardTitle><p>{actionLabels[item.resolution.action]}</p><p>{item.resolution.reason}</p>
       <small>{timestamp(item.resolution.decidedAt)} · Оператор {item.resolution.decidedBy}</small>
       {item.taskId && <Link to={'/tasks/' + item.taskId + '/reconciliations/' + item.resolution.reconciliationId}>Сверка, на которой основано решение</Link>}
     </CardContent></section></Card>}
@@ -125,7 +125,7 @@ function IssueActions({ issue }: { issue: Issue }) {
   });
   if (issue.status !== 'OPEN') return null;
   const decisions = issue.allowedActions.filter((action): action is DecisionAction => action === 'RETRY' || action === 'APPLY_EXTERNAL_RESULT' || action === 'ACKNOWLEDGE_DIFFERENCE');
-  return <div className="history">
+  return <div className="base-page-stack">
     <ActionGroup align="start">
       {issue.allowedActions.includes('TAKE_OWNERSHIP') && <Button onClick={() => take.mutate()} disabled={take.isPending}>
         {take.isPending ? 'Сохраняем…' : issue.assignedTo ? 'Перенять разбор' : 'Взять разбор'}</Button>}
@@ -133,7 +133,7 @@ function IssueActions({ issue }: { issue: Issue }) {
     </ActionGroup>
     <ErrorMessage error={take.error} />
     {decisions.length > 0 ? <DecisionForm issue={issue} actions={decisions} /> :
-      issue.taskId && <p className="muted history">Чтобы принять решение, выполните свежую сверку. Сетевые попытки продолжаются по расписанию, если отправка не приостановлена.</p>}
+      issue.taskId && <p className="muted">Чтобы принять решение, выполните свежую сверку. Сетевые попытки продолжаются по расписанию, если отправка не приостановлена.</p>}
   </div>;
 }
 

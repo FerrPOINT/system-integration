@@ -179,7 +179,7 @@ function RenameForm({ task, onClose }: { task: Task; onClose: () => void }) {
 function History({ id, canReview }: { id: string; canReview: boolean }) {
   const [page, setPage] = useState(0);
   const history = useQuery({ queryKey: keys.history(id, page), queryFn: () => data(listTaskHistory(id, { page })) });
-  return <Card asChild><section className="history"><CardContent className="base-page-stack"><CardTitle asChild><h2>История</h2></CardTitle>
+  return <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>История</h2></CardTitle>
     {history.isPending ? <Loading /> : history.isError ? <><ErrorMessage error={history.error} />
       <Button onClick={() => history.refetch()}>Повторить</Button></> : <>
       <Timeline>{history.data.items.map(event => <TimelineItem key={event.eventId}><TimelineMarker /><TimelineContent>

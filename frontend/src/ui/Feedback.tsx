@@ -9,7 +9,7 @@ export function ErrorMessage({ error }: { error: Error | null }) {
 }
 
 export function Loading() {
-  return <Notice role="status" aria-busy="true">Загрузка…</Notice>;
+  return <div className="base-loading-state" role="status" aria-label="Загрузка…" aria-busy="true" data-scope="page">Загрузка…</div>;
 }
 
 export function Pagination({ page, hasNext, pending, onChange }: {

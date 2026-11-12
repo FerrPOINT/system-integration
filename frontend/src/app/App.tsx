@@ -22,8 +22,8 @@ export function App() {
     queryFn: () => data(getSession()),
     staleTime: 0,
   });
-  if (session.isPending) return <main><Loading /></main>;
-  if (session.isError) return <main><ErrorMessage error={session.error} />
+  if (session.isPending) return <main className="base-page-stack"><Loading /></main>;
+  if (session.isError) return <main className="base-page-stack"><ErrorMessage error={session.error} />
     <Button onClick={() => session.refetch()}>Повторить</Button></main>;
   if (!session.data) return <Login appearance={appearance} />;
   return <Shell user={session.data} appearance={appearance} />;
@@ -68,7 +68,7 @@ function Shell({ user, appearance }: { user: GetSession200; appearance: ReactNod
       <div className="header-controls">{appearance}<div className="account"><span>{user.username}<small>{user.role === 'OPERATOR' ? 'Оператор' : 'Инициатор'}</small></span>
         <Button onClick={() => logout.mutate()} disabled={logout.isPending}>Выйти</Button></div></div>
     </header>
-    <main id="main" tabIndex={-1}>
+    <main id="main" className="base-page-stack" tabIndex={-1}>
       <ErrorMessage error={logout.error} />
       <Routes>
         <Route path="/tasks" element={<TaskList user={user} />} />

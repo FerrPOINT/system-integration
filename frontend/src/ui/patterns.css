@@ -701,15 +701,22 @@ outline: 2px solid Highlight;
 :where(h1, h2, h3, p) { margin: 0; }
 .base-page-stack { display: flex; min-width: 0; flex-direction: column; gap: var(--shell-page-block-gap); }
 .base-form { display: grid; min-width: 0; gap: var(--base-panel-padding); }
-.base-page-header { margin-block-end: var(--shell-page-block-gap); }
-.base-page-stack > .base-page-header { margin-block-end: 0; }
 .base-page-copy { min-width: 0; }
 .base-card-content > .base-card-title { line-height: 1.4; }
 .base-timeline-content > * + * { margin-block-start: 6px; }
 
 small, .muted { color: var(--color-text-muted); }
 small { display: block; font-size: 12px; line-height: 1.5; }
-dl { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr; gap: 13px 20px; margin: 18px 0; }
+dl { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr; gap: 12px 20px; margin: 0; }
 dt { color: var(--color-text-muted); }
 dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
 .technical { font-family: var(--base-font-mono); font-size: var(--base-font-body); }
+
+
+/* Base LoadingState (async-states.tsx / tokens.css); page layout owns its outside gap. */
+.base-loading-state {
+  display: flex; min-width: 0; align-items: center; justify-content: center;
+  padding: var(--base-panel-padding); text-align: center; font-size: var(--base-font-body);
+  line-height: var(--base-line-body); color: var(--color-text-muted); overflow-wrap: anywhere;
+}
+.base-page-stack > .base-button { align-self: flex-start; }
