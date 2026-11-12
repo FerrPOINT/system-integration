@@ -1,3 +1,13 @@
+import { Notice } from '../../ui/notice';
+import { BackLink } from '../../ui/back-link';
+import { Timeline, TimelineItem, TimelineMarker, TimelineContent } from '../../ui/timeline';
+import { Disclosure } from '../../ui/disclosure';
+import { Table } from '../../ui/table';
+import { EmptyState } from '../../ui/empty-state';
+import { ActionGroup } from '../../ui/action-group';
+import { Card, CardContent, CardTitle } from '../../ui/card';
+import { PageHeader } from '../../ui/page-header';
+import { FormField } from '../../ui/form-field';
 import { Badge } from '../../ui/badge';
 import { Select } from '../../ui/select';
 import { Input } from '../../ui/input';
@@ -31,12 +41,11 @@ export function TaskList({ user }: { user: GetSession200 }) {
     const updated = new URLSearchParams(search); updated.set('page', String(next)); setSearch(updated);
   }
   return <>
-    <div className="page-heading"><div><h1>{user.role === 'OPERATOR' ? 'Все задания' : 'Мои задания'}</h1>
-      <p className="muted">Приём задания, доставка и результат исполнения показаны отдельно.</p></div>
-      {user.role === 'INITIATOR' && <Button asChild variant="default"><Link to="/tasks/new">Создать задание</Link></Button>}</div>
-    <details className="filter-panel" key={search.toString()} open={!mobile || Boolean(status || params.createdFrom || params.createdTo)}>
-    <summary>Фильтры <span>{status || params.createdFrom || params.createdTo ? 'Заданы условия' : 'Результат и период'}</span></summary>
-    <form className="filters" onSubmit={event => {
+    <PageHeader title={user.role === 'OPERATOR' ? 'Все задания' : 'Мои задания'}
+      context="Приём задания, доставка и результат исполнения показаны отдельно."
+      actions={user.role === 'INITIATOR' && <Button asChild variant="default"><Link to="/tasks/new">Создать задание</Link></Button>} />
+    <Disclosure className="filter-panel" key={search.toString()} open={!mobile || Boolean(status || params.createdFrom || params.createdTo)} summary={<>Фильтры <span className="muted">{status || params.createdFrom || params.createdTo ? 'Заданы условия' : 'Результат и период'}</span></>}>
+    <form className="base-form filters" onSubmit={event => {
       event.preventDefault(); const form = new FormData(event.currentTarget); const next = new URLSearchParams();
       if (form.get('businessStatus') !== 'ALL') next.set('businessStatus', String(form.get('businessStatus')));
       for (const name of ['createdFrom', 'createdTo']) {
@@ -44,31 +53,32 @@ export function TaskList({ user }: { user: GetSession200 }) {
       }
       setSearch(next);
     }}>
-      <label htmlFor="business-status">Результат<Select id="business-status" name="businessStatus" defaultValue={status || 'ALL'}
-        options={[{ value: 'ALL', label: 'Все результаты' }, ...Object.entries(businessLabels).map(([value, label]) => ({ value, label }))]} /></label>
-      <label>Создано с (UTC, включительно)<Input type="datetime-local" name="createdFrom" defaultValue={params.createdFrom?.slice(0,16)} /></label>
-      <label>Создано до (UTC, не включая)<Input type="datetime-local" name="createdTo" defaultValue={params.createdTo?.slice(0,16)} /></label>
-      <div className="filter-actions"><Button variant="default">Применить</Button><Button type="button" onClick={() => setSearch({})}>Сбросить</Button></div>
-    </form></details>
-    {!valid ? <p role="alert">Некорректные параметры страницы. Сбросьте фильтры.</p> : tasks.isPending ? <Loading /> :
+      <FormField id="business-status" label="Результат">{attrs => <Select {...attrs} name="businessStatus" defaultValue={status || 'ALL'}
+        options={[{ value: 'ALL', label: 'Все результаты' }, ...Object.entries(businessLabels).map(([value, label]) => ({ value, label }))]} />}</FormField>
+      <FormField id="field-createdFrom" label="Создано с (UTC, включительно)">{attrs => <Input {...attrs} type="datetime-local" name="createdFrom" defaultValue={params.createdFrom?.slice(0,16)} />}</FormField>
+      <FormField id="field-createdTo" label="Создано до (UTC, не включая)">{attrs => <Input {...attrs} type="datetime-local" name="createdTo" defaultValue={params.createdTo?.slice(0,16)} />}</FormField>
+      <ActionGroup align="start" className="filter-actions"><Button variant="default">Применить</Button><Button type="button" onClick={() => setSearch({})}>Сбросить</Button></ActionGroup>
+    </form></Disclosure>
+    {!valid ? <Notice role="alert" tone="danger">Некорректные параметры страницы. Сбросьте фильтры.</Notice> : tasks.isPending ? <Loading /> :
       tasks.isError ? <><ErrorMessage error={tasks.error} /><Button onClick={() => tasks.refetch()}>Повторить</Button></> :
       <><div className="list-heading"><span>{tasks.isFetching ? 'Обновляем…' : 'Сохранённые задания'}</span>
         <Button type="button" onClick={() => tasks.refetch()} disabled={tasks.isFetching}>Обновить</Button></div>
-        {tasks.data.items.length === 0 ? <section className="panel empty"><h2>{status || params.createdFrom || params.createdTo ? 'Ничего не найдено' : 'Заданий пока нет'}</h2>
-          <p>{status || params.createdFrom || params.createdTo ? 'Измените условия или сбросьте фильтры, чтобы увидеть задания.' : 'Создайте первое задание. Здесь появятся доставка и результат исполнения.'}</p>
-          {(status || params.createdFrom || params.createdTo) && <Button onClick={() => setSearch({})}>Сбросить фильтры</Button>}</section> : mobile ?
-          <ul className="task-cards">{tasks.data.items.map(task => <li className="panel task-card" key={task.taskId}>
-            <h2><Link to={'/tasks/' + task.taskId}>{task.title}</Link></h2>
+        {tasks.data.items.length === 0 ? <Card><EmptyState headingLevel={2}
+          message={status || params.createdFrom || params.createdTo ? 'Ничего не найдено' : 'Заданий пока нет'}
+          description={status || params.createdFrom || params.createdTo ? 'Измените условия или сбросьте фильтры, чтобы увидеть задания.' : 'Создайте первое задание. Здесь появятся доставка и результат исполнения.'}
+          action={(status || params.createdFrom || params.createdTo) && <Button onClick={() => setSearch({})}>Сбросить фильтры</Button>} /></Card> : mobile ?
+          <ul className="task-cards">{tasks.data.items.map(task => <Card asChild key={task.taskId}><li className="task-card"><CardContent className="base-page-stack">
+            <CardTitle asChild><h2><Link to={'/tasks/' + task.taskId}>{task.title}</Link></h2></CardTitle>
             <div className="task-card-status"><BusinessBadge status={task.businessStatus} /><span>{deliveryLabels[task.deliveryStatus]}</span></div>
             <dl><dt>Заявка</dt><dd>{task.request.reference}</dd><dt>Количество</dt><dd>{task.request.quantity}</dd>
               <dt>Создано</dt><dd>{timestamp(task.createdAt)}</dd></dl>
-          </li>)}</ul> :
-          <table className="panel task-table"><caption className="sr-only">Реестр заданий</caption>
+          </CardContent></li></Card>)}</ul> :
+          <Card><Table className="task-table"><caption className="sr-only">Реестр заданий</caption>
             <thead><tr><th scope="col">Название / заявка</th><th scope="col">Доставка</th><th scope="col">Результат</th><th scope="col">Создано (UTC)</th></tr></thead>
             <tbody>{tasks.data.items.map(task => <tr key={task.taskId}><td><Link to={'/tasks/' + task.taskId}>{task.title}</Link>
               <small>{task.request.reference} · {task.request.quantity} ед.</small></td><td>{deliveryLabels[task.deliveryStatus]}</td>
               <td><BusinessBadge status={task.businessStatus} /></td><td>{timestamp(task.createdAt)}</td></tr>)}</tbody>
-          </table>}
+          </Table></Card>}
         <Pagination page={page} hasNext={tasks.data.hasNext} pending={tasks.isFetching} onChange={changePage} />
       </>}
   </>;
@@ -90,19 +100,17 @@ export function NewTask() {
       navigate('/tasks/' + result.taskId);
     },
   });
-  return <><Link className="back-link" to="/tasks">← К заданиям</Link><h1>Новое задание</h1>
-    <section className="panel readable"><p className="muted">Задание сохраняется сразу. Отправка исполнителю продолжится в фоне.</p>
-      <form onSubmit={event => { event.preventDefault(); create.mutate(new FormData(event.currentTarget)); }}>
-        <label>Название<Input name="title" required maxLength={160} pattern=".*\S.*" autoFocus /></label>
-        <div className="field"><label>Номер заявки<Input name="reference" required pattern="REQ-[0-9]{6}" placeholder="REQ-000001" aria-describedby="reference-hint" /></label>
-          <small id="reference-hint">REQ- и шесть цифр. После создания изменить нельзя.</small></div>
-        <div className="field"><label>Количество<Input name="quantity" type="number" min={1} max={1000} step={1} required defaultValue={25} aria-describedby="quantity-hint" /></label>
-          <small id="quantity-hint">Демонстрационное правило: до 100 единиц включительно — успех, больше — отказ.</small></div>
+  return <><BackLink to="/tasks">К заданиям</BackLink><PageHeader title="Новое задание" />
+    <Card asChild><section className="readable"><CardContent className="base-page-stack"><p className="muted">Задание сохраняется сразу. Отправка исполнителю продолжится в фоне.</p>
+      <form className="base-form" onSubmit={event => { event.preventDefault(); create.mutate(new FormData(event.currentTarget)); }}>
+        <FormField id="field-title" label="Название" required>{attrs => <Input {...attrs} name="title" maxLength={160} pattern=".*\S.*" autoFocus />}</FormField>
+        <FormField id="field-reference" label="Номер заявки" required hint="REQ- и шесть цифр. После создания изменить нельзя.">{attrs => <Input {...attrs} name="reference" pattern="REQ-[0-9]{6}" placeholder="REQ-000001" />}</FormField>
+        <FormField id="field-quantity" label="Количество" required hint="Демонстрационное правило: до 100 единиц включительно — успех, больше — отказ.">{attrs => <Input {...attrs} name="quantity" type="number" min={1} max={1000} step={1} defaultValue={25} />}</FormField>
         <ErrorMessage error={create.error} />
-        <div className="actions"><Button variant="default" disabled={create.isPending}>{create.isPending ? 'Сохраняем…' : 'Создать'}</Button>
-          <Link to="/tasks">Отмена</Link></div>
+        <ActionGroup align="start"><Button variant="default" disabled={create.isPending}>{create.isPending ? 'Сохраняем…' : 'Создать'}</Button>
+          <Link to="/tasks">Отмена</Link></ActionGroup>
       </form>
-    </section></>;
+    </CardContent></section></Card></>;
 }
 
 export function TaskCard({ user }: { user: GetSession200 }) {
@@ -120,13 +128,13 @@ export function TaskCard({ user }: { user: GetSession200 }) {
   });
   const [editing, setEditing] = useState(false);
   if (task.isPending) return <Loading />;
-  if (!task.data) return <><Link to="/tasks">← К заданиям</Link><ErrorMessage error={task.error} />
+  if (!task.data) return <><BackLink to="/tasks">К заданиям</BackLink><ErrorMessage error={task.error} />
     <Button onClick={() => task.refetch()}>Повторить</Button></>;
   const item = task.data;
-  return <><Link className="back-link" to="/tasks">← К заданиям</Link>
-    <div className="page-heading"><h1>{item.title}</h1><Button onClick={() => task.refetch()} disabled={task.isFetching}>Обновить</Button></div>
+  return <><BackLink to="/tasks">К заданиям</BackLink>
+    <PageHeader title={item.title} actions={<Button onClick={() => task.refetch()} disabled={task.isFetching}>Обновить</Button>} />
     <ErrorMessage error={task.error} />
-    <section className="panel"><h2>Состояние задания</h2>
+    <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>Состояние задания</h2></CardTitle>
       <dl className="details"><dt>Доставка</dt><dd>{deliveryLabels[item.deliveryStatus]}</dd>
         <dt>Исполнение</dt><dd><BusinessBadge status={item.businessStatus} /></dd>
         <dt>Заявка</dt><dd>{item.request.reference}</dd><dt>Количество</dt><dd>{item.request.quantity}</dd>
@@ -138,7 +146,7 @@ export function TaskCard({ user }: { user: GetSession200 }) {
       {user.role === 'INITIATOR' && (editing ? <RenameForm task={item} onClose={() => setEditing(false)} /> :
         <Button onClick={() => setEditing(true)}>Изменить название</Button>)}
       {user.role === 'OPERATOR' && <ReconcileButton taskId={id} />}
-    </section>
+    </CardContent></section></Card>
     <History id={id} canReview={user.role === 'OPERATOR'} />
   </>;
 }
@@ -159,28 +167,28 @@ function RenameForm({ task, onClose }: { task: Task; onClose: () => void }) {
     },
   });
   const conflict = rename.error instanceof ApiError && rename.error.status === 409;
-  return <form className="edit-form" onSubmit={event => { event.preventDefault(); rename.mutate(new FormData(event.currentTarget)); }}>
-    <label>Новое название<Input name="title" required maxLength={160} pattern=".*\S.*" defaultValue={task.title} autoFocus /></label>
+  return <form className="base-form edit-form" onSubmit={event => { event.preventDefault(); rename.mutate(new FormData(event.currentTarget)); }}>
+    <FormField id="field-title" label="Новое название" required>{attrs => <Input {...attrs} name="title" maxLength={160} pattern=".*\S.*" defaultValue={task.title} autoFocus />}</FormField>
     <ErrorMessage error={rename.error} />
-    <div className="actions"><Button variant="default" disabled={rename.isPending || conflict}>Сохранить</Button>
+    <ActionGroup align="start"><Button variant="default" disabled={rename.isPending || conflict}>Сохранить</Button>
       <Button type="button" onClick={async () => { await client.invalidateQueries({ queryKey: keys.task(task.taskId) }); onClose(); }}>
-        {conflict ? 'Обновить карточку' : 'Отмена'}</Button></div>
+        {conflict ? 'Обновить карточку' : 'Отмена'}</Button></ActionGroup>
   </form>;
 }
 
 function History({ id, canReview }: { id: string; canReview: boolean }) {
   const [page, setPage] = useState(0);
   const history = useQuery({ queryKey: keys.history(id, page), queryFn: () => data(listTaskHistory(id, { page })) });
-  return <section className="panel history"><h2>История</h2>
+  return <Card asChild><section className="history"><CardContent className="base-page-stack"><CardTitle asChild><h2>История</h2></CardTitle>
     {history.isPending ? <Loading /> : history.isError ? <><ErrorMessage error={history.error} />
       <Button onClick={() => history.refetch()}>Повторить</Button></> : <>
-      <ol>{history.data.items.map(event => <li key={event.eventId}>
+      <Timeline>{history.data.items.map(event => <TimelineItem key={event.eventId}><TimelineMarker /><TimelineContent>
         <p>{event.summary}</p><small><time dateTime={event.occurredAt}>{timestamp(event.occurredAt)}</time> ·
           {event.actor === 'SYSTEM' ? ' Система' : ` Пользователь ${event.actorUserId}`}</small>
         {canReview && event.reconciliationId && <Link to={'/tasks/' + id + '/reconciliations/' + event.reconciliationId}>Открыть сохранённую сверку</Link>}
         {canReview && event.issueId && <Link to={'/issues/' + event.issueId}>Открыть разбор</Link>}
-      </li>)}</ol>
+      </TimelineContent></TimelineItem>)}</Timeline>
       <Pagination page={page} hasNext={history.data.hasNext} pending={history.isFetching} onChange={setPage} />
     </>}
-  </section>;
+  </CardContent></section></Card>;
 }

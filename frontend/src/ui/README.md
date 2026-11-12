@@ -35,3 +35,22 @@ services-base/base-modules/ui/src, commit 9a5008a79415110a0d8fdcc8348aa4853dbcc3
 Тема хранится в app/theme.tsx; компоненты читают только CSS-переменные.
 Фильтр «Все результаты» имеет явное UI-значение ALL, которое не отправляется в API.
 Пустое значение в обязательном действии оператора остаётся placeholder.
+
+## Общие паттерны экранов
+
+Карточки и их содержимое — Card/CardContent/CardTitle; заголовок страницы —
+PageHeader; поле, подпись и подсказка — FormField/Label; таблица — Table;
+сообщение — Notice; пустой результат — EmptyState; фильтры — Disclosure;
+действия — ActionGroup; история — Timeline. Эти реализации перенесены из того же
+Base commit. PageHeader использует только обычный заголовок, контекст и действия;
+Disclosure — только panel, без неиспользуемого ResourceList row.
+CSS-правила выбранных семейств из Base находятся в patterns.css; Tailwind utility
+классы заменены эквивалентными обычными CSS-правилами.
+Подсказки и required принадлежат FormField, содержимое и side effects — экрану.
+BackLink составляет штатные Button и React Router Link.
+
+Brand в app/Brand.tsx один для входа и шапки: Base IconMark и SVG ArrowRightLeft
+из уже используемого Lucide. Цвета и размеры знака задаёт Base; текстовых
+псевдологотипов и отдельной копии на странице входа нет.
+styles.css отвечает за сетки экранов и оболочку. Общие поля, кнопки, карточки,
+сообщения, заголовки и история в нём заново не оформляются.

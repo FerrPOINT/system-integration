@@ -1,3 +1,10 @@
+import { BackLink } from '../../ui/back-link';
+import { Notice } from '../../ui/notice';
+import { EmptyState } from '../../ui/empty-state';
+import { ActionGroup } from '../../ui/action-group';
+import { Card, CardContent, CardTitle } from '../../ui/card';
+import { PageHeader } from '../../ui/page-header';
+import { FormField } from '../../ui/form-field';
 import { Select } from '../../ui/select';
 import { Textarea } from '../../ui/textarea';
 import { Button } from '../../ui/button';
@@ -53,19 +60,18 @@ export function IssueList() {
   const issues = useQuery({ queryKey: [...keys.issues, 'list', page, status], enabled: valid,
     queryFn: () => data(listExchangeIssues({ page, status: status as IssueStatus })) });
   return <>
-    <div className="page-heading"><div><h1>Разбор обмена</h1><p className="muted">Доставка, конфликты и решения операторов.</p></div>
-      <Button onClick={() => issues.refetch()} disabled={issues.isFetching || !valid}>Обновить</Button></div>
-    <label className="readable" htmlFor="issue-status">Состояние разбора<Select id="issue-status" value={status}
-      onValueChange={status => setSearch({ status })} options={[{ value: 'OPEN', label: 'Открытые' }, { value: 'RESOLVED', label: 'Завершённые' }]} /></label>
-    {!valid ? <p role="alert">Некорректные параметры страницы.</p> : issues.isPending ? <Loading /> : !issues.data ?
+    <PageHeader title="Разбор обмена" context="Доставка, конфликты и решения операторов." actions={<Button onClick={() => issues.refetch()} disabled={issues.isFetching || !valid}>Обновить</Button>} />
+    <div className="readable"><FormField id="issue-status" label="Состояние разбора">{attrs => <Select {...attrs} value={status}
+      onValueChange={status => setSearch({ status })} options={[{ value: 'OPEN', label: 'Открытые' }, { value: 'RESOLVED', label: 'Завершённые' }]} />}</FormField></div>
+    {!valid ? <Notice role="alert" tone="danger">Некорректные параметры страницы.</Notice> : issues.isPending ? <Loading /> : !issues.data ?
       <><ErrorMessage error={issues.error} /><Button onClick={() => issues.refetch()}>Повторить</Button></> : <>
       <ErrorMessage error={issues.error} />
-      {issues.data.items.length === 0 ? <p className="panel empty">Проблем в выбранном состоянии нет.</p> :
-        <ul className="issue-cards">{issues.data.items.map(issue => <li className="panel" key={issue.issueId}>
-          <h2><Link to={'/issues/' + issue.issueId}>{kinds[issue.kind]}</Link></h2><p>{issue.summary}</p>
+      {issues.data.items.length === 0 ? <Card><EmptyState message="Проблем в выбранном состоянии нет." /></Card> :
+        <ul className="issue-cards">{issues.data.items.map(issue => <Card asChild key={issue.issueId}><li><CardContent className="base-page-stack">
+          <CardTitle asChild><h2><Link to={'/issues/' + issue.issueId}>{kinds[issue.kind]}</Link></h2></CardTitle><p>{issue.summary}</p>
           <small>{timestamp(issue.openedAt)}</small><small>{issue.assignedTo ? 'Ответственный: ' + issue.assignedTo : 'Ответственный пока не назначен'}</small>
           {issue.nextAttemptAt && <small>Следующая попытка: {timestamp(issue.nextAttemptAt)}</small>}
-        </li>)}</ul>}
+        </CardContent></li></Card>)}</ul>}
       <Pagination page={page} hasNext={issues.data.hasNext} pending={issues.isFetching}
         onChange={next => setSearch({ status, page: String(next) })} />
     </>}
@@ -76,34 +82,34 @@ export function IssueCard() {
   const { id = '' } = useParams();
   const issue = useQuery({ queryKey: keys.issue(id), queryFn: () => data(getExchangeIssue(id)) });
   if (issue.isPending) return <Loading />;
-  if (!issue.data) return <><Link to="/issues">← К разбору обмена</Link><ErrorMessage error={issue.error} />
+  if (!issue.data) return <><BackLink to="/issues">К разбору обмена</BackLink><ErrorMessage error={issue.error} />
     <Button onClick={() => issue.refetch()}>Повторить</Button></>;
   const item = issue.data;
   return <>
-    <Link className="back-link" to="/issues">← К разбору обмена</Link>
-    <div className="page-heading"><h1>{kinds[item.kind]}</h1><Button onClick={() => issue.refetch()} disabled={issue.isFetching}>Обновить</Button></div>
+    <BackLink to="/issues">К разбору обмена</BackLink>
+    <PageHeader title={kinds[item.kind]} actions={<Button onClick={() => issue.refetch()} disabled={issue.isFetching}>Обновить</Button>} />
     <ErrorMessage error={issue.error} />
-    <section className="panel"><h2>{item.status === 'OPEN' ? 'Открытый разбор' : 'Разбор завершён'}</h2><p>{item.summary}</p>
+    <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>{item.status === 'OPEN' ? 'Открытый разбор' : 'Разбор завершён'}</h2></CardTitle><p>{item.summary}</p>
       <dl><dt>Открыт</dt><dd>{timestamp(item.openedAt)}</dd><dt>Ответственный</dt><dd className="technical">{item.assignedTo || 'Не назначен'}</dd>
         {item.operationId && <><dt>ID операции</dt><dd className="technical">{item.operationId}</dd></>}
         {item.nextAttemptAt && <><dt>Следующая попытка</dt><dd>{timestamp(item.nextAttemptAt)}</dd></>}
       </dl>
       {item.taskId && <Link to={'/tasks/' + item.taskId}>Открыть задание и историю</Link>}
       <IssueActions issue={item} />
-    </section>
-    {item.evidence && <section className="panel history"><h2>Диагностика первого события</h2><p>{item.evidence.reason}</p>
+    </CardContent></section></Card>
+    {item.evidence && <Card asChild><section className="history"><CardContent className="base-page-stack"><CardTitle asChild><h2>Диагностика первого события</h2></CardTitle><p>{item.evidence.reason}</p>
       {item.evidence.cursor && <p>Позиция ленты: {item.evidence.cursor}</p>}
       <div className="comparison-grid">
         {item.evidence.local && <Snapshot title="Локальный снимок при ошибке" value={item.evidence.local} />}
         {item.evidence.received && <ReceivedResult value={item.evidence.received} />}
       </div>
-    </section>}
+    </CardContent></section></Card>}
     {item.latestReconciliationId && item.taskId && <p className="history"><Button asChild><Link to={'/tasks/' + item.taskId + '/reconciliations/' + item.latestReconciliationId}>
       Открыть последнюю сверку</Link></Button></p>}
-    {item.resolution && <section className="panel history"><h2>Решение</h2><p>{actionLabels[item.resolution.action]}</p><p>{item.resolution.reason}</p>
+    {item.resolution && <Card asChild><section className="history"><CardContent className="base-page-stack"><CardTitle asChild><h2>Решение</h2></CardTitle><p>{actionLabels[item.resolution.action]}</p><p>{item.resolution.reason}</p>
       <small>{timestamp(item.resolution.decidedAt)} · Оператор {item.resolution.decidedBy}</small>
       {item.taskId && <Link to={'/tasks/' + item.taskId + '/reconciliations/' + item.resolution.reconciliationId}>Сверка, на которой основано решение</Link>}
-    </section>}
+    </CardContent></section></Card>}
   </>;
 }
 
@@ -120,11 +126,11 @@ function IssueActions({ issue }: { issue: Issue }) {
   if (issue.status !== 'OPEN') return null;
   const decisions = issue.allowedActions.filter((action): action is DecisionAction => action === 'RETRY' || action === 'APPLY_EXTERNAL_RESULT' || action === 'ACKNOWLEDGE_DIFFERENCE');
   return <div className="history">
-    <div className="actions">
+    <ActionGroup align="start">
       {issue.allowedActions.includes('TAKE_OWNERSHIP') && <Button onClick={() => take.mutate()} disabled={take.isPending}>
         {take.isPending ? 'Сохраняем…' : issue.assignedTo ? 'Перенять разбор' : 'Взять разбор'}</Button>}
       {issue.taskId && issue.allowedActions.includes('RECONCILE') && <ReconcileButton taskId={issue.taskId} />}
-    </div>
+    </ActionGroup>
     <ErrorMessage error={take.error} />
     {decisions.length > 0 ? <DecisionForm issue={issue} actions={decisions} /> :
       issue.taskId && <p className="muted history">Чтобы принять решение, выполните свежую сверку. Сетевые попытки продолжаются по расписанию, если отправка не приостановлена.</p>}
@@ -147,12 +153,12 @@ function DecisionForm({ issue, actions }: { issue: Issue; actions: DecisionActio
     },
     onSuccess: async () => { await refresh(); command.reset(); setReason(''); setAction(''); },
   });
-  return <form className="edit-form" onSubmit={event => { event.preventDefault(); decide.mutate(); }}>
-    <label htmlFor="decision-action">Действие<Select id="decision-action" value={action} required placeholder="Выберите действие"
-      onValueChange={value => setAction(value as DecisionAction)} options={actions.map(value => ({ value, label: actionLabels[value] }))} /></label>
-    {action === 'ACKNOWLEDGE_DIFFERENCE' && <p className="message">Локальный результат сохранится. Приостановленная из-за ошибки протокола отправка будет окончательно остановлена.</p>}
+  return <form className="base-form edit-form" onSubmit={event => { event.preventDefault(); decide.mutate(); }}>
+    <FormField id="decision-action" label="Действие" required>{attrs => <Select {...attrs} value={action} placeholder="Выберите действие"
+      onValueChange={value => setAction(value as DecisionAction)} options={actions.map(value => ({ value, label: actionLabels[value] }))} />}</FormField>
+    {action === 'ACKNOWLEDGE_DIFFERENCE' && <Notice>Локальный результат сохранится. Приостановленная из-за ошибки протокола отправка будет окончательно остановлена.</Notice>}
     {issue.latestReconciliationId && issue.taskId && <Link to={'/tasks/' + issue.taskId + '/reconciliations/' + issue.latestReconciliationId}>Сверка для этого решения</Link>}
-    <label>Причина решения<Textarea value={reason} required maxLength={500} rows={3} onChange={event => setReason(event.target.value)} /></label>
+    <FormField id="decision-reason" label="Причина решения" required>{attrs => <Textarea {...attrs} value={reason} maxLength={500} rows={3} onChange={event => setReason(event.target.value)} />}</FormField>
     <ErrorMessage error={decide.error} />
     <Button variant="default" disabled={decide.isPending || !reason.trim() || !action || !actions.includes(action)}>
       {decide.isPending ? 'Сохраняем решение…' : action ? actionLabels[action] : 'Выполнить'}</Button>
@@ -164,42 +170,41 @@ export function ReconciliationCard() {
   const snapshot = useQuery({ queryKey: keys.reconciliation(taskId, reconciliationId), staleTime: Infinity,
     queryFn: () => data(getTaskReconciliation(taskId, reconciliationId)) });
   if (snapshot.isPending) return <Loading />;
-  if (!snapshot.data) return <><Link to={'/tasks/' + taskId}>← К заданию</Link><ErrorMessage error={snapshot.error} />
+  if (!snapshot.data) return <><BackLink to={'/tasks/' + taskId}>К заданию</BackLink><ErrorMessage error={snapshot.error} />
     <Button onClick={() => snapshot.refetch()}>Повторить</Button></>;
   const item = snapshot.data;
   return <>
-    <Link className="back-link" to={'/tasks/' + taskId}>← К заданию</Link>
-    <div className="page-heading"><h1>Сохранённая сверка</h1><ReconcileButton taskId={taskId} /></div>
+    <BackLink to={'/tasks/' + taskId}>К заданию</BackLink>
+    <PageHeader title="Сохранённая сверка" actions={<ReconcileButton taskId={taskId} />} />
     <ErrorMessage error={snapshot.error} />
-    <section className="panel reconciliation-panel" data-outcome={item.outcome}><div className="reconciliation-summary">
-      <span className="outcome-mark" aria-hidden="true">{item.outcome === 'MATCH' ? '✓' : item.outcome === 'DIFFERENCE' ? '≠' : '!'}</span>
-      <div><h2>{outcomes[item.outcome]}</h2><p className="muted">{timestamp(item.checkedAt)} · Оператор {item.checkedBy}</p></div></div>
+    <Card asChild><section className="reconciliation-panel" data-outcome={item.outcome}><CardContent className="base-page-stack"><Notice tone={item.outcome === 'MATCH' ? 'success' : 'danger'} title={<CardTitle asChild><h2>{outcomes[item.outcome]}</h2></CardTitle>}>
+      {timestamp(item.checkedAt)} · Оператор {item.checkedBy}</Notice>
       <p className="muted">Это сохранённые данные на момент проверки. Новая сверка создаст отдельную запись.</p>
       <div className="comparison-grid"><Snapshot title="В приложении" value={item.local} />
-        {item.external ? <Snapshot title="У исполнителя" value={item.external} /> : <section><h3>У исполнителя</h3>
-          <p>{item.externalAvailability === 'NOT_FOUND' ? 'Операция с таким ID отсутствует' : 'Не удалось получить корректное состояние'}</p></section>}
+        {item.external ? <Snapshot title="У исполнителя" value={item.external} /> : <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h3>У исполнителя</h3></CardTitle>
+          <p>{item.externalAvailability === 'NOT_FOUND' ? 'Операция с таким ID отсутствует' : 'Не удалось получить корректное состояние'}</p></CardContent></section></Card>}
       </div>
       {item.issueId && <Button asChild variant="default"><Link to={'/issues/' + item.issueId}>Перейти к разбору и решению</Link></Button>}
-    </section>
+    </CardContent></section></Card>
   </>;
 }
 
 function Snapshot({ title, value }: { title: string; value: LocalSnapshot | OperationState }) {
   const external = 'executions' in value;
   const status = external ? value.result?.status || 'PENDING' : value.businessStatus;
-  return <section className="snapshot"><h3>{title}</h3><dl><dt>Заявка</dt><dd>{value.request.reference}</dd>
+  return <Card asChild><section className="snapshot"><CardContent className="base-page-stack"><CardTitle asChild><h3>{title}</h3></CardTitle><dl><dt>Заявка</dt><dd>{value.request.reference}</dd>
     <dt>Количество</dt><dd>{value.request.quantity}</dd>
     {!external && <><dt>Доставка</dt><dd>{deliveryLabels[value.deliveryStatus]}</dd></>}
     <dt>Исполнение</dt><dd>{businessLabels[status]}</dd>
     {external && <><dt>ID операции</dt><dd className="technical">{value.operationId}</dd><dt>Исполнений</dt><dd>{value.executions}</dd></>}
     {value.result?.completedAt && <><dt>Завершено</dt><dd>{timestamp(value.result.completedAt)}</dd></>}
     {value.result?.rejectionCode && <><dt>Причина отказа</dt><dd>Количество превышает 100 единиц</dd></>}
-  </dl></section>;
+  </dl></CardContent></section></Card>;
 }
 
 function ReceivedResult({ value }: { value: Result }) {
-  return <section className="snapshot"><h3>Входящий снимок</h3><dl><dt>ID операции</dt><dd className="technical">{value.operationId}</dd>
+  return <Card asChild><section className="snapshot"><CardContent className="base-page-stack"><CardTitle asChild><h3>Входящий снимок</h3></CardTitle><dl><dt>ID операции</dt><dd className="technical">{value.operationId}</dd>
     <dt>Заявка</dt><dd>{value.request.reference}</dd><dt>Количество</dt><dd>{value.request.quantity}</dd><dt>Версия</dt><dd>{value.version}</dd>
     <dt>Исполнение</dt><dd>{businessLabels[value.status]}</dd>{value.completedAt && <><dt>Завершено</dt><dd>{timestamp(value.completedAt)}</dd></>}
-  </dl></section>;
+  </dl></CardContent></section></Card>;
 }

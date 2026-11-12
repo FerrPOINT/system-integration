@@ -5,10 +5,10 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
   await login(page);
   await page.getByRole('link', { name: 'Создать задание' }).click();
   const name = `E2E ${testInfo.project.name} ${crypto.randomUUID()}`;
-  await page.getByLabel('Название', { exact: true }).fill(name);
+  await page.getByLabel('Название *', { exact: true }).fill(name);
   await page.getByLabel('Номер заявки').fill('REQ-800001');
-  await page.getByLabel('Количество', { exact: true }).fill('25');
-  await page.getByLabel('Количество', { exact: true }).press('Tab');
+  await page.getByLabel('Количество *', { exact: true }).fill('25');
+  await page.getByLabel('Количество *', { exact: true }).press('Tab');
   await expect(page.getByRole('button', { name: 'Создать', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
@@ -20,7 +20,7 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
   await expect(page.getByRole('heading', { name: name + ' обновлено', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'История', exact: true })).toBeVisible();
   await expect(page.getByText(/Название изменено:/)).toBeVisible();
-  await page.getByRole('link', { name: '← К заданиям', exact: true }).click();
+  await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
   await expect(page.getByRole('link', { name: name + ' обновлено', exact: true })).toBeVisible();
   if (testInfo.project.name === 'mobile') {
     await expect(page.getByRole('table')).toHaveCount(0);
@@ -52,9 +52,9 @@ test('TC-01 / TC-09: business rejection, visible loading and recovery to the fil
   await login(page);
   await page.getByRole('link', { name: 'Создать задание' }).click();
   const name = 'E2E отказ ' + crypto.randomUUID();
-  await page.getByLabel('Название', { exact: true }).fill(name);
+  await page.getByLabel('Название *', { exact: true }).fill(name);
   await page.getByLabel('Номер заявки').fill('REQ-800004');
-  await page.getByLabel('Количество', { exact: true }).fill('150');
+  await page.getByLabel('Количество *', { exact: true }).fill('150');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
   await expect(page.getByText('Отклонено', { exact: true })).toBeVisible();
@@ -136,8 +136,8 @@ test('TC-08: session refresh removes the previous owner cache before an in-place
   await expired;
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
   // Keep the same SPA: navigating or reloading would hide a stale QueryClient cache.
-  await page.getByLabel('Логин', { exact: true }).fill('initiator.two');
-  await page.getByLabel('Пароль', { exact: true }).fill(process.env.SI_DEMO_PASSWORD!);
+  await page.getByLabel('Логин *', { exact: true }).fill('initiator.two');
+  await page.getByLabel('Пароль *', { exact: true }).fill(process.env.SI_DEMO_PASSWORD!);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Отмена', exact: true }).click();
@@ -154,8 +154,8 @@ test('TC-09: history follows automatic task updates without reopening the card',
     await login(page);
     await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
     const title = 'E2E живая история ' + crypto.randomUUID();
-    await page.getByLabel('Название', { exact: true }).fill(title);
-    await page.getByLabel('Номер заявки', { exact: true }).fill(reference);
+    await page.getByLabel('Название *', { exact: true }).fill(title);
+    await page.getByLabel('Номер заявки *', { exact: true }).fill(reference);
     await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
     await expect(page.getByText('Задание принято и поставлено в очередь', { exact: true })).toBeVisible();

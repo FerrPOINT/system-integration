@@ -15,8 +15,8 @@ test('TC-03 / TC-07: lost reply, independent execution, reconciliation and opera
   await login(page);
   await page.getByRole('link', { name: 'Создать задание' }).click();
   const title = 'E2E разбор ' + crypto.randomUUID();
-  await page.getByLabel('Название', { exact: true }).fill(title);
-  await page.getByLabel('Номер заявки', { exact: true }).fill(reference);
+  await page.getByLabel('Название *', { exact: true }).fill(title);
+  await page.getByLabel('Номер заявки *', { exact: true }).fill(reference);
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await expect(page.getByText('Получено исполнителем', { exact: true })).toBeVisible();
@@ -39,7 +39,7 @@ test('TC-03 / TC-07: lost reply, independent execution, reconciliation and opera
   await expect(page.getByText(operator.userId, { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Взять разбор', exact: true })).toHaveCount(0);
   await selectChoice(page, 'Действие', 'Принять внешний результат');
-  await page.getByLabel('Причина решения', { exact: true }).fill('Проверено фактическое исполнение, принимаю сохранённый результат');
+  await page.getByLabel('Причина решения *', { exact: true }).fill('Проверено фактическое исполнение, принимаю сохранённый результат');
   await page.getByRole('button', { name: 'Принять внешний результат', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Открыть задание и историю' }).click();
@@ -74,7 +74,7 @@ test('TC-06 / TC-07: conflicting external input is stopped explicitly without ac
   await page.getByRole('link', { name: 'Перейти к разбору и решению' }).click();
   await expect(page.getByRole('option', { name: 'Принять внешний результат', exact: true })).toHaveCount(0);
   await selectChoice(page, 'Действие', 'Завершить разбор');
-  await page.getByLabel('Причина решения', { exact: true }).fill('ID занят операцией с другим запросом, прекращаю отправку');
+  await page.getByLabel('Причина решения *', { exact: true }).fill('ID занят операцией с другим запросом, прекращаю отправку');
   await page.getByRole('button', { name: 'Завершить разбор', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Разбор завершён' })).toBeVisible();
   await page.getByRole('link', { name: 'Открыть задание и историю' }).click();

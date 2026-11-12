@@ -1,3 +1,7 @@
+import { PageHeader } from '../ui/page-header';
+import { Card, CardContent } from '../ui/card';
+import { FormField } from '../ui/form-field';
+import { Brand } from './Brand';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import type { ReactNode } from 'react';
@@ -35,26 +39,18 @@ function Login({ appearance }: { appearance: ReactNode }) {
     onSuccess: () => client.invalidateQueries({ queryKey: keys.session }),
   });
   return <main className="login-page">
-    <div className="login-toolbar"><span className="brand"><span className="brand-mark" aria-hidden="true">↔</span> Сервис обмена</span>{appearance}</div>
-    <section className="login-intro"><p className="eyebrow">Задания и результаты</p>
-      <h1>Обмен с внешней системой</h1>
-      <p className="login-description">Создавайте задания, следите за исполнением и разбирайте расхождения в одном месте.</p>
-      <ol className="workflow-steps" aria-label="Как проходит задание">
-        <li><strong>Создание</strong><span>Задание сохраняется и попадает в очередь.</span></li>
-        <li><strong>Исполнение</strong><span>Получение и результат показаны отдельно.</span></li>
-        <li><strong>Проверка</strong><span>История и сверка помогают разобраться в итоге.</span></li>
-      </ol>
-    </section>
-    <section className="panel login-panel">
-      <h2>Вход в систему</h2>
-      <p className="muted">Введите логин и пароль вашей учётной записи.</p>
-      <form onSubmit={event => { event.preventDefault(); login.mutate(new FormData(event.currentTarget)); }}>
-        <label>Логин<Input name="username" autoComplete="username" required maxLength={64} autoFocus /></label>
-        <label>Пароль<Input name="password" type="password" autoComplete="current-password" required /></label>
+    <div className="login-toolbar"><Brand />{appearance}</div>
+    <div className="login-content">
+    <Card asChild><section className="login-panel"><CardContent className="base-page-stack">
+      <PageHeader title="Вход в систему" context="Введите логин и пароль вашей учётной записи." />
+      <form className="base-form" onSubmit={event => { event.preventDefault(); login.mutate(new FormData(event.currentTarget)); }}>
+        <FormField id="field-username" label="Логин" required>{attrs => <Input {...attrs} name="username" autoComplete="username" maxLength={64} autoFocus />}</FormField>
+        <FormField id="field-password" label="Пароль" required>{attrs => <Input {...attrs} name="password" type="password" autoComplete="current-password" />}</FormField>
         <ErrorMessage error={login.error} />
         <Button variant="default" disabled={login.isPending}>{login.isPending ? 'Входим…' : 'Войти'}</Button>
       </form>
-    </section>
+    </CardContent></section></Card>
+    </div>
   </main>;
 }
 
@@ -66,7 +62,7 @@ function Shell({ user, appearance }: { user: GetSession200; appearance: ReactNod
   return <>
     <a className="skip-link" href="#main">К содержимому</a>
     <header className="app-header">
-      <Link to="/tasks" className="brand"><span className="brand-mark" aria-hidden="true">↔</span><span>Обмен с внешней системой</span></Link>
+      <Link to="/tasks" className="brand-link"><Brand /></Link>
       <nav className="main-nav" aria-label="Основная навигация"><NavLink to="/tasks">Задания</NavLink>
         {user.role === 'OPERATOR' && <NavLink to="/issues">Разбор обмена</NavLink>}</nav>
       <div className="header-controls">{appearance}<div className="account"><span>{user.username}<small>{user.role === 'OPERATOR' ? 'Оператор' : 'Инициатор'}</small></span>
@@ -82,7 +78,7 @@ function Shell({ user, appearance }: { user: GetSession200; appearance: ReactNod
         <Route path="/issues/:id" element={user.role === 'OPERATOR' ? <IssueCard /> : <Navigate to="/tasks" replace />} />
         <Route path="/tasks/:taskId/reconciliations/:reconciliationId" element={user.role === 'OPERATOR' ? <ReconciliationCard /> : <Navigate to="/tasks" replace />} />
         <Route path="/" element={<Navigate to="/tasks" replace />} />
-        <Route path="*" element={<section><h1>Страница не найдена</h1><Link to="/tasks">К заданиям</Link></section>} />
+        <Route path="*" element={<section><PageHeader title="Страница не найдена" actions={<Button asChild><Link to="/tasks">К заданиям</Link></Button>} /></section>} />
       </Routes>
     </main>
   </>;

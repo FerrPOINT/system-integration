@@ -22,7 +22,7 @@ test('UI-01: dark default, all palettes and readable controls', async ({ page })
         const color = getComputedStyle(el).backgroundColor;
         return color !== 'transparent' && !color.endsWith(', 0)') ? color : background(el.parentElement!);
       };
-      return ['.login-panel h2', '.login-panel > .muted', '.login-panel .base-button[data-variant="default"]', '.theme-control .base-choice-trigger', '.login-panel input'].map(selector => {
+      return ['.login-panel .base-page-title', '.login-panel .base-page-context', '.login-panel .base-button[data-variant="default"]', '.theme-control .base-choice-trigger', '.login-panel input'].map(selector => {
         const el = document.querySelector(selector)!;
         const colors = [luminance(rgb(getComputedStyle(el).color)), luminance(rgb(background(el)))].sort((a, b) => a - b);
         return { selector, ratio: (colors[1] + .05) / (colors[0] + .05) };
@@ -42,7 +42,7 @@ test('UI-02: theme survives navigation and logout, synchronizes tabs and preserv
   await login(page);
   await expect(picker).toHaveAttribute('data-value', 'gray');
   if (info.project.name === 'mobile') {
-    const brand = await page.locator('.app-header > .brand').boundingBox();
+    const brand = await page.locator('.app-header > .brand-link').boundingBox();
     expect(brand!.width).toBeGreaterThan(150);
     expect(brand!.height).toBeLessThan(80);
   }
@@ -56,16 +56,16 @@ test('UI-02: theme survives navigation and logout, synchronizes tabs and preserv
   await page.getByRole('button', { name: 'Применить', exact: true }).click();
   await expect(page).not.toHaveURL(/businessStatus=/);
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
-  await page.getByLabel('Название', { exact: true }).fill('Черновик сохраняется при смене темы');
+  await page.getByLabel('Название *', { exact: true }).fill('Черновик сохраняется при смене темы');
   await selectChoice(page, 'Цветовая тема', themeLabels['light']);
-  await expect(page.getByLabel('Название', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');
+  await expect(page.getByLabel('Название *', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');
   const other = await context.newPage();
   try {
     await other.goto('/tasks');
     await expect(other.getByRole('combobox', { name: 'Цветовая тема', exact: true })).toHaveAttribute('data-value', 'light');
     await selectChoice(other, 'Цветовая тема', 'Тёмная');
     await expect(picker).toHaveAttribute('data-value', 'dark');
-    await expect(page.getByLabel('Название', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');
+    await expect(page.getByLabel('Название *', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');
   } finally { await other.close(); }
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
@@ -126,5 +126,33 @@ test('UI-05: Base popup uses the selected palette, safe arrow spacing and keyboa
   await expect(page.getByRole('option', { selected: true })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('listbox')).toHaveCount(0);
-  await expect(page.getByLabel('Логин', { exact: true })).toBeFocused();
+  await expect(page.getByLabel('Логин *', { exact: true })).toBeFocused();
+});
+
+test('UI-06: shared brand, surfaces and form fields across the application', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
+  await expect(page.locator('.app-brand .base-icon-mark svg')).toHaveCount(1);
+  const logo = await page.locator('.app-brand').innerHTML();
+  const surface = await page.locator('.login-panel').evaluate(el => ({
+    radius: getComputedStyle(el).borderRadius,
+    padding: getComputedStyle(el.querySelector('.base-card-content')!).padding,
+  }));
+  await expect(page.getByLabel('Логин *', { exact: true })).toHaveAttribute('required', '');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await login(page);
+  expect(await page.locator('.app-brand').innerHTML()).toBe(logo);
+  await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toHaveClass('base-page-title');
+  const editor = page.locator('main .base-card');
+  expect(await editor.evaluate(el => ({
+    radius: getComputedStyle(el).borderRadius,
+    padding: getComputedStyle(el.querySelector('.base-card-content')!).padding,
+  }))).toEqual(surface);
+  const reference = page.getByLabel('Номер заявки');
+  await expect(reference).toHaveAttribute('aria-describedby', 'field-reference-hint');
+  await expect(page.locator('#field-reference-hint')).toHaveText('REQ- и шесть цифр. После создания изменить нельзя.');
+  await expect(reference).toHaveAttribute('required', '');
+  expect(await page.evaluate(() => document.querySelectorAll('button:not(.base-control), input:not(.base-control), textarea:not(.base-control)').length)).toBe(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

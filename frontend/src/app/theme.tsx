@@ -1,3 +1,5 @@
+import { Label } from '../ui/label';
+import { Notice } from '../ui/notice';
 import { Select } from '../ui/select';
 import { useEffect, useLayoutEffect, useState } from 'react';
 
@@ -38,10 +40,10 @@ export function useThemePreference() {
 
 export function ThemePicker({ theme, setTheme, notice }: ReturnType<typeof useThemePreference>) {
   return <div className="theme-picker">
-    <label className="theme-control" htmlFor="theme-choice"><span>Тема</span>
+    <Label className="theme-control" htmlFor="theme-choice"><span>Тема</span>
       <Select id="theme-choice" aria-label="Цветовая тема" value={theme} onValueChange={value => setTheme(value as Theme)}
         options={[{ value: 'dark', label: 'Тёмная' }, { value: 'light', label: 'Светлая' }, { value: 'gray', label: 'Серая' }]} />
-    </label>
-    {notice && <small className="theme-notice" role="status">{notice}</small>}
+    </Label>
+    {notice && <div className="theme-notice"><Notice role="status">{notice}</Notice></div>}
   </div>;
 }
