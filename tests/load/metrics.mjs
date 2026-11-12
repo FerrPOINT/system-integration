@@ -116,6 +116,7 @@ export async function drainLoad(resources, timeoutMs = 300000) {
   return { startedAt, finishedAt: new Date().toISOString(), drained, stoppedFor: stoppedFor || (drained ? null : 'drain-time-limit'), samples };
 }
 
+// Compare complete JSONB snapshots: JDBC timestamps and PostgreSQL text casts round half-microseconds differently.
 export async function loadIntegrity(resources) {
   const postgres = resources.find(item => item.service === 'postgres').containerId;
   const [app, emulator] = await Promise.all([
@@ -133,9 +134,7 @@ export async function loadIntegrity(resources) {
         'lastCursor',(SELECT last_cursor FROM incoming_position WHERE id=1),
         'ids',md5(string_agg(operation_id::text,',' ORDER BY operation_id)),
         'requests',md5(string_agg(concat_ws('|',operation_id,request_reference,request_quantity),',' ORDER BY operation_id)),
-        'results',md5(string_agg(concat_ws('|',operation_id,accepted_result->>'operationId',accepted_result->'request'->>'reference',
-          accepted_result->'request'->>'quantity',accepted_result->>'version',accepted_result->>'status',
-          to_char((accepted_result->>'completedAt')::timestamptz AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS.US')),',' ORDER BY operation_id))
+        'results',md5(string_agg(concat_ws('|',operation_id,accepted_result::text),',' ORDER BY operation_id))
       ) FROM tasks;
     `),
     sql(postgres, 'si_emulator_test', `
@@ -144,9 +143,7 @@ export async function loadIntegrity(resources) {
         'unpublished',(SELECT count(*) FROM result_events WHERE cursor IS NULL),'lastCursor',(SELECT last_cursor FROM feed_position WHERE id=1),
         'ids',md5(string_agg(id::text,',' ORDER BY id)),
         'requests',md5(string_agg(concat_ws('|',id,reference,quantity),',' ORDER BY id)),
-        'results',md5(string_agg(concat_ws('|',id,result->>'operationId',result->'request'->>'reference',
-          result->'request'->>'quantity',result->>'version',result->>'status',
-          to_char(completed_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS.US')),',' ORDER BY id))
+        'results',md5(string_agg(concat_ws('|',id,result::text),',' ORDER BY id))
       ) FROM operations;
     `),
   ]);
