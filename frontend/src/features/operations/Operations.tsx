@@ -80,7 +80,7 @@ export function IssueList() {
 
 export function IssueCard() {
   const { id = '' } = useParams();
-  const issue = useQuery({ queryKey: keys.issue(id), queryFn: () => data(getExchangeIssue(id)) });
+  const issue = useQuery({ queryKey: keys.issue(id), queryFn: ({ signal }) => data(getExchangeIssue(id, { signal })) });
   if (issue.isPending) return <Loading />;
   if (!issue.data) return <><BackLink to="/issues">К разбору обмена</BackLink><ErrorMessage error={issue.error} />
     <Button onClick={() => issue.refetch()}>Повторить</Button></>;
@@ -168,7 +168,7 @@ function DecisionForm({ issue, actions }: { issue: Issue; actions: DecisionActio
 export function ReconciliationCard() {
   const { taskId = '', reconciliationId = '' } = useParams();
   const snapshot = useQuery({ queryKey: keys.reconciliation(taskId, reconciliationId), staleTime: Infinity,
-    queryFn: () => data(getTaskReconciliation(taskId, reconciliationId)) });
+    queryFn: ({ signal }) => data(getTaskReconciliation(taskId, reconciliationId, { signal })) });
   if (snapshot.isPending) return <Loading />;
   if (!snapshot.data) return <><BackLink to={'/tasks/' + taskId}>К заданию</BackLink><ErrorMessage error={snapshot.error} />
     <Button onClick={() => snapshot.refetch()}>Повторить</Button></>;

@@ -8,8 +8,8 @@ import type { ReactNode } from 'react';
 import { ThemePicker, useThemePreference } from './theme';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, NavLink, Route, Routes } from 'react-router-dom';
-import { clearSession, csrf, data, keys } from './api';
-import { getSession, logIn, logOut } from '../../build/generated/openapi/client';
+import { clearSession, readSession, csrf, data, keys } from './api';
+import { logIn, logOut } from '../../build/generated/openapi/client';
 import type { GetSession200 } from '../../build/generated/openapi/client';
 import { ErrorMessage, Loading } from '../ui/Feedback';
 import { TaskList, NewTask, TaskCard } from '../features/tasks/Tasks';
@@ -19,14 +19,14 @@ export function App() {
   const appearance = <ThemePicker {...useThemePreference()} />;
   const session = useQuery({
     queryKey: keys.session,
-    queryFn: () => data(getSession()),
+    queryFn: readSession,
     staleTime: 0,
   });
   if (session.isPending) return <main className="base-page-stack"><Loading /></main>;
   if (session.isError) return <main className="base-page-stack"><ErrorMessage error={session.error} />
     <Button onClick={() => session.refetch()}>Повторить</Button></main>;
   if (!session.data) return <Login appearance={appearance} />;
-  return <Shell user={session.data} appearance={appearance} />;
+  return <Shell key={session.data.userId + ':' + session.data.role} user={session.data} appearance={appearance} />;
 }
 
 function Login({ appearance }: { appearance: ReactNode }) {

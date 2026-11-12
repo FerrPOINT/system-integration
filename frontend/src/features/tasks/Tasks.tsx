@@ -101,7 +101,7 @@ export function NewTask() {
       return data(createTask(input, { ...await csrf(), 'Idempotency-Key': command.forInput(input) }));
     },
     onSuccess: async result => {
-      await client.fetchQuery({ queryKey: keys.task(result.taskId), queryFn: () => data(getTask(result.taskId)) });
+      await client.fetchQuery({ queryKey: keys.task(result.taskId), queryFn: ({ signal }) => data(getTask(result.taskId, { signal })) });
       await client.invalidateQueries({ queryKey: keys.tasks }, { throwOnError: true });
       command.reset();
       navigate('/tasks/' + result.taskId);
@@ -123,8 +123,8 @@ export function NewTask() {
 export function TaskCard({ user }: { user: GetSession200 }) {
   const { id = '' } = useParams();
   const client = useQueryClient();
-  const task = useQuery({ queryKey: keys.task(id), queryFn: async () => {
-    const result = await data(getTask(id));
+  const task = useQuery({ queryKey: keys.task(id), queryFn: async ({ signal }) => {
+    const result = await data(getTask(id, { signal }));
     void client.invalidateQueries({ queryKey: [...keys.task(id), 'history'] });
     return result;
   },

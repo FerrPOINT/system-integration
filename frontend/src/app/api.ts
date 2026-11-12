@@ -1,6 +1,6 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
-import { getCsrfToken } from '../../build/generated/openapi/client';
-import type { Problem } from '../../build/generated/openapi/client';
+import { getCsrfToken, getSession } from '../../build/generated/openapi/client';
+import type { Problem, GetSession200 } from '../../build/generated/openapi/client';
 
 export class ApiError extends Error {
   constructor(readonly status: number, readonly problem?: Problem) {
@@ -39,12 +39,25 @@ export const keys = {
   reconciliation: (task: string, id: string) => ['reconciliations', task, id] as const,
 };
 
-export async function clearSession() {
-  await queryClient.cancelQueries();
-  // Keep the observed session query: removing it would detach App from future updates.
-  queryClient.removeQueries({ predicate: query => query.queryKey[0] !== keys.session[0] });
+async function clearUserCache() {
+  const owned = (query: { queryKey: readonly unknown[] }) => query.queryKey[0] !== keys.session[0];
+  await queryClient.cancelQueries({ predicate: owned });
+  queryClient.removeQueries({ predicate: owned });
   queryClient.getMutationCache().clear();
+}
+
+export async function clearSession() {
+  await queryClient.cancelQueries({ queryKey: keys.session, exact: true });
+  await clearUserCache();
+  // Keep the observed session query so App remains subscribed to identity changes.
   queryClient.setQueryData(keys.session, null);
+}
+
+export async function readSession({ signal }: { signal: AbortSignal }) {
+  const next = await data(getSession({ signal }));
+  const previous = queryClient.getQueryData<GetSession200 | null>(keys.session);
+  if (previous?.userId !== next.userId || previous?.role !== next.role) await clearUserCache();
+  return next;
 }
 
 function expireSession(error: Error) {
