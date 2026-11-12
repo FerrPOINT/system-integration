@@ -1,6 +1,8 @@
+import { ApiError } from '../app/api';
+
 export function ErrorMessage({ error }: { error: Error | null }) {
   if (!error) return null;
-  return <p className="message error" role="alert">{error.message}</p>;
+  return <p className="message error" role="alert">{error instanceof ApiError ? error.message : 'Не удалось выполнить запрос. Повторите попытку.'}</p>;
 }
 
 export function Loading() {

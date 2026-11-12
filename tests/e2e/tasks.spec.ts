@@ -81,10 +81,10 @@ test('TC-09 / TC-12: empty filter, server error recovery and UTC rendering', asy
   const { taskId } = await created.json();
   await page.goto('/tasks?createdFrom=2000-01-01T00%3A00%3A00Z&createdTo=2000-01-02T00%3A00%3A00Z');
   await expect(page.getByRole('heading', { name: 'Заданий пока нет' })).toBeVisible();
-  await page.route('**/api/tasks?*', route => route.fulfill({ status: 503, contentType: 'application/problem+json',
-    body: JSON.stringify({ title: 'Сервис временно недоступен', status: 503, code: 'UNAVAILABLE' }) }));
+  await page.route('**/api/tasks?*', route => route.fulfill({ status: 502, contentType: 'text/html',
+    body: '<html><body>502 Bad Gateway</body></html>' }));
   await page.getByRole('button', { name: 'Обновить', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('Сервис временно недоступен');
+  await expect(page.getByRole('alert')).toContainText('Не удалось выполнить запрос. Повторите попытку.');
   await page.unroute('**/api/tasks?*');
   await page.getByRole('button', { name: 'Повторить', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Заданий пока нет' })).toBeVisible();
