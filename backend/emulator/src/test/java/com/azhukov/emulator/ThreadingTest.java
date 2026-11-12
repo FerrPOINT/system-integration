@@ -25,12 +25,19 @@ import static org.junit.jupiter.api.Assertions.*;
 class ThreadingTest  {
     @LocalServerPort int port;
     @Autowired TaskScheduler scheduler;
+    @Autowired com.zaxxer.hikari.HikariDataSource pool;
 
     @org.springframework.test.context.DynamicPropertySource
     static void database(org.springframework.test.context.DynamicPropertyRegistry properties) {
         properties.add("spring.datasource.url", () -> "jdbc:postgresql://127.0.0.1:19532/si_emulator_test");
         properties.add("spring.datasource.username", () -> "si_emulator_test");
         properties.add("spring.datasource.password", () -> System.getenv("SI_EMULATOR_TEST_DB_PASSWORD"));
+    }
+
+    @Test
+    void validationDeadlineFitsWithinConnectionBorrowDeadline() {
+        assertTrue(pool.getValidationTimeout() > 0);
+        assertTrue(pool.getValidationTimeout() < pool.getConnectionTimeout());
     }
 
     @Test

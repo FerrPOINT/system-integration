@@ -26,6 +26,7 @@ spring:
     password: ${SI_DB_PASSWORD}
     hikari:
       connection-timeout: 2000
+      validation-timeout: 1000
       maximum-pool-size: 8
   jackson:
     mapper:

@@ -41,6 +41,7 @@ services:
   backend:
     logging: *bounded-logging
     profiles: [app]
+    stop_grace_period: 60s
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -71,6 +72,7 @@ services:
   emulator:
     logging: *bounded-logging
     profiles: [app]
+    stop_grace_period: 60s
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -99,6 +101,7 @@ services:
   frontend:
     logging: *bounded-logging
     profiles: [app]
+    stop_grace_period: 60s
     build:
       context: .
       dockerfile: frontend/Dockerfile

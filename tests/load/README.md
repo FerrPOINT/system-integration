@@ -109,10 +109,10 @@ $env:SI_SOURCE_REF = git rev-parse HEAD
 Метка образов API и эмулятора должна совпадать с коммитом кандидата.
 
 ```sh
-docker compose -f compose.yml -f compose.load.yml --profile app up -d --wait
-docker compose -f compose.yml -f compose.load.yml --profile app stop backend emulator
+docker compose -f compose.yml -f compose.public.yml -f compose.load.yml --profile app up -d --wait
+docker compose -f compose.yml -f compose.public.yml -f compose.load.yml --profile app stop backend emulator
 node tests/load/reset.mjs
-docker compose -f compose.yml -f compose.load.yml --profile app up -d --wait
+docker compose -f compose.yml -f compose.public.yml -f compose.load.yml --profile app up -d --wait
 node tests/load/prepare.mjs
 node tests/load/run.mjs
 ```
@@ -128,7 +128,7 @@ Runner проверяет фактические подключения, чис�
 После прогона верните обычные БД демонстрационного стенда:
 
 ```sh
-docker compose --profile app up -d --wait
+docker compose -f compose.yml -f compose.public.yml --profile app up -d --wait
 ```
 
 Данные `si_app` и `si_emulator` reset нагрузки не изменяет.
@@ -143,3 +143,39 @@ docker compose --profile app up -d --wait
 Эта проверка записывается в idempotency и не смешивается с задержками окна NF08.
 Исполнение внешней операции проверяют также серверные тесты и восстановительный
 сценарий; рост внешней очереди под нагрузкой фиксируется отдельно.
+
+## Расширенный профиль capacity
+
+Точка входа одна: run.mjs явно выбирает nf08 (по умолчанию) или capacity.
+Неизвестное значение SI_LOAD_PROFILE отклоняется до запросов.
+nf08.mjs сохраняет штатную смесь и длительность NF08;
+capacity.mjs реализует TC-18. Общие проверки окружения и метрики принадлежат
+environment.mjs и metrics.mjs. Это тестовые модули, не новые сервисы.
+
+После NF08 остановите backend/эмулятор, выполните reset выделенных БД и снова
+поднимите нагрузочный Compose. Обычные демонстрационные БД не очищаются.
+Из корня с проектным Node 26 и загруженным .env:
+
+~~~sh
+SI_LOAD_PROFILE=capacity node tests/load/prepare.mjs
+SI_LOAD_PROFILE=capacity node tests/load/run.mjs
+~~~
+
+Подготовка ждёт завершения ровно 10 000 записей. Профиль отдельно проходит
+чтение и смесь NF08 на 20/40/80 клиентах, 15 с прогрева и 60 с измерения.
+При ранней остановке отчёт указывает фактически измеренное время.
+Между ступенями ожидает очередь до 180 с; не обнуляет её ради следующей ступени.
+Пределы и проверки — в [TC-18](../../docs/test-cases.md#tc-18-расширенная-нагрузка-и-восстановление-после-пика).
+
+Метрики каждые 5 с: настройки БД, число/возраст ожидающих операций,
+захваты, исполнения/публикации, статистика БД и ожиданий, CPU/память и состояние
+контейнеров. Сбор асинхронный, Docker/psql читают только выделенные тестовые БД.
+Наблюдение добавляет небольшую нагрузку; новые отчёты NF08 включают её,
+прежний baseline её не содержал. Кэш ОС не сбрасывается.
+
+capacity.json хранит каждую ступень, причину остановки, независимую сверку,
+историю/права/повтор команды и maximumPassedClients по чтению и смеси.
+passed означает корректный эксперимент без нарушений данных/прав, с пройденной
+ступенью 20 в обоих режимах. Более высокая ступень может выявить предел;
+это не означает поддержку 80 клиентов. Неожиданные ошибки, OOM/перезапуск
+и ошибки наблюдения не считаются успешным результатом.

@@ -25,6 +25,13 @@ import static org.junit.jupiter.api.Assertions.*;
 class ThreadingTest extends com.azhukov.integration.support.PostgresTest {
     @LocalServerPort int port;
     @Autowired TaskScheduler scheduler;
+    @Autowired com.zaxxer.hikari.HikariDataSource pool;
+
+    @Test
+    void validationDeadlineFitsWithinConnectionBorrowDeadline() {
+        assertTrue(pool.getValidationTimeout() > 0);
+        assertTrue(pool.getValidationTimeout() < pool.getConnectionTimeout());
+    }
 
     @Test
     void actualHttpRequestUsesVirtualThread() throws Exception {

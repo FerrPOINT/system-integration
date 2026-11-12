@@ -4,16 +4,18 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { ApiSession, ApiFailure, localOrigin } from '../support/http.mjs';
+import { loadEnvironment } from '../load/environment.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19580');
 const external = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19581');
 assert.equal(new URL(origin).port, '19580'); assert.equal(new URL(external).port, '19581');
-const compose = ['compose', '--profile', 'app'];
+const compose = ['compose', '-f', 'compose.yml', '-f', 'compose.public.yml', '-f', 'compose.load.yml', '--profile', 'app'];
+loadEnvironment();
 const sqlQuote = value => "'" + String(value).replaceAll("'", "''") + "'";
 const databases = {
-  app: 'PGPASSWORD="$SI_DB_PASSWORD" psql -h 127.0.0.1 -U si_app -d si_app -X -Atq -v ON_ERROR_STOP=1',
-  emulator: 'PGPASSWORD="$SI_EMULATOR_DB_PASSWORD" psql -h 127.0.0.1 -U si_emulator -d si_emulator -X -Atq -v ON_ERROR_STOP=1',
+  app: 'PGPASSWORD="$SI_TEST_DB_PASSWORD" psql -h 127.0.0.1 -U si_test -d si_test -X -Atq -v ON_ERROR_STOP=1',
+  emulator: 'PGPASSWORD="$SI_EMULATOR_TEST_DB_PASSWORD" psql -h 127.0.0.1 -U si_emulator_test -d si_emulator_test -X -Atq -v ON_ERROR_STOP=1',
 };
 const holders = new Set();
 const receipt = { testSourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
@@ -75,7 +77,7 @@ for (const service of ['backend', 'emulator']) {
   receipt.runtime.push({ service, image: container.Image, sourceCommit: container.Config.Labels['org.opencontainers.image.revision'] });
   const env = Object.fromEntries(container.Config.Env.map(value => { const i = value.indexOf('='); return [value.slice(0, i), value.slice(i + 1)]; }));
   assert.equal(service === 'backend' ? env.SI_DB_URL : env.SI_EMULATOR_DB_URL,
-    service === 'backend' ? 'jdbc:postgresql://postgres:5432/si_app' : 'jdbc:postgresql://postgres:5432/si_emulator');
+    service === 'backend' ? 'jdbc:postgresql://postgres:5432/si_test' : 'jdbc:postgresql://postgres:5432/si_emulator_test');
 }
 
 let api = await login();
@@ -204,6 +206,30 @@ try {
     assert.equal(composeRun(['ps', '-q', 'frontend']).trim(), frontendId);
     mark('Frontend follows a changed backend IP without restarting', { oldAddress, newAddress, frontendUnchanged: true });
   } finally { docker(['rm', '--force', fixture]); }
+  api = await login();
+  await fault('REQ-830005', 'UNAVAILABLE');
+  const burst = await Promise.all(Array.from({ length: 8 }, async (_, index) => {
+    const created = await api.command('POST', '/api/tasks', {
+      title: 'Graceful shutdown ' + index, request: { reference: 'REQ-830005', quantity: 25 },
+    });
+    return api.get('/api/tasks/' + created.taskId);
+  }));
+  composeRun(['stop', 'backend', 'emulator']);
+  const exits = ['backend', 'emulator'].map(service => {
+    const id = composeRun(['ps', '--all', '-q', service]).trim();
+    const state = JSON.parse(docker(['inspect', '--format', '{{json .State}}', id]));
+    assert.equal(state.ExitCode, 0, service + ' did not stop gracefully');
+    assert.equal(state.OOMKilled, false);
+    return { service, exitCode: state.ExitCode };
+  });
+  composeRun(['up', '-d', '--no-build', '--no-deps', '--wait', 'backend', 'emulator']);
+  api = await login();
+  await fault('REQ-830005');
+  for (const item of burst) {
+    await completed(item);
+    assert.equal((await inspect(item.operationId)).executions, 1);
+  }
+  mark('Graceful stop preserves eight queued operations and resumes each exactly once', { exits, operations: burst.length });
   receipt.passed = true;
 } catch (error) {
   receipt.error = { name: error.name, message: error.message };

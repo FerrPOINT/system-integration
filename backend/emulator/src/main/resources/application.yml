@@ -19,6 +19,7 @@ spring:
     password: ${SI_EMULATOR_DB_PASSWORD}
     hikari:
       connection-timeout: 2000
+      validation-timeout: 1000
       maximum-pool-size: 4
   jackson:
     mapper:

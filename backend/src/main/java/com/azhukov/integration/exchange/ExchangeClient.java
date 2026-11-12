@@ -16,6 +16,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Component
 public class ExchangeClient implements AutoCloseable {
@@ -39,17 +42,26 @@ public class ExchangeClient implements AutoCloseable {
     public ExchangeReply events(long after) { return send(HttpRequest.newBuilder(base.resolve("/result-events?after=" + after + "&limit=100")).GET()); }
 
     private ExchangeReply send(HttpRequest.Builder request) {
+        var pending = http.sendAsync(
+            request.timeout(Duration.ofSeconds(2)).header("Accept", "application/json").build(),
+            HttpResponse.BodyHandlers.ofString());
         try {
-            var response = http.send(request.timeout(Duration.ofSeconds(2)).header("Accept", "application/json").build(),
-                HttpResponse.BodyHandlers.ofString());
+            // Java 25 request.timeout covers headers only; bound the complete body as well.
+            var response = pending.get(2, TimeUnit.SECONDS);
             JsonNode body;
             try { body = json.readTree(response.body()); } catch (RuntimeException invalid) { body = null; }
             return new ExchangeReply(response.statusCode(), body, false);
-        } catch (ConnectException | HttpConnectTimeoutException unavailable) {
-            return new ExchangeReply(0, null, true);
-        } catch (IOException ambiguous) {
+        } catch (TimeoutException ambiguous) {
+            pending.cancel(true);
             return new ExchangeReply(0, null, false);
+        } catch (ExecutionException failed) {
+            var cause = failed.getCause();
+            if (cause instanceof ConnectException || cause instanceof HttpConnectTimeoutException)
+                return new ExchangeReply(0, null, true);
+            if (cause instanceof IOException) return new ExchangeReply(0, null, false);
+            throw new IllegalStateException("Exchange request failed", cause);
         } catch (InterruptedException interrupted) {
+            pending.cancel(true);
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Exchange interrupted", interrupted);
         }
