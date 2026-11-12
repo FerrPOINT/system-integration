@@ -1,0 +1,19 @@
+[Unit]
+Description=System Integration HTTPS origin tunnel to Koara
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+StartLimitIntervalSec=0
+
+[Service]
+User=ferrpoint
+ExecStart=/usr/bin/ssh -NT -i /home/ferrpoint/.ssh/system_integration_koara_ed25519 -o BatchMode=yes -o ConnectTimeout=10 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/home/ferrpoint/.ssh/system_integration_koara_known_hosts -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -R 127.0.0.1:19573:127.0.0.1:19573 system-integration-tunnel@23.26.37.158
+Restart=always
+RestartSec=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target

@@ -1,10 +1,10 @@
 FROM node:24.19.0-alpine AS build
 RUN npm install --global --no-audit --no-fund corepack@0.35.0
-WORKDIR /work
-COPY contracts contracts
-COPY frontend frontend
 WORKDIR /work/frontend
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN corepack pnpm install --frozen-lockfile --reporter=append-only
+COPY contracts /work/contracts
+COPY frontend .
 RUN corepack pnpm build
 
 FROM nginx:1.30.1-alpine

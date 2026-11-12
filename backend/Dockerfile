@@ -8,10 +8,10 @@ RUN --mount=type=cache,target=/root/.gradle \
     ./gradlew --no-daemon --max-workers=1 '-Dorg.gradle.jvmargs=-Xmx512m -XX:ActiveProcessorCount=2' :bootJar :emulator:bootJar
 
 FROM eclipse-temurin:25.0.5_8-jre AS runtime
-ARG VCS_REF=development
-LABEL org.opencontainers.image.revision=$VCS_REF
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
+ARG VCS_REF=development
+LABEL org.opencontainers.image.revision=$VCS_REF
 WORKDIR /app
 USER 10001:10001
 EXPOSE 8080

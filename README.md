@@ -195,6 +195,42 @@ Gradle перед компиляцией генерирует Spring MVC инт�
 предназначены для локальной проверки; порты Compose доступны только с этого
 компьютера. Публичный домен и TLS конфигурация запуска не настраивает.
 
+## Публичный стенд
+
+Адрес — [demo.azhukov-dev.ru](https://demo.azhukov-dev.ru).
+Публикация использует существующий TLS gateway Koara и отдельный SSH-туннель
+на Firebat1. Доступны три демоучётки из раздела запуска; пароль хранится
+в приватном `SI_DEMO_PASSWORD`. Установка не публикует порты БД и эмулятора.
+
+На Firebat1 полный стенд запускается с HTTPS-настройками:
+
+```sh
+docker compose -f compose.yml -f compose.public.yml --profile app up -d --wait
+systemctl status system-integration-tunnel.service
+node --test tests/e2e/public.test.mjs
+```
+
+`compose.public.yml` включает Secure cookie и автоматическое восстановление
+контейнеров после перезапуска Docker. Для локальных HTTP-проверок используйте
+основной Compose. Во время восстановительных и нагрузочных проверок публичный
+туннель останавливается; после них возвращается публичная конфигурация.
+
+В `deploy/` сохранены конфигурации Nginx, sshd и systemd. На Koara sshd
+разрешает отдельной учётке только обратный порт `127.0.0.1:19573`;
+ключ и проверенный SSH host key хранятся вне Git. Firebat1 использует
+`/etc/systemd/system/system-integration-tunnel.service` от пользователя
+`ferrpoint`. На Koara конфигурации установлены в
+`/etc/nginx/conf.d/system-integration.conf` и
+`/etc/ssh/sshd_config.d/61-system-integration.conf`. После изменения
+проверяйте `nginx -t` и `sshd -t` перед reload соответствующей службы.
+
+Сертификат домена обслуживает существующий Certbot. Его deploy hook
+`/etc/letsencrypt/renewal-hooks/deploy/demo-certificate` обновляет TLS-файлы,
+которые читает общий Xray. Действующий каталог TLS сохраняется независимо
+от удаления приложения Mini-CRM. Обновление приложения не требует
+перезапуска общего Xray. Публичный вход ограничивает частоту попыток входа:
+10 в минуту на адрес с кратковременным запасом 10 запросов, ответ 429.
+
 ## Документация
 
 | Что нужно | Где смотреть |
