@@ -128,7 +128,7 @@ docker compose --profile app up -d --wait
 Соберите backend из каталога `backend/`.
 
 ```sh
-sh ./gradlew --no-daemon --max-workers=2 :test :bootJar :emulator:bootJar
+sh ./gradlew --no-daemon --max-workers=2 :test :emulator:test :bootJar :emulator:bootJar
 ```
 
 Транзакционные и API-тесты отдельно используют настоящий PostgreSQL `si_test`.
