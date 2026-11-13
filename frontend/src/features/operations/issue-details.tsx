@@ -1,7 +1,6 @@
 import { ErrorMessage } from '../../app/error-message';
 import { BackLink } from '../../ui/back-link';
 import { Notice } from '../../ui/notice';
-import { EmptyState } from '../../ui/empty-state';
 import { ActionGroup } from '../../ui/action-group';
 import { Card, CardContent, CardTitle } from '../../ui/card';
 import { PageHeader } from '../../ui/page-header';
@@ -10,74 +9,23 @@ import { Select } from '../../ui/select';
 import { Textarea } from '../../ui/textarea';
 import { Button } from '../../ui/button';
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { getExchangeIssue, getTaskReconciliation, listExchangeIssues, reconcileTask, resolveExchangeIssue, retryExchange, takeExchangeIssue } from '../../../build/generated/openapi/client';
-import type { Issue, IssueKind, IssueStatus, LocalSnapshot, OperationState, ResolutionAction, Result } from '../../../build/generated/openapi/client';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Link, useParams } from 'react-router-dom';
+import { getExchangeIssue, resolveExchangeIssue, retryExchange, takeExchangeIssue } from '../../../build/generated/openapi/client';
+import type { Issue, ResolutionAction, Result } from '../../../build/generated/openapi/client';
 import { csrf, data, keys } from '../../app/api';
-import { businessLabels, deliveryLabels, timestamp } from '../../app/format';
+import { businessLabels, timestamp } from '../../app/format';
 import { useCommandKey } from '../../app/use-command-key';
-import { Loading, Pagination } from '../../ui/Feedback';
+import { Loading } from '../../ui/Feedback';
+import { issueKindLabels } from './issue-labels';
+import { useRefreshExchange } from './use-refresh-exchange';
+import { ReconcileButton } from './reconcile-button';
+import { Snapshot } from './exchange-snapshot';
 
-const kinds: Record<IssueKind, string> = {
-  DELIVERY_UNCERTAIN: 'Доставка не подтверждена', DELIVERY_DELAYED: 'Лимит попыток исчерпан', PROTOCOL_ERROR: 'Ошибка протокола',
-  RESULT_CONFLICT: 'Конфликт результата', RECONCILIATION_DIFFERENCE: 'Расхождение при сверке',
-};
-const outcomes = { MATCH: 'Состояния совпадают', DIFFERENCE: 'Обнаружено расхождение', UNAVAILABLE: 'Сверка недоступна' };
 type DecisionAction = 'RETRY' | ResolutionAction;
 const actionLabels: Record<DecisionAction, string> = {
   RETRY: 'Повторить обмен', APPLY_EXTERNAL_RESULT: 'Принять внешний результат', ACKNOWLEDGE_DIFFERENCE: 'Завершить разбор',
 };
-
-function useRefreshExchange() {
-  const client = useQueryClient();
-  return () => Promise.all([
-    client.invalidateQueries({ queryKey: keys.issues }, { throwOnError: true }),
-    client.invalidateQueries({ queryKey: keys.tasks }, { throwOnError: true }),
-  ]);
-}
-
-export function ReconcileButton({ taskId }: { taskId: string }) {
-  const navigate = useNavigate();
-  const refresh = useRefreshExchange();
-  const command = useCommandKey();
-  const reconcile = useMutation({
-    mutationFn: async () => data(reconcileTask(taskId, { ...await csrf(), 'Idempotency-Key': command.forInput(taskId) })),
-    onSuccess: async snapshot => {
-      await refresh();
-      command.reset();
-      navigate('/tasks/' + taskId + '/reconciliations/' + snapshot.reconciliationId);
-    },
-  });
-  return <div className="inline-action"><Button onClick={() => reconcile.mutate()} disabled={reconcile.isPending}>
-    {reconcile.isPending ? 'Сверяем…' : 'Выполнить сверку'}</Button><ErrorMessage error={reconcile.error} /></div>;
-}
-
-export function IssueList() {
-  const [search, setSearch] = useSearchParams();
-  const page = Number(search.get('page') || 0);
-  const status = search.get('status') || 'OPEN';
-  const valid = Number.isSafeInteger(page) && page >= 0 && ['OPEN', 'RESOLVED'].includes(status);
-  const issues = useQuery({ queryKey: [...keys.issues, 'list', page, status], enabled: valid,
-    queryFn: ({ signal }) => data(listExchangeIssues({ page, status: status as IssueStatus }, { signal })) });
-  return <>
-    <PageHeader title="Разбор обмена" context="Доставка, конфликты и решения операторов." actions={<Button onClick={() => issues.refetch()} disabled={issues.isFetching || !valid}>Обновить</Button>} />
-    <div className="readable"><FormField id="issue-status" label="Состояние разбора">{attrs => <Select {...attrs} value={status}
-      onValueChange={status => setSearch({ status })} options={[{ value: 'OPEN', label: 'Открытые' }, { value: 'RESOLVED', label: 'Завершённые' }]} />}</FormField></div>
-    {!valid ? <Notice role="alert" tone="danger">Некорректные параметры страницы.</Notice> : issues.isPending ? <Loading /> : !issues.data ?
-      <><ErrorMessage error={issues.error} /><Button onClick={() => issues.refetch()}>Повторить</Button></> : <>
-      <ErrorMessage error={issues.error} />
-      {issues.data.items.length === 0 ? <Card><EmptyState message="Проблем в выбранном состоянии нет." /></Card> :
-        <ul className="issue-cards">{issues.data.items.map(issue => <Card asChild key={issue.issueId}><li><CardContent className="base-page-stack">
-          <CardTitle asChild><h2><Link to={'/issues/' + issue.issueId}>{kinds[issue.kind]}</Link></h2></CardTitle><p>{issue.summary}</p>
-          <div className="issue-meta"><small>{timestamp(issue.openedAt)}</small><small>{issue.assignedTo ? 'Ответственный: ' + issue.assignedTo : 'Ответственный пока не назначен'}</small>
-          {issue.nextAttemptAt && <small>Следующая попытка: {timestamp(issue.nextAttemptAt)}</small>}</div>
-        </CardContent></li></Card>)}</ul>}
-      <Pagination page={page} totalItems={issues.data.totalItems} totalPages={issues.data.totalPages} pending={issues.isFetching}
-        onChange={next => setSearch({ status, page: String(next) })} />
-    </>}
-  </>;
-}
 
 export function IssueCard() {
   const { id = '' } = useParams();
@@ -88,7 +36,7 @@ export function IssueCard() {
   const item = issue.data;
   return <>
     <BackLink to="/issues">К разбору обмена</BackLink>
-    <PageHeader title={kinds[item.kind]} actions={<Button onClick={() => issue.refetch()} disabled={issue.isFetching}>Обновить</Button>} />
+    <PageHeader title={issueKindLabels[item.kind]} actions={<Button onClick={() => issue.refetch()} disabled={issue.isFetching}>Обновить</Button>} />
     <ErrorMessage error={issue.error} />
     <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>{item.status === 'OPEN' ? 'Открытый разбор' : 'Разбор завершён'}</h2></CardTitle><p>{item.summary}</p>
       <dl><dt>Открыт</dt><dd>{timestamp(item.openedAt)}</dd><dt>Ответственный</dt><dd className="technical">{item.assignedTo || 'Не назначен'}</dd>
@@ -164,43 +112,6 @@ function DecisionForm({ issue, actions }: { issue: Issue; actions: DecisionActio
     <Button variant="default" disabled={decide.isPending || !reason.trim() || !action || !actions.includes(action)}>
       {decide.isPending ? 'Сохраняем решение…' : action ? actionLabels[action] : 'Выполнить'}</Button>
   </form>;
-}
-
-export function ReconciliationCard() {
-  const { taskId = '', reconciliationId = '' } = useParams();
-  const snapshot = useQuery({ queryKey: keys.reconciliation(taskId, reconciliationId), staleTime: Infinity,
-    queryFn: ({ signal }) => data(getTaskReconciliation(taskId, reconciliationId, { signal })) });
-  if (snapshot.isPending) return <Loading />;
-  if (!snapshot.data) return <><BackLink to={'/tasks/' + taskId}>К заданию</BackLink><ErrorMessage error={snapshot.error} />
-    <Button onClick={() => snapshot.refetch()}>Повторить</Button></>;
-  const item = snapshot.data;
-  return <>
-    <BackLink to={'/tasks/' + taskId}>К заданию</BackLink>
-    <PageHeader title="Сохранённая сверка" actions={<ReconcileButton taskId={taskId} />} />
-    <ErrorMessage error={snapshot.error} />
-    <Card asChild><section className="reconciliation-panel" data-outcome={item.outcome}><CardContent className="base-page-stack"><Notice tone={item.outcome === 'MATCH' ? 'success' : 'danger'} title={<CardTitle asChild><h2>{outcomes[item.outcome]}</h2></CardTitle>}>
-      {timestamp(item.checkedAt)} · Оператор {item.checkedBy}</Notice>
-      <p className="muted">Это сохранённые данные на момент проверки. Новая сверка создаст отдельную запись.</p>
-      <div className="comparison-grid"><Snapshot title="В приложении" value={item.local} />
-        {item.external ? <Snapshot title="У исполнителя" value={item.external} /> : <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h3>У исполнителя</h3></CardTitle>
-          <p>{item.externalAvailability === 'NOT_FOUND' ? 'Операция с таким ID отсутствует' : 'Не удалось получить корректное состояние'}</p></CardContent></section></Card>}
-      </div>
-      {item.issueId && <Button asChild variant="default"><Link to={'/issues/' + item.issueId}>Перейти к разбору и решению</Link></Button>}
-    </CardContent></section></Card>
-  </>;
-}
-
-function Snapshot({ title, value }: { title: string; value: LocalSnapshot | OperationState }) {
-  const external = 'executions' in value;
-  const status = external ? value.result?.status || 'PENDING' : value.businessStatus;
-  return <Card asChild><section className="snapshot"><CardContent className="base-page-stack"><CardTitle asChild><h3>{title}</h3></CardTitle><dl><dt>Заявка</dt><dd>{value.request.reference}</dd>
-    <dt>Количество</dt><dd>{value.request.quantity}</dd>
-    {!external && <><dt>Доставка</dt><dd>{deliveryLabels[value.deliveryStatus]}</dd></>}
-    <dt>Исполнение</dt><dd>{businessLabels[status]}</dd>
-    {external && <><dt>ID операции</dt><dd className="technical">{value.operationId}</dd><dt>Исполнений</dt><dd>{value.executions}</dd></>}
-    {value.result?.completedAt && <><dt>Завершено</dt><dd>{timestamp(value.result.completedAt)}</dd></>}
-    {value.result?.rejectionCode && <><dt>Причина отказа</dt><dd>Количество превышает 100 единиц</dd></>}
-  </dl></CardContent></section></Card>;
 }
 
 function ReceivedResult({ value }: { value: Result }) {

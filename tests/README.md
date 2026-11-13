@@ -174,3 +174,18 @@ node --test tests/build/gradle.test.mjs
 Она создаёт временные build metadata, генерирует обе схемы, проверяет
 UP-TO-DATE и инвалидацию потребителей внешнего контракта. Все fixtures удаляются.
 Общий прогон этих проверок: node --test --test-concurrency=1 tests/build/*.test.mjs.
+
+## Нативное поведение Select
+
+Из tests с проектным Node/Corepack и установленными браузерами:
+
+~~~sh
+corepack pnpm exec playwright test --config choice.config.ts
+~~~
+
+Тестовая страница frontend/tests/choice-form.html доступна только через Vite
+на собственном loopback-порту 19774, который runner запускает и останавливает.
+Она не входит в production build и не обращается к API/БД.
+Шесть desktop/mobile-проверок покрывают required, controlled/uncontrolled reset,
+однократный FormData, disabled/fieldset, клавиатуру и недоступное значение.
+Основной playwright.config.ts эту fixture не запускает.

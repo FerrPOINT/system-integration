@@ -44,7 +44,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
     const composedRef = useComposedRefs(ref, setTrigger);
     const fieldDisabled = useChoiceDisabled(trigger, disabled);
     const validation = useChoiceValidation(
-      [state.value],
+      state.value,
       required,
       fieldDisabled,
     );
@@ -151,8 +151,8 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
           </Primitive.Portal>
         </Primitive.Root>
         <ChoiceFormBridge
-          values={[state.value]}
-          resetValues={[state.resetValue]}
+          value={state.value}
+          resetValue={state.resetValue}
           options={options}
           name={name}
           form={form}

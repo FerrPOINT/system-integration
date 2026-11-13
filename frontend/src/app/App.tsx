@@ -13,8 +13,12 @@ import { clearSession, readSession, csrf, data, keys } from './api';
 import { logIn, logOut } from '../../build/generated/openapi/client';
 import type { GetSession200 } from '../../build/generated/openapi/client';
 import { Loading } from '../ui/Feedback';
-import { TaskList, NewTask, TaskCard } from '../features/tasks/Tasks';
-import { IssueList, IssueCard, ReconciliationCard } from '../features/operations/Operations';
+import { TaskList } from '../features/tasks/task-list';
+import { NewTask } from '../features/tasks/task-create';
+import { TaskCard } from '../features/tasks/task-details';
+import { IssueList } from '../features/operations/issue-list';
+import { IssueCard } from '../features/operations/issue-details';
+import { ReconciliationCard } from '../features/operations/reconciliation-details';
 
 export function App() {
   const appearance = <ThemePicker {...useThemePreference()} />;
