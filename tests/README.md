@@ -3,6 +3,7 @@
 | Где | Что проверяем |
 | --- | --- |
 | `tests/e2e/` | HTTP smoke, браузерные сценарии обеих ролей и аварийные перезапуски процессов. |
+| [tests/sql/](sql/README.md) | Реестр JDBC и EXPLAIN на откатываемых тестовых fixtures. |
 | `tests/load/` | Генерация 5 000 записей и [профиль NF08](load/README.md). |
 | `backend/src/test/` | Контракты, правила обмена, HTTP-доступ и транзакции PostgreSQL. `integrationTest` использует выделенную БД `si_test`. |
 | `frontend/tests/` | Контрактные тесты сгенерированного клиента. |
