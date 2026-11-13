@@ -3,8 +3,8 @@ import { ApiSession, localOrigin, parallel } from '../support/http.mjs';
 import { loadEnvironment } from './environment.mjs';
 
 const profile = process.env.SI_LOAD_PROFILE || 'nf08';
-if (!['nf08', 'capacity'].includes(profile)) throw new Error('SI_LOAD_PROFILE must be nf08 or capacity');
-const initialCount = profile === 'nf08' ? 5000 : 10000;
+if (!['nf08', 'nf08-external', 'capacity', 'steady'].includes(profile)) throw new Error('SI_LOAD_PROFILE must be nf08, nf08-external, capacity or steady');
+const initialCount = profile === 'capacity' ? 10000 : 5000;
 loadEnvironment();
 
 const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19580');

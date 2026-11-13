@@ -1,8 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { performance } from 'node:perf_hooks';
-import { ApiSession, ApiFailure, localOrigin, parallel } from '../support/http.mjs';
+import { createInterface } from 'node:readline';
+import { createHash } from 'node:crypto';
+import { prepareNf08Clients, runNf08Workload, validateNf08Workload } from './nf08-workload.mjs';
+import { ApiFailure, localOrigin } from '../support/http.mjs';
 import { qualifiedLoadEnvironment } from './environment.mjs';
 import { observeLoad, drainLoad, loadIntegrity, pipelineSummary } from './metrics.mjs';
 import { verifyCreatedTasks, verifyFinishedSnapshot } from './integrity.mjs';
@@ -20,79 +22,27 @@ if (!process.env.SI_DEMO_PASSWORD) throw new Error('SI_DEMO_PASSWORD is required
 const resources = qualifiedLoadEnvironment(sourceCommit);
 const resourceTotal = { cpu: resources.reduce((sum, item) => sum + item.cpu, 0), memory: resources.reduce((sum, item) => sum + item.memory, 0) };
 
-await Promise.all(dataset.accounts.map(async account => {
-  const session = new ApiSession(origin); await session.login(account.username, process.env.SI_DEMO_PASSWORD);
-  let total = 0;
-  for (let page = 0; ; page++) {
-    const items = await session.get(`/api/tasks?page=${page}`); total += items.items.length;
-    if (!items.hasNext) break;
-  }
-  if (total !== 2500) throw new Error('The initial record count changed before measurement');
-  if ((await session.get('/api/tasks?businessStatus=SUCCEEDED&page=0')).items.length !== 20)
-    throw new Error('Each initiator needs a full successful first page');
-}));
-
-const clients = new Array(20);
-await parallel(Array.from({ length: 20 }, (_, index) => index), 4, async index => {
-  const owner = index % 2;
-  const session = new ApiSession(origin);
-  const identity = await session.login(dataset.accounts[owner].username, process.env.SI_DEMO_PASSWORD);
-  const task = await session.get('/api/tasks/' + dataset.accounts[owner].tasks[Math.floor(index / 2)]);
-  clients[index] = { index, session, userId: identity.userId, task, action: index % 4, counter: 0 };
-});
-const measurements = ['list', 'card', 'create', 'rename'].map(operation => ({ operation, latencies: [], successes: 0, errors: {} }));
-const created = [], allCreated = [];
-const warmupErrors = {};
-let serial = 200000;
+const externalDriver = process.env.SI_LOAD_PROFILE === 'nf08-external';
+const clients = await prepareNf08Clients(dataset, origin, process.env.SI_DEMO_PASSWORD);
 const observation = await observeLoad(resources);
-const startedAt = new Date().toISOString();
-const warmEnd = performance.now() + 30_000;
-const measureEnd = warmEnd + 120_000;
-await Promise.all(clients.map(async client => {
-  while (performance.now() < measureEnd) {
-    const start = performance.now(); const measured = start >= warmEnd;
-    const stat = measurements[client.action]; let createdTask;
-    try {
-      if (client.action === 0) {
-        const result = await client.session.get('/api/tasks?businessStatus=SUCCEEDED&page=0');
-        if (result.items?.length !== 20 || result.totalItems < 2500 || result.totalPages !== Math.ceil(result.totalItems / 20) || result.items.some(task => task.businessStatus !== 'SUCCEEDED' || task.ownerId !== client.userId)) throw new ApiFailure(200, 'INVALID_LIST_PAGE');
-      }
-      if (client.action === 1) {
-        const result = await client.session.get('/api/tasks/' + client.task.taskId);
-        if (result.taskId !== client.task.taskId || result.ownerId !== client.userId || result.titleRevision < client.task.titleRevision) throw new ApiFailure(200, 'INVALID_TASK_STATE');
-        client.task = result;
-      }
-      if (client.action === 2) {
-        if (serial > 999999) throw new Error('REFERENCE_RANGE_EXHAUSTED');
-        const input = {
-          title: `NF08 client ${client.index} create ${client.counter}`, request: { reference: `REQ-${serial++}`, quantity: 25 },
-        };
-        const result = await client.session.command('POST', '/api/tasks', input);
-        if (typeof result?.taskId !== 'string') throw new ApiFailure(201, 'INVALID_CREATE_RESULT');
-        createdTask = { taskId: result.taskId, client: client.index, ownerId: client.userId, title: input.title, reference: input.request.reference };
-        allCreated.push(createdTask);
-      }
-      if (client.action === 3) {
-        const result = await client.session.command('PATCH', '/api/tasks/' + client.task.taskId, {
-          title: `NF08 client ${client.index} rename ${client.counter}`, expectedTitleRevision: client.task.titleRevision,
-        });
-        client.task.titleRevision = result.titleRevision;
-      }
-      if (measured) { stat.successes++; if (createdTask) created.push(createdTask); }
-    } catch (error) {
-      const code = error instanceof ApiFailure ? `${error.status}:${error.code}` : error.name;
-      if (measured) {
-        stat.errors[code] = (stat.errors[code] || 0) + 1;
-      } else warmupErrors[code] = (warmupErrors[code] || 0) + 1;
-    } finally {
-      if (measured) stat.latencies.push(performance.now() - start);
-      client.action = (client.action + 1) % 4; client.counter++;
-    }
-  }
-}));
-
-const finishedAt = new Date().toISOString();
-await observation.stop();
+const serverWindowStartedAt = new Date().toISOString();
+let workload;
+try {
+  if (externalDriver) {
+    const input = createInterface({ input: process.stdin, terminal: false });
+    console.log(JSON.stringify({ type: 'nf08-start', sourceCommit, serverWindowStartedAt }));
+    let line;
+    try { for await (const item of input) { line = item; break; } }
+    finally { input.close(); }
+    if (!line) throw new Error('External driver ended without a workload report');
+    const message = JSON.parse(line);
+    if (message.type !== 'nf08-workload' || message.sourceCommit !== sourceCommit)
+      throw new Error('External driver report does not match the qualified NF08 profile');
+    workload = message.workload;
+  } else workload = await runNf08Workload(clients);
+} finally { await observation.stop(); }
+validateNf08Workload(workload);
+const { startedAt, finishedAt, measurements, created, allCreated, warmupErrors, generator } = workload;
 const p95 = values => { const sorted = [...values].sort((a, b) => a - b); return sorted.length ? sorted[Math.ceil(0.95 * sorted.length) - 1] : null; };
 const externalErrors = {};
 const progressWaitStartedAt = new Date().toISOString();
@@ -151,14 +101,15 @@ try {
     verified.completed === allCreated.length && verified.pending === 0;
 } catch (error) { finalIntegrity.error = error instanceof ApiFailure ? error.code : error.name; }
 
-const pipeline = await pipelineSummary(resources, startedAt);
+const pipeline = await pipelineSummary(resources, serverWindowStartedAt);
 
 const counts = measurements.map(stat => stat.latencies.length);
 const reads = measurements.slice(0, 2).flatMap(stat => stat.latencies);
 const writes = measurements.slice(2).flatMap(stat => stat.latencies);
 const errors = measurements.reduce((total, stat) => total + Object.values(stat.errors).reduce((a, b) => a + b, 0), 0);
 const report = {
-  sourceCommit, startedAt, finishedAt, clients: 20, warmupSeconds: 30, measuredSeconds: 120, initialCount: 5000, resources, warmupErrors,
+  sourceCommit, driver: externalDriver ? 'external-ssh' : 'local', generator, serverWindowStartedAt,
+  startedAt, finishedAt, clients: 20, warmupSeconds: 30, measuredSeconds: 120, initialCount: 5000, resources, warmupErrors,
   resourceTotal, idempotency, drain, finalIntegrity, pipeline, observation: { samples: observation.samples, errors: observation.errors },
   operations: measurements.map(stat => ({ operation: stat.operation, count: stat.latencies.length, share: stat.latencies.length / counts.reduce((a, b) => a + b, 0),
     successes: stat.successes, errors: stat.errors, p95Ms: p95(stat.latencies) })),
@@ -172,7 +123,11 @@ report.sourceUnchanged = git('rev-parse', 'HEAD') === sourceCommit && !git('stat
 report.passed = observation.errors.length === 0 && observation.samples.every(sample => sample.containers.every(item => item.running && !item.oom && !item.restarted)) && idempotency.passed && report.sourceUnchanged && errors === 0 && Object.keys(warmupErrors).length === 0 && counts.every(count => count > 0) && Math.max(...counts) - Math.min(...counts) <= 20 &&
   report.readP95Ms <= 2000 && report.writeP95Ms <= 3000 && Object.keys(externalErrors).length === 0 && external.completed > 0 && finalIntegrity.passed;
 await mkdir(new URL('../results/', import.meta.url), { recursive: true });
-const output = new URL('../results/nf08.json', import.meta.url);
-await writeFile(output, JSON.stringify(report, null, 2));
-console.log(JSON.stringify(report, null, 2));
+const output = new URL('../results/' + (externalDriver ? 'nf08-external' : 'nf08') + '.json', import.meta.url);
+const serialized = JSON.stringify(report, null, 2);
+await writeFile(output, serialized);
+if (externalDriver) console.log(JSON.stringify({ type: 'nf08-finished', sourceCommit, passed: report.passed,
+  readP95Ms: report.readP95Ms, writeP95Ms: report.writeP95Ms, errors: report.errors,
+  expectedRecords: finalIntegrity.expectedRecords, reportSha256: createHash('sha256').update(serialized).digest('hex') }));
+else console.log(serialized);
 if (!report.passed) process.exitCode = 1;
