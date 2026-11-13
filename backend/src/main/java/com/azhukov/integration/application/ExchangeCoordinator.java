@@ -24,26 +24,36 @@ public class ExchangeCoordinator implements AutoCloseable {
     public ExchangeCoordinator(ExchangeTasks tasks, ExternalExchange client) { this.tasks = tasks; this.client = client; }
 
     public void deliver() {
-        // Drain a bounded amount before the idle delay, keeping at most four HTTP calls.
-        for (int batch = 0; batch < 8; batch++) {
-            var pending = new ArrayList<CompletableFuture<Void>>();
-            try {
-                for (int n = 0; n < 4; n++) {
-                    var claim = tasks.claim();
-                    if (claim == null) break;
+        var pending=new ArrayList<CompletableFuture<Void>>();
+        int claimed=0;
+        boolean exhausted=false;
+        try {
+            while (!exhausted && claimed<32) {
+                while (pending.size()<4 && claimed<32) {
+                    var claim=tasks.claim();
+                    if (claim==null) { exhausted=true; break; }
+                    claimed++;
                     pending.add(CompletableFuture.runAsync(() -> {
-                        long started = System.nanoTime();
-                        var reply = client.deliver(claim);
+                        long started=System.nanoTime();
+                        var reply=client.deliver(claim);
                         tasks.finish(claim,reply);
                         log.info("delivery operationId={} attemptId={} step={} number={} httpStatus={} connectionFailed={} durationMs={}",
                             claim.operationId(),claim.attemptId(),claim.step(),claim.number(),reply.httpStatus(),reply.connectionFailed(),
                             (System.nanoTime()-started)/1_000_000);
-                    }, senders));
+                    },senders));
                 }
-            } finally {
-                CompletableFuture.allOf(pending.toArray(CompletableFuture[]::new)).join();
+                if (pending.isEmpty()) return;
+                CompletableFuture.anyOf(pending.toArray(CompletableFuture[]::new)).join();
+                for (var completed=pending.iterator();completed.hasNext();) {
+                    var future=completed.next();
+                    if (future.isDone()) {
+                        future.join(); // Observe every completed failure before releasing its slot.
+                        completed.remove();
+                    }
+                }
             }
-            if (pending.size() < 4) return;
+        } finally {
+            CompletableFuture.allOf(pending.toArray(CompletableFuture[]::new)).join();
         }
     }
 
