@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { ApiSession, ApiFailure, localOrigin, parallel } from '../support/http.mjs';
 import { qualifiedLoadEnvironment } from './environment.mjs';
-import { observeLoad, drainLoad, loadIntegrity } from './metrics.mjs';
+import { observeLoad, drainLoad, loadIntegrity, pipelineSummary } from './metrics.mjs';
 import { verifyCreatedTasks, verifyFinishedSnapshot } from './integrity.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
@@ -151,13 +151,15 @@ try {
     verified.completed === allCreated.length && verified.pending === 0;
 } catch (error) { finalIntegrity.error = error instanceof ApiFailure ? error.code : error.name; }
 
+const pipeline = await pipelineSummary(resources, startedAt);
+
 const counts = measurements.map(stat => stat.latencies.length);
 const reads = measurements.slice(0, 2).flatMap(stat => stat.latencies);
 const writes = measurements.slice(2).flatMap(stat => stat.latencies);
 const errors = measurements.reduce((total, stat) => total + Object.values(stat.errors).reduce((a, b) => a + b, 0), 0);
 const report = {
   sourceCommit, startedAt, finishedAt, clients: 20, warmupSeconds: 30, measuredSeconds: 120, initialCount: 5000, resources, warmupErrors,
-  resourceTotal, idempotency, drain, finalIntegrity, observation: { samples: observation.samples, errors: observation.errors },
+  resourceTotal, idempotency, drain, finalIntegrity, pipeline, observation: { samples: observation.samples, errors: observation.errors },
   operations: measurements.map(stat => ({ operation: stat.operation, count: stat.latencies.length, share: stat.latencies.length / counts.reduce((a, b) => a + b, 0),
     successes: stat.successes, errors: stat.errors, p95Ms: p95(stat.latencies) })),
   readP95Ms: p95(reads), writeP95Ms: p95(writes), errors,

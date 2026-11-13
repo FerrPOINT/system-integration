@@ -50,6 +50,9 @@ try {
  assert.ok(blocked,'The observer must see the known waiting test transaction');
  assert.ok(blocked.blockers.includes(holdingPid));
  assert.equal(blocked.wait_event_type,'Lock');
+ assert.match(blocked.query,/SELECT last_cursor FROM incoming_position.*FOR UPDATE/);
+ assert.ok(sample.app.activeQueries.some(row=>row.query.includes('FOR UPDATE') && row.wait_event_type==='Lock'));
+ assert.ok(sample.app.activeQueries.every(row=>row.sessions>0 && row.oldest_query_seconds>=0));
  assert.ok(blocked.transaction_age_seconds>=0);
  assert.ok(sample.app.transactions.active>=1);
  assert.ok(sample.runnerProcess.cpuMicros.user>=0);
