@@ -27,7 +27,9 @@ main { max-width: 1280px; padding: 26px 24px 56px; margin: 0 auto; }
 
 .filters { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr) auto; align-items: end; gap: 14px; padding: 0; }
 .task-table { table-layout: fixed; }
-.task-table th:first-child { width: 37%; }
+.task-table th:nth-child(2) { width: 22%; }
+.task-table th:nth-child(3) { width: 176px; }
+.task-table th:nth-child(4) { width: 210px; }
 .task-table td:first-child > a { color: var(--color-text-primary); font-weight: 600; text-decoration: none; }
 .task-table td:first-child > a:hover { color: var(--color-accent); text-decoration: underline; }
 .task-table td small { margin-top: 5px; }

@@ -84,13 +84,13 @@ export function TaskList({ user }: { user: GetSession200 }) {
             <CardTitle asChild><h2><Link className="base-truncate" title={task.title} to={'/tasks/' + task.taskId}>{task.title}</Link></h2></CardTitle>
             <div className="task-card-status"><BusinessBadge status={task.businessStatus} /><span>{deliveryLabels[task.deliveryStatus]}</span></div>
             <dl><dt>Заявка</dt><dd>{task.request.reference}</dd><dt>Количество</dt><dd>{task.request.quantity}</dd>
-              <dt>Создано</dt><dd>{timestamp(task.createdAt)}</dd></dl>
+              <dt>Создано</dt><dd><time dateTime={task.createdAt}>{timestamp(task.createdAt, { showZone: false })}</time></dd></dl>
           </CardContent></li></Card>)}</ul> :
           <Card><Table className="task-table" data-page-items><caption className="sr-only">Реестр заданий</caption>
             <thead data-page-heading><tr><th scope="col">Название / заявка</th><th scope="col">Доставка</th><th scope="col">Результат</th><th scope="col">Создано (UTC)</th></tr></thead>
             <tbody>{tasks.data.items.slice(0, size).map(task => <tr key={task.taskId} data-page-item><td><Link className="base-truncate" title={task.title} to={'/tasks/' + task.taskId}>{task.title}</Link>
               <small>{task.request.reference} · {task.request.quantity} ед.</small></td><td>{deliveryLabels[task.deliveryStatus]}</td>
-              <td><BusinessBadge status={task.businessStatus} /></td><td>{timestamp(task.createdAt)}</td></tr>)}</tbody>
+              <td><BusinessBadge status={task.businessStatus} /></td><td><time dateTime={task.createdAt}>{timestamp(task.createdAt, { showZone: false })}</time></td></tr>)}</tbody>
           </Table></Card>}
     </div>
     <Pagination page={validPage ? page : 0} totalItems={tasks.data?.totalItems ?? 0} totalPages={tasks.data?.totalPages ?? 0} pending={tasks.isFetching || !valid} onChange={changePage} />
@@ -179,7 +179,7 @@ export function TaskCard({ user }: { user: GetSession200 }) {
       <dl className="details"><dt>Доставка</dt><dd>{deliveryLabels[item.deliveryStatus]}</dd>
         <dt>Исполнение</dt><dd><BusinessBadge status={item.businessStatus} /></dd>
         <dt>Заявка</dt><dd>{item.request.reference}</dd><dt>Количество</dt><dd>{item.request.quantity}</dd>
-        <dt>Создано</dt><dd>{timestamp(item.createdAt)}</dd>
+        <dt>Создано</dt><dd><time dateTime={item.createdAt}>{timestamp(item.createdAt, { showZone: false })}</time></dd>
         <dt>ID операции</dt><dd className="technical">{item.operationId}</dd>
         {item.result && <><dt>Завершено</dt><dd>{timestamp(item.result.completedAt)}</dd>
           {item.result.rejectionCode && <><dt>Причина отказа</dt><dd>Количество превышает 100 единиц</dd></>}</>}

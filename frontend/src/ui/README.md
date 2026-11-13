@@ -6,14 +6,14 @@ commit `5b6a3f3b0e538c9e6eb0ed0a7f455dca05bf67de`.
 SHA-256 скопированного файла:
 `265371dfc84ede43f81b9198e4db02f6655c4515da7d88dd6c0d61fb8f4c51ce`.
 Хук используется реестром: узкий экран получает карточки вместо таблицы.
-LICENSE и NOTICE сохранены рядом. Остальные компоненты добавляются только
+LICENSE и NOTICE.txt сохранены рядом. Остальные компоненты добавляются только
 при появлении потребителя. Пакет `@pdlc/ui` не подключён.
 
 ## Компоненты и оформление
 
 Select, Button, Input, Textarea, Badge и палитры перенесены из Base PDLC:
 services-base/base-modules/ui/src, commit 9a5008a79415110a0d8fdcc8348aa4853dbcc3fc.
-Копия локальная, зависимости от пакета @pdlc/ui нет. LICENSE и NOTICE применяются
+Копия локальная, зависимости от пакета @pdlc/ui нет. LICENSE и NOTICE.txt применяются
 к скопированному и производному коду.
 
 - Select — однозначный выбор из Base select.tsx; MultiSelect не переносился.

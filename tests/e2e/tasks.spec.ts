@@ -108,14 +108,14 @@ test('TC-09 / TC-12: empty filter, server error recovery and UTC rendering', asy
   await expect(page.getByRole('link', { name: 'Создать задание' })).toBeVisible();
   await page.goto('/tasks/' + taskId);
   const task = await (await page.request.get('/api/tasks/' + taskId)).json();
-  const time = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' }).format(new Date(task.createdAt)) + ' UTC';
-  await expect(page.getByText(time, { exact: true }).first()).toBeVisible();
+  const time = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' }).format(new Date(task.createdAt));
+  await expect(page.locator('.details time')).toHaveText(time);
   const otherZone = await page.context().browser()!.newContext({ baseURL: new URL(page.url()).origin, timezoneId: 'America/Los_Angeles' });
   try {
     const other = await otherZone.newPage();
     await login(other);
     await other.goto('/tasks/' + taskId);
-    await expect(other.getByText(time, { exact: true }).first()).toBeVisible();
+    await expect(other.locator('.details time')).toHaveText(time);
   } finally { await otherZone.close(); }
 });
 
