@@ -55,7 +55,15 @@ test('UI-14: a completed task receives another operator audit entry without reop
     const saved = await operator.command('POST', '/api/tasks/' + taskId + '/reconciliations');
     expect(saved.outcome).toBe('MATCH');
     await expect(page.getByText('Сверка: MATCH', { exact: true })).toHaveCount(0);
+    const refreshed = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === '/api/tasks/' + taskId + '/history' && response.status() === 200;
+    });
     await page.clock.runFor(11000);
+    const history = await (await refreshed).json();
+    expect(history.items.some((event: { summary: string }) => event.summary === 'Сверка: MATCH')).toBe(true);
+    // Real HTTP can finish after runFor returns; let the paused browser flush query notifications.
+    await page.clock.runFor(100);
     await expect(page.getByText('Сверка: MATCH', { exact: true })).toBeVisible();
     await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
   });
