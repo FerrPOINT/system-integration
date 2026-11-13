@@ -125,6 +125,28 @@ class OperationsWorkflowTest extends PostgresTest {
     }
 
     @Test
+    void reconciliationReplayAndKeyConflictDoNotReadExternalState() throws Exception {
+        UUID task=created(login("initiator.one"),UUID.randomUUID());
+        var claim=exchange.claim();
+        when(client.get(claim.operationId())).thenReturn(missing());
+        var op=login("operator"); var key=UUID.randomUUID();
+        var first=reconcile(op,task,key); status(200,first);
+        long snapshots=count("reconciliations"),history=count("task_history");
+        clearInvocations(client);
+        doThrow(new AssertionError("Replay must not call the external system")).when(client).get(any(UUID.class));
+        var replay=reconcile(op,task,key); status(200,replay);
+        assertEquals(body(first),body(replay));
+        UUID other=created(login("initiator.two"),UUID.randomUUID());
+        long beforeConflict=count("task_history");
+        var conflict=reconcile(op,other,key); status(409,conflict);
+        assertEquals("IDEMPOTENCY_CONFLICT",body(conflict).get("code").asString());
+        verifyNoInteractions(client);
+        assertEquals(snapshots,count("reconciliations"));
+        assertEquals(beforeConflict,count("task_history"));
+        assertEquals(history+1,beforeConflict,"Only the independent task creation adds audit");
+    }
+
+    @Test
     void responsibilityTransferAndReplayedReceiptDoNotRewriteCurrentOwner() throws Exception {
         var scenario=difference();
         var firstKey=UUID.randomUUID();

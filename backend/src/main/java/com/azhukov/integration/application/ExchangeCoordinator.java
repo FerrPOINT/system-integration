@@ -65,7 +65,7 @@ public class ExchangeCoordinator implements AutoCloseable {
             return;
         }
         feedFailures = 0;
-        if (tasks.consume(after,reply.events()) && !reply.events().isEmpty())
+        if (!reply.events().isEmpty() && tasks.consume(after,reply.events()))
             log.info("result-feed consumed after={} count={}",after,reply.events().size());
         nextRead = Instant.now().plusMillis(reply.events().isEmpty() ? 1000 : 0);
     }

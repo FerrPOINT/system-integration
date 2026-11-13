@@ -38,10 +38,15 @@ public class ReviewService {
         this.tasks=tasks; this.issues=issues; this.issueChanges=issueChanges; this.exchange=exchange; this.commands=commands;
     }
 
+    public record ReconciliationStart(ExchangeState before,Reconciliation replay) {}
+
     @Transactional(readOnly=true)
-    public ExchangeState snapshot(Actor user,UUID task) {
+    public ReconciliationStart prepareReconciliation(Actor user,UUID task,UUID key) {
         requireOperator(user);
-        return tasks.exchange(tasks.get(task,user,false).operationId(),false);
+        var record=tasks.get(task,user,false);
+        var saved=commands.replay(user.id(),Command.RECONCILE,key,task,Reconciliation.class);
+        if (saved.isPresent()) return new ReconciliationStart(null,saved.get());
+        return new ReconciliationStart(tasks.exchange(record.operationId(),false),null);
     }
 
     @Transactional(readOnly=true)

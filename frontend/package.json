@@ -11,7 +11,7 @@
     "generate:api": "orval",
     "dev": "orval && vite --host 127.0.0.1 --strictPort",
     "build": "orval && tsc --noEmit && vite build",
-    "test:api": "node --test tests/api-client.test.mjs"
+    "test:api": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-compose-refs": "1.1.5",

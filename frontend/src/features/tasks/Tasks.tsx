@@ -23,6 +23,7 @@ import { useMediaQuery } from '../../ui/use-media-query';
 import { useCommandKey } from '../../app/use-command-key';
 import { businessLabels, deliveryLabels, timestamp } from '../../app/format';
 import { ReconcileButton } from '../operations/Operations';
+import { taskRefreshInterval } from './refresh-interval';
 
 function BusinessBadge({ status }: { status: BusinessStatus }) {
   return <Badge tone={status === 'SUCCEEDED' ? 'success' : status === 'REJECTED' ? 'danger' : status === 'RUNNING' ? 'info' : 'neutral'}>{businessLabels[status]}</Badge>;
@@ -122,16 +123,10 @@ export function NewTask() {
 
 export function TaskCard({ user }: { user: GetSession200 }) {
   const { id = '' } = useParams();
-  const client = useQueryClient();
-  const task = useQuery({ queryKey: keys.task(id), queryFn: async ({ signal }) => {
-    const result = await data(getTask(id, { signal }));
-    void client.invalidateQueries({ queryKey: [...keys.task(id), 'history'] });
-    return result;
-  },
-    refetchInterval: query => {
-      const current = query.state.data;
-      return current && !['SUCCEEDED', 'REJECTED'].includes(current.businessStatus) ? 3000 : false;
-    },
+  const task = useQuery({
+    queryKey: keys.task(id),
+    queryFn: ({ signal }) => data(getTask(id, { signal })),
+    refetchInterval: query => taskRefreshInterval(query.state.data),
   });
   const [editing, setEditing] = useState(false);
   if (task.isPending) return <Loading />;
@@ -154,7 +149,7 @@ export function TaskCard({ user }: { user: GetSession200 }) {
         <Button onClick={() => setEditing(true)}>Изменить название</Button>)}
       {user.role === 'OPERATOR' && <ReconcileButton taskId={id} />}
     </CardContent></section></Card>
-    <History id={id} canReview={user.role === 'OPERATOR'} />
+    <History id={id} canReview={user.role === 'OPERATOR'} refreshInterval={taskRefreshInterval(item)} />
   </>;
 }
 
@@ -183,9 +178,10 @@ function RenameForm({ task, onClose }: { task: Task; onClose: () => void }) {
   </form>;
 }
 
-function History({ id, canReview }: { id: string; canReview: boolean }) {
+function History({ id, canReview, refreshInterval }: { id: string; canReview: boolean; refreshInterval: number | false }) {
   const [page, setPage] = useState(0);
-  const history = useQuery({ queryKey: keys.history(id, page), queryFn: ({ signal }) => data(listTaskHistory(id, { page }, { signal })) });
+  const history = useQuery({ queryKey: keys.history(id, page),
+    queryFn: ({ signal }) => data(listTaskHistory(id, { page }, { signal })), refetchInterval: refreshInterval });
   return <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>История</h2></CardTitle>
     {history.isPending ? <Loading /> : history.isError ? <><ErrorMessage error={history.error} />
       <Button onClick={() => history.refetch()}>Повторить</Button></> : <>

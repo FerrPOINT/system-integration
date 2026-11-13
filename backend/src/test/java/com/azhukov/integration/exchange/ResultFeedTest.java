@@ -9,6 +9,9 @@ import com.azhukov.integration.application.ExchangeTasks;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.jdbc.core.JdbcTemplate;
+import static org.mockito.Mockito.*;
 
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -20,6 +23,25 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ResultFeedTest extends PostgresTest {
     @Autowired ExchangeTasks exchange;
+    @MockitoSpyBean JdbcTemplate observedSql;
+
+    @Test
+    void emptyFeedKeepsItsIdleDelayWithoutWritingTheCursor() throws Exception {
+        var requests=new AtomicInteger();
+        var server=source(requests,new AtomicReference<>("[]"),new AtomicInteger(200));
+        try (var client=new ExchangeClient(json,origin(server)); var worker=new ExchangeCoordinator(exchange,client)) {
+            clearInvocations(observedSql);
+            worker.receive();
+            worker.receive();
+            assertEquals(1,requests.get(),"The empty feed must retain its idle delay");
+            long writes=mockingDetails(observedSql).getInvocations().stream().filter(call ->
+                call.getMethod().getName().equals("update") && call.getArguments().length>0 &&
+                call.getArguments()[0] instanceof String sql && sql.startsWith("UPDATE incoming_position")).count();
+            assertEquals(0,writes,"An empty page must not start cursor/result application");
+            assertEquals(0,exchange.cursor());
+        } finally { server.stop(0); }
+    }
+
 
     @Test
     void invalidCursorPausesWithoutAdvancingAndRestartCanConsumeCorrectedSource() throws Exception {
