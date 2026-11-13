@@ -1,4 +1,4 @@
-package com.azhukov.integration.service.idempotency;
+package com.azhukov.integration.json;
 
 import com.azhukov.integration.config.DocumentJsonConfiguration;
 import com.azhukov.integration.contract.internal.model.*;
@@ -7,7 +7,7 @@ import com.azhukov.integration.domain.task.TaskInput;
 import com.azhukov.integration.dto.review.IssueCommands;
 import com.azhukov.integration.dto.task.CreateTask;
 import com.azhukov.integration.dto.task.RenameTask;
-import com.azhukov.integration.service.idempotency.ContentFingerprint;
+import com.azhukov.integration.json.ContentFingerprint;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;

@@ -5,7 +5,7 @@ import com.azhukov.integration.domain.exchange.ExchangeState;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.review.*;
 import com.azhukov.integration.repository.ReviewRepository;
-import com.azhukov.integration.service.idempotency.ContentFingerprint;
+import com.azhukov.integration.json.ContentFingerprint;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;

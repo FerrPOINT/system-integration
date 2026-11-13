@@ -221,12 +221,13 @@ MapStruct преобразует HTTP DTO; security преобразует по�
 com.azhukov.integration
   controller/       тонкие generated API
   service/          сценарии, права, транзакции и координация
-    idempotency/    квитанции команд, JSON и канонический fingerprint
+    idempotency/    квитанции команд и координация
   repository/       контракты хранения
     jdbc/           SQL и row mapping
   domain/           task, exchange, review: состояние и правила
   dto/              внутренние команды, результаты и страницы
   mapper/           MapStruct HTTP-проекции
+  json/             общий канонический fingerprint квитанций и диагностики
   client/http/      внешний HTTP и проверка протокола
   security/         Spring Security и сессия
   scheduler/        тонкие планировщики
@@ -314,7 +315,7 @@ UnitOfWork, command bus, event sourcing и новая система CQRS не �
 Не добавляем MapStruct только ради названия технологии: ручной небольшой
 маппинг допустим, генератор оправдан повторяющимся объёмом преобразований.
 
-Слой application использует обычные Spring beans, constructor injection
+Слой service использует обычные Spring beans, constructor injection
 и транзакционные методы, вызываемые через proxy. Внешний HTTP выполняется
 между такими методами; self-invocation не создаёт новую транзакционную границу.
 Это штатное поведение [Spring Transaction Management](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/annotations.html).
@@ -397,7 +398,7 @@ ID задания и операции создаёт приложение, ID в
 
 Зависимости слоёв проверяются тестами классов, например ArchUnit как test-only
 зависимостью с проверенной поддержкой Java 25; самодельный regex-анализатор
-исходников не нужен. Правила: domain без фреймворков/HTTP DTO, application без
+исходников не нужен. Правила: domain без фреймворков/HTTP DTO, service без
 controller/JDBC/HTTP-адаптеров, controller без SQL, отсутствие циклов. Ограничения проверяют
 реальные импорты, не только имена пакетов.
 

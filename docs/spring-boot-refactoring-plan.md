@@ -97,7 +97,6 @@ backend/src/main/java/com/azhukov/integration/
     IssueLifecycleService.java
     idempotency/
       IdempotencyService.java
-      ContentFingerprint.java
   repository/
     TaskRepository.java
     ExchangeRepository.java
@@ -110,6 +109,8 @@ backend/src/main/java/com/azhukov/integration/
       JdbcCommandReceiptRepository.java
       JdbcUserDetailsService.java
       TaskRowMapper.java
+  json/
+    ContentFingerprint.java
   mapper/
     TaskApiMapper.java
     ReviewApiMapper.java
@@ -138,8 +139,10 @@ backend/src/main/java/com/azhukov/integration/
 Actor переносится в domain/Actor.java, RuleViolation остаётся в domain;
 Page — в dto/Page.java. CreateTask, RenameTask и HistoryEntry переходят в
 dto/task; IssueCommands — в dto/review, с прежними именами полей и nested
-результатами. ContentFingerprint принадлежит техническому сценарию
-service/idempotency; CommandType в dto сохраняет прежние строковые коды команд.
+результатами. ContentFingerprint принадлежит json: его используют и IdempotencyService,
+и JdbcReviewRepository для канонизации квитанций и диагностических снимков.
+Размещение в service создавало обратную зависимость JDBC и цикл; общий
+технический helper не зависит от сервисов или репозиториев. CommandType в dto сохраняет прежние строковые коды команд.
 Пакеты common/utils для несвязанных классов не вводятся. В dto остаются только
 реальные внутренние команды, результаты и проекции; HTTP DTO генерирует OpenAPI.
 

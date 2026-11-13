@@ -33,6 +33,25 @@ class RepositoryArchitectureTest {
     }
 
     @Test
+    void jdbcAdaptersDoNotDependOnServicesOrHttpBoundaries() {
+        noClasses().that().resideInAPackage("com.azhukov.integration.repository.jdbc..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                "com.azhukov.integration.service..","com.azhukov.integration.controller..",
+                "com.azhukov.integration.client.http..","com.azhukov.integration.contract..")
+            .check(new ClassFileImporter().withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                .importPackages("com.azhukov.integration.repository.jdbc"));
+    }
+
+    @Test
+    void productionPackagesHaveNoCycles() {
+        var production = new ClassFileImporter().withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPackages("com.azhukov.integration");
+        assertFalse(production.isEmpty());
+        com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices()
+            .matching("com.azhukov.integration.(*)..").should().beFreeOfCycles().check(production);
+    }
+
+    @Test
     void ruleRejectsSqlInAnotherAdapter() {
         var fixture=new ClassFileImporter().importClasses(BadAdapter.class);
         assertThrows(AssertionError.class,() -> SQL_BOUNDARY.check(fixture));

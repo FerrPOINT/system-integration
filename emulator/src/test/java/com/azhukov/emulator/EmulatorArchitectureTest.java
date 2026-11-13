@@ -35,5 +35,12 @@ class EmulatorArchitectureTest {
         SQL.check(production);
         assertThrows(AssertionError.class,() -> SQL.check(new ClassFileImporter().importClasses(BadAdapter.class)));
     }
+    @Test
+    void productionPackagesHaveNoCycles() {
+        assertFalse(production.isEmpty());
+        com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices()
+            .matching("com.azhukov.emulator.(*)..").should().beFreeOfCycles().check(production);
+    }
+
     private static class BadAdapter { private JdbcTemplate jdbc; }
 }

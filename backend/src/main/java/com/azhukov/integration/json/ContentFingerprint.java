@@ -1,4 +1,4 @@
-package com.azhukov.integration.service.idempotency;
+package com.azhukov.integration.json;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

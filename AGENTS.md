@@ -92,9 +92,10 @@ $env:PLAYWRIGHT_BROWSERS_PATH="$PWD/.local/browsers"
 публичной версии по [текущей стадии](docs/current-stage.md).
 
 - Основное приложение — один контекст интеграции; эмулятор — отдельный контекст
-  и процесс. Разделяем domain, application, infrastructure и web без новых сервисов.
-- Domain владеет состоянием и допустимыми переходами; application — сценарием,
-  правами и транзакцией; infrastructure — SQL/HTTP/планировщиками; web — API.
+  и процесс. Явно выделяем domain, controller, service и repository без новых процессов.
+- Domain владеет состоянием и допустимыми переходами; service — сценарием,
+  правами и транзакцией; repository/jdbc — SQL; client/http — внешним протоколом;
+  controller/mapper — API, scheduler — тонким запуском фоновых операций.
   Бизнес-модель не зависит от Spring, JDBC, Jackson и сгенерированных HTTP DTO.
 - Используем DDD для языка, границ и инвариантов. SOLID означает ясную
   ответственность и направление зависимостей; DRY — одного владельца правила,

@@ -1,6 +1,7 @@
 package com.azhukov.integration.service.idempotency;
 
 import com.azhukov.integration.domain.RuleViolation;
+import com.azhukov.integration.json.ContentFingerprint;
 import com.azhukov.integration.dto.CommandType;
 import com.azhukov.integration.repository.CommandReceiptRepository;
 import com.azhukov.integration.repository.CommandReceiptRepository.Receipt;

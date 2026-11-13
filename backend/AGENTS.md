@@ -23,7 +23,8 @@ Java 25 и Spring Boot. Текущая структура пакетов опи�
 - client/http — HTTP и строгая проверка внешнего протокола; scheduler — тонкие
   триггеры; security — Spring Security; config — конфигурация;
   exception — единый HTTP-формат ошибок. DTO команд и страниц находятся в dto.
-  IdempotencyService владеет lock/read/callback/save в service/idempotency;
+  json владеет общей канонизацией/отпечатком JSON для квитанций и диагностики;
+  не зависит от service/repository. IdempotencyService владеет lock/read/callback/save в service/idempotency;
   репозиторий квитанций не исполняет бизнес-callback и не кодирует JSON.
 - Модель задания владеет инвариантами задания; проблема и сверка имеют
   отдельную модель, поскольку проблема ленты может не иметь задания.
