@@ -173,8 +173,8 @@ margin: 0;
 }
 .base-icon-mark {
 --base-icon-mark-color: var(--color-accent);
-  --base-icon-mark-size: calc(var(--base-font-body) + 20px);
-  --base-icon-mark-glyph-size: calc(var(--base-font-body) + 5px);
+  --base-icon-mark-size: calc((var(--base-font-body) + 20px) * 1.5);
+  --base-icon-mark-glyph-size: calc((var(--base-font-body) + 5px) * 1.5);
   box-sizing: border-box;
   display: inline-flex;
   flex: none;
