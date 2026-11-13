@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { login, selectChoice } from './support';
 
-const external = process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19581';
+const external = process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19681';
 
 test.afterEach(async ({ request }) => {
   for (const reference of ['REQ-810001', 'REQ-810002', 'REQ-820001', 'REQ-820002'])

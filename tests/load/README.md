@@ -120,9 +120,13 @@ node --test tests/load/integrity.test.mjs
 ## Запуск
 
 Команды выполняются из корня репозитория после обычной приёмки приложения.
-Загрузите `.env` в окружение терминала по README. Тест использует отдельные
-БД `si_test` и `si_emulator_test` с разными ролями и паролями.
-Не запускайте серверные интеграционные тесты одновременно с нагрузочным стендом.
+Загрузите .env в окружение терминала по README. Compose-проект
+system-integration-load имеет собственные контейнеры, PostgreSQL, том и сеть
+10.252.96.0/24. Диагностика доступна только на loopback:
+API 19680, эмулятор 19681, frontend 19673, БД 19632.
+Обычный проект system-integration и публичный туннель остаются запущены.
+Нагрузка использует только si_test/si_emulator_test нового PostgreSQL.
+Сборки и тяжёлые проверки на хосте выполняются последовательно.
 
 Перед сборкой кандидат должен быть закоммичен. В PowerShell:
 
@@ -131,14 +135,18 @@ $env:SI_SOURCE_REF = git rev-parse HEAD
 ```
 
 В POSIX shell: `export SI_SOURCE_REF=$(git rev-parse HEAD)`.
-Соберите три образа обычными командами корневого README с этим окружением.
-Метка образов API и эмулятора должна совпадать с коммитом кандидата.
+Соберите три тестовых образа с этим окружением:
+~~~sh
+docker compose -p system-integration-load -f compose.yml -f compose.public.yml -f compose.load.yml --profile app build backend emulator frontend
+~~~
+
+Метки всех трёх образов должны совпадать с коммитом кандидата.
 
 ```sh
-docker compose -f compose.yml -f compose.public.yml -f compose.load.yml --profile app up -d --wait
-docker compose -f compose.yml -f compose.public.yml -f compose.load.yml --profile app stop backend emulator
+docker compose -p system-integration-load -f compose.yml -f compose.public.yml -f compose.load.yml --profile app up -d --wait
+docker compose -p system-integration-load -f compose.yml -f compose.public.yml -f compose.load.yml --profile app stop backend emulator
 node tests/load/reset.mjs
-docker compose -f compose.yml -f compose.public.yml -f compose.load.yml --profile app up -d --wait
+docker compose -p system-integration-load -f compose.yml -f compose.public.yml -f compose.load.yml --profile app up -d --wait
 node tests/load/prepare.mjs
 node tests/load/run.mjs
 ```
@@ -151,11 +159,13 @@ Runner проверяет фактические подключения, чис�
 `tests/results/nf08.json`; ненулевой exit code означает несостоявшуюся
 либо не прошедшую квалификацию. Сам отчёт содержит причины ошибок.
 
-После прогона верните обычные БД демонстрационного стенда:
+После полной сверки удалите собственные завершённые тестовые fixtures,
+контейнеры, сеть и том. Перед командой проверьте имя проекта:
 
-```sh
-docker compose -f compose.yml -f compose.public.yml --profile app up -d --wait
-```
+~~~sh
+docker compose -p system-integration-load -f compose.yml -f compose.public.yml -f compose.load.yml --profile app ps
+docker compose -p system-integration-load -f compose.yml -f compose.public.yml -f compose.load.yml --profile app down --volumes
+~~~
 
 Данные `si_app` и `si_emulator` reset нагрузки не изменяет.
 
@@ -265,9 +275,10 @@ host/PID, накопленное CPU-время и RSS самого Node-про�
 отчёт генератора; незавершённый канал, иная версия и неполные метрики дают отказ
 квалификации. Локальный NF08 сохраняет отдельный отчёт.
 
-Сначала на Firebat1 отключите публичный туннель, поднимите точные образы кандидата
-с compose.load.yml, выполните штатный reset при остановленных API/эмуляторе,
-затем up и подготовку:
+Сначала на Firebat1 поднимите точные образы кандидата отдельным проектом
+system-integration-load с compose.load.yml. Выполните штатный reset при
+остановленных тестовых API/эмуляторе, затем up и подготовку.
+Демонстрационный стенд и публичный туннель остаются запущены:
 
 ~~~sh
 SI_LOAD_PROFILE=nf08-external node tests/load/prepare.mjs
@@ -311,8 +322,9 @@ Node CPU не включает дочерние SSH-процессы; hostResour
 двух компьютеров для этих вычислений не требуется.
 
 Это проверка отдельного генератора и SSH/сети, она не измеряет публичный HTTPS,
-браузер или frontend-прокси. После прогона оператор возвращает обычный Compose,
-проверяет сохранность/образы и запускает публичный туннель с TC-16.
+браузер или frontend-прокси. После прогона оператор сверяет обычный стенд
+и публичный TC-16, затем удаляет собственные завершённые тестовые fixtures.
+Обычный Compose и туннель не переключаются.
 
 ## Равномерное поступление заданий
 

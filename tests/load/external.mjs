@@ -91,7 +91,7 @@ await writeFile(output, JSON.stringify(receipt, null, 2));
 let tunnel, controller, lines;
 try {
   await portFree();
-  tunnel = startSsh(['-N', '-o', 'ExitOnForwardFailure=yes', '-L', '127.0.0.1:' + port + ':127.0.0.1:19580', host]);
+  tunnel = startSsh(['-N', '-o', 'ExitOnForwardFailure=yes', '-L', '127.0.0.1:' + port + ':127.0.0.1:19680', host]);
   await ready(tunnel);
   const preflight = [
     "import {readFileSync} from 'node:fs';",

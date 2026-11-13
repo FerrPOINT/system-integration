@@ -4,8 +4,8 @@ import { get as httpGet } from 'node:http';
 import { get as httpsGet } from 'node:https';
 import { gunzipSync } from 'node:zlib';
 
-const backend = process.env.SI_BACKEND_URL ?? 'http://127.0.0.1:19580';
-const frontend = process.env.SI_FRONTEND_URL ?? 'http://127.0.0.1:19573';
+const backend = process.env.SI_BACKEND_URL ?? 'http://127.0.0.1:19680';
+const frontend = process.env.SI_FRONTEND_URL ?? 'http://127.0.0.1:19673';
 
 test('backend is healthy', async () => {
   const response = await fetch(new URL('/actuator/health', backend), {

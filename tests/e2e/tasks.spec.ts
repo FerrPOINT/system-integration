@@ -161,7 +161,7 @@ test('TC-08: session refresh removes the previous owner cache before an in-place
 
 
 test('TC-09: history follows automatic task updates without reopening the card', async ({ page, request }, info) => {
-  const external = process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19581';
+  const external = process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19681';
   const reference = info.project.name === 'mobile' ? 'REQ-800007' : 'REQ-800006';
   expect((await request.put(`${external}/test/faults/${reference}`, { data: { mode: 'UNAVAILABLE' } })).status()).toBe(204);
   try {

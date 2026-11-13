@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { localOrigin } from '../support/http.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
-const compose = ['compose', '-f', 'compose.yml', '-f', 'compose.load.yml', '--profile', 'app'];
+const compose = ['compose', '-p', 'system-integration-load', '-f', 'compose.yml', '-f', 'compose.load.yml', '--profile', 'app'];
 
 export function loadEnvironment() {
   return ['backend', 'postgres', 'emulator', 'frontend'].map(service => {
@@ -10,12 +11,27 @@ export function loadEnvironment() {
     if (!id) throw new Error(`Missing load service: ${service}`);
     const [container] = JSON.parse(execFileSync('docker', ['inspect', id], { encoding: 'utf8' }));
     if (!container.State.Running) throw new Error(`The ${service} container must be running`);
+    if (container.Config.Labels?.['com.docker.compose.project'] !== 'system-integration-load')
+      throw new Error('Load checks require the isolated system-integration-load project');
+    const internalPort = service === 'postgres' ? '5432/tcp' : '8080/tcp';
+    const binding = container.NetworkSettings.Ports[internalPort]?.find(item => item.HostIp === '127.0.0.1');
+    if (!binding) throw new Error('Load services must publish diagnostics only on loopback');
+    const endpoints = {
+      backend: ['SI_BACKEND_URL', 'http://127.0.0.1:19680'],
+      emulator: ['SI_EMULATOR_URL', 'http://127.0.0.1:19681'],
+      frontend: ['SI_FRONTEND_URL', 'http://127.0.0.1:19673'],
+    };
+    if (service !== 'postgres') {
+      const [variable, fallback] = endpoints[service];
+      if (new URL(localOrigin(process.env[variable] || fallback)).port !== binding.HostPort)
+        throw new Error(variable + ' must match the isolated container port');
+    }
     const env = Object.fromEntries(container.Config.Env.map(value => { const i = value.indexOf('='); return [value.slice(0, i), value.slice(i + 1)]; }));
     if (service === 'backend' && (env.SI_DB_URL !== 'jdbc:postgresql://postgres:5432/si_test' || env.SI_DB_USER !== 'si_test'))
       throw new Error('The backend must use the isolated si_test database');
     if (service === 'emulator' && (env.SI_EMULATOR_DB_URL !== 'jdbc:postgresql://postgres:5432/si_emulator_test' || env.SI_EMULATOR_DB_USER !== 'si_emulator_test'))
       throw new Error('The emulator must use the isolated si_emulator_test database');
-    return { service, containerId: id, image: container.Image, cpu: container.HostConfig.NanoCpus / 1e9,
+    return { service, hostPort: Number(binding.HostPort), containerId: id, image: container.Image, cpu: container.HostConfig.NanoCpus / 1e9,
       memory: container.HostConfig.Memory, startedAt: container.State.StartedAt, sourceCommit: container.Config.Labels?.['org.opencontainers.image.revision'] };
   });
 }

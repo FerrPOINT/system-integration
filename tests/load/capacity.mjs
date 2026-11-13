@@ -17,8 +17,8 @@ const mode = process.env.SI_CAPACITY_MODE || 'read';
 const clientCount = Number(process.env.SI_CAPACITY_CLIENTS || '20');
 if (!['read', 'mixed'].includes(mode) || ![20, 40, 80].includes(clientCount))
   throw new Error('Select one capacity stage: SI_CAPACITY_MODE=read|mixed and SI_CAPACITY_CLIENTS=20|40|80');
-const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19580');
-const externalOrigin = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19581');
+const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19680');
+const externalOrigin = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19681');
 const dataset = JSON.parse(await readFile(new URL('../results/load-dataset.json', import.meta.url), 'utf8'));
 if (dataset.profile !== 'capacity' || dataset.initialCount !== 10000 || dataset.origin !== origin)
   throw new Error('Prepare the exact 10000-record capacity dataset');

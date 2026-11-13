@@ -18,8 +18,8 @@ if (!rates.length || rates.some(rate => !Number.isInteger(rate) || rate < 1) ||
     !Number.isInteger(phaseSeconds) || phaseSeconds < 1 ||
     rates.reduce((sum, rate) => sum + rate * phaseSeconds, 0) > 399000)
   throw new Error('Set positive integer SI_STEADY_RATES and SI_STEADY_PHASE_SECONDS within the finite request-reference range');
-const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19580');
-const externalOrigin = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19581');
+const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19680');
+const externalOrigin = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19681');
 const resources = qualifiedLoadEnvironment(sourceCommit);
 const dataset = JSON.parse(await readFile(new URL('../results/load-dataset.json', import.meta.url), 'utf8'));
 if (dataset.origin !== origin || dataset.profile !== 'steady' || dataset.initialCount !== 5000)

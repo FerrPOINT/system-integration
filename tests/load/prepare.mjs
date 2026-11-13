@@ -7,7 +7,7 @@ if (!['nf08', 'nf08-external', 'capacity', 'steady'].includes(profile)) throw ne
 const initialCount = profile === 'capacity' ? 10000 : 5000;
 loadEnvironment();
 
-const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19580');
+const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19680');
 if (!process.env.SI_DEMO_PASSWORD) throw new Error('SI_DEMO_PASSWORD is required');
 const users = ['initiator.one', 'initiator.two'];
 const accounts = await Promise.all(users.map(async username => {

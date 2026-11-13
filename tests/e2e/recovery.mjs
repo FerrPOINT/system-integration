@@ -7,10 +7,9 @@ import { ApiSession, ApiFailure, localOrigin } from '../support/http.mjs';
 import { loadEnvironment } from '../load/environment.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
-const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19580');
-const external = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19581');
-assert.equal(new URL(origin).port, '19580'); assert.equal(new URL(external).port, '19581');
-const compose = ['compose', '-f', 'compose.yml', '-f', 'compose.public.yml', '-f', 'compose.load.yml', '--profile', 'app'];
+const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19680');
+const external = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19681');
+const compose = ['compose', '-p', 'system-integration-load', '-f', 'compose.yml', '-f', 'compose.public.yml', '-f', 'compose.load.yml', '--profile', 'app'];
 loadEnvironment();
 const sqlQuote = value => "'" + String(value).replaceAll("'", "''") + "'";
 const databases = {
@@ -199,7 +198,7 @@ try {
     const current = JSON.parse(docker(['inspect', composeRun(['ps', '-q', 'backend']).trim()]))[0];
     const newAddress = current.NetworkSettings.Networks[network].IPAddress;
     assert.notEqual(newAddress, oldAddress);
-    const frontend = 'http://127.0.0.1:19573';
+    const frontend = localOrigin(process.env.SI_FRONTEND_URL || 'http://127.0.0.1:19673');
     await waitFor('frontend discovers the new backend address', async () => {
       const response = await fetch(frontend + '/api/session', { headers: { Connection: 'close' }, signal: AbortSignal.timeout(5000) });
       return response.status === 401 && (await response.json()).code === 'SESSION_REQUIRED';

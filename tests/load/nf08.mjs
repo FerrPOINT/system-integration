@@ -14,8 +14,8 @@ const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8'
 const sourceCommit = git('rev-parse', 'HEAD');
 if (git('status', '--porcelain')) throw new Error('Commit the candidate before the NF08 qualification');
 const dataset = JSON.parse(await readFile(new URL('../results/load-dataset.json', import.meta.url), 'utf8'));
-const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19580');
-const externalOrigin = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19581');
+const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19680');
+const externalOrigin = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19681');
 if (dataset.origin !== origin || dataset.initialCount !== 5000) throw new Error('Prepare the exact 5000-record dataset on this test origin');
 if (!process.env.SI_DEMO_PASSWORD) throw new Error('SI_DEMO_PASSWORD is required');
 
