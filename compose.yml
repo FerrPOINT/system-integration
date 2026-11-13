@@ -29,7 +29,7 @@ services:
       - '127.0.0.1:19532:5432'
     volumes:
       - postgres:/var/lib/postgresql
-      - ./backend/database/init.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
+      - ./deploy/postgres/init.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
     healthcheck:
       test: [CMD-SHELL, 'pg_isready -U si_admin -d postgres']
       interval: 3s
@@ -44,7 +44,7 @@ services:
     stop_grace_period: 60s
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: Dockerfile
       target: backend
       args:
         VCS_REF: ${SI_SOURCE_REF:-development}
@@ -75,7 +75,7 @@ services:
     stop_grace_period: 60s
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: Dockerfile
       target: emulator
       args:
         VCS_REF: ${SI_SOURCE_REF:-development}

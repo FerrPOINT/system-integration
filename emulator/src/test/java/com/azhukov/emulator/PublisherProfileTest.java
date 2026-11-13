@@ -37,7 +37,7 @@ class PublisherProfileTest {
         int[][] orders={{1,10,25,50},{50,25,10,1},{25,1,50,10}};
         for (int round=0;round<orders.length;round++)
             for (int batch:orders[round]) reports.add(Map.of("round",round+1,"profile",profile(batch)));
-        var output=Path.of("../../tests/results/publisher-profile.json");
+        var output=Path.of("../tests/results/publisher-profile.json");
         Files.createDirectories(output.getParent());
         Files.writeString(output,json.writeValueAsString(reports));
     }

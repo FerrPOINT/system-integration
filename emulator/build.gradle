@@ -1,13 +1,9 @@
+import org.openapitools.generator.gradle.plugin.tasks.GenerateTask
+
 plugins {
-    id 'java'
     id 'org.springframework.boot'
+    id 'org.openapi.generator'
 }
-
-group = 'com.azhukov.integration'
-version = rootProject.version
-
-java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
-repositories { mavenCentral() }
 
 dependencies {
     implementation platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES)
@@ -22,11 +18,12 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-sourceSets.main.java.srcDir(rootProject.tasks.named('generateExchangeApi').flatMap {
-    it.outputDir.dir('src/main/java')
-})
+def externalApi = tasks.named('openApiGenerate', GenerateTask) {
+    rootProject.configureContract(delegate, 'external-exchange', 'external')
+}
 
-tasks.named('test') { useJUnitPlatform { excludeTags 'postgres' } }
+sourceSets.main.java.srcDir(externalApi.flatMap { it.outputDir.dir('src/main/java') })
+
 tasks.named('bootJar') { archiveFileName = 'system-integration-emulator.jar' }
 
 tasks.register('integrationTest', Test) {

@@ -5,7 +5,7 @@
 | `tests/e2e/` | HTTP smoke, браузерные сценарии обеих ролей и аварийные перезапуски процессов. |
 | [tests/sql/](sql/README.md) | Реестр JDBC и EXPLAIN на откатываемых тестовых fixtures. |
 | `tests/load/` | Генерация 5 000 записей и [профиль NF08](load/README.md). |
-| backend/src/test/, backend/emulator/src/test/ | Контракты, предметные правила, архитектура, HTTP-доступ и PostgreSQL. integrationTest использует si_test/si_emulator_test. |
+| backend/src/test/, emulator/src/test/ | Контракты, предметные правила, архитектура, HTTP-доступ и PostgreSQL. integrationTest использует si_test/si_emulator_test. |
 | `frontend/tests/` | Контрактные тесты клиента, polling и round-trip production JS/CSS. |
 
 Сценарии и ожидаемые результаты связаны с требованиями в
@@ -143,7 +143,7 @@ UI-12 проверяет корректный 503 при создании: фо�
 
 Native PostgreSQL-тесты, UI, recovery и нагрузка используют один выделенный
 PostgreSQL проекта system-integration-load на 19632 с БД si_test/si_emulator_test.
-Native-тесты требуют остановленных backend/emulator; их команды есть в корневом README.
+Native-тесты требуют остановленных backend и emulator; их команды есть в корневом README.
 Тяжёлые проверки выполняются последовательно; данные обычных si_app/si_emulator
 не являются тестовыми fixtures.
 
@@ -164,3 +164,13 @@ node --test tests/build/context.test.mjs
 
 Проверка использует scratch/COPY без сети, синтетические env-файлы и временный
 каталог внутри .local. Не читает приватные env и удаляет созданные fixtures.
+
+Проверка графов и владения codegen не компилирует бизнес-исходники:
+
+~~~sh
+node --test tests/build/gradle.test.mjs
+~~~
+
+Она создаёт временные build metadata, генерирует обе схемы, проверяет
+UP-TO-DATE и инвалидацию потребителей внешнего контракта. Все fixtures удаляются.
+Общий прогон этих проверок: node --test --test-concurrency=1 tests/build/*.test.mjs.

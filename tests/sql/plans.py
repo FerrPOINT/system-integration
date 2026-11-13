@@ -20,7 +20,7 @@ def bind(sql, values):
  return ''.join(a+sql_literal(b) for a,b in zip(chunks,values))+chunks[-1]
 from jdbc_inventory import collect
 
-inventory=collect(['backend/src/main/java','backend/emulator/src/main/java'])
+inventory=collect(['backend/src/main/java','emulator/src/main/java'])
 cases=[]
 def add(key,sql,values=(),variant='default',fixture='base'):
  cases.append({'callSite':key,'variant':variant,'database':inventory[key]['database'],'sql':bind(sql,values),'template':sql,'parameters':list(values),'fixture':fixture})

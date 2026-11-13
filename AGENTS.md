@@ -6,7 +6,8 @@
 
 | Каталог | Ответственность |
 | --- | --- |
-| [backend/](backend/AGENTS.md) | Java, HTTP API, бизнес-правила, БД, доставка и эмулятор. |
+| [backend/](backend/AGENTS.md) | Java, HTTP API, бизнес-правила, БД и доставка. |
+| [emulator/](emulator/AGENTS.md) | Отдельное исполнение, БД, события и режимы сбоев. |
 | [frontend/](frontend/AGENTS.md) | React, экраны и вызовы API. |
 | [contracts/](contracts/AGENTS.md) | OpenAPI внутреннего приложения и эмулятора. |
 | [tests/](tests/AGENTS.md) | Проверки запущенного сервиса и нагрузка. |

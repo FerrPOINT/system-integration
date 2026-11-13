@@ -71,14 +71,13 @@ $env:SI_DEMO_PASSWORD = [string]$settings.services.backend.environment.SI_DEMO_P
 запускайте без этого профиля.
 
 ```sh
-cd backend
-sh ./gradlew bootRun --args=--spring.profiles.active=demo-users
+sh ./gradlew :backend:bootRun --args=--spring.profiles.active=demo-users
 ```
 
 В PowerShell замените `sh ./gradlew` на `.\gradlew.bat`. Если терминал
 использует другой JDK, укажите путь к JDK 25 в `JAVA_HOME`.
 
-Эмулятор запускается отдельным процессом из `backend/`. Профиль
+Эмулятор запускается отдельным процессом из корня репозитория. Профиль
 `test-faults` включает служебные команды воспроизведения сбоев.
 
 ```sh
@@ -125,10 +124,10 @@ docker compose --profile app up -d --wait
 проверяются при запуске. Для остановки — `docker compose --profile app stop`.
 Сборка контейнеров не заменяет интеграционные и браузерные проверки.
 
-Соберите backend из каталога `backend/`.
+Java-сборка запускается из корня репозитория; приложения адресуются отдельно.
 
 ```sh
-sh ./gradlew --no-daemon --max-workers=2 :test :emulator:test :bootJar :emulator:bootJar
+sh ./gradlew --no-daemon --max-workers=2 :backend:test :emulator:test :backend:bootJar :emulator:bootJar
 ```
 
 Транзакционные и API-тесты отдельно используют настоящий PostgreSQL `si_test`.
@@ -141,10 +140,10 @@ docker compose -p system-integration-load -f compose.yml -f compose.load.yml --p
 docker compose -p system-integration-load -f compose.yml -f compose.load.yml --profile app up -d --wait postgres
 ~~~
 
-Затем из `backend/`:
+Затем из корня репозитория:
 
 ```sh
-sh ./gradlew --no-daemon --max-workers=2 :integrationTest :emulator:integrationTest
+sh ./gradlew --no-daemon --max-workers=2 :backend:integrationTest :emulator:integrationTest
 ```
 
 Команда требует `SI_TEST_DB_PASSWORD` и `SI_EMULATOR_TEST_DB_PASSWORD`,
@@ -194,11 +193,13 @@ corepack pnpm test:api
 ## Генерация из OpenAPI
 
 Gradle перед компиляцией генерирует Spring MVC интерфейсы и DTO обеих схем
-в `backend/build/generated/openapi/`. Vite получает Fetch-клиент и DTO
+в `backend/build/generated/openapi/`. Эмулятор независимо генерирует внешнюю
+схему в `emulator/build/generated/openapi/`. Vite получает Fetch-клиент и DTO
 внутренней схемы из `frontend/build/generated/openapi/`. Команды
 `corepack pnpm dev` и `corepack pnpm build` запускают Orval автоматически.
-Для одной генерации вызовите `sh ./gradlew openApiGenerate generateExchangeApi`
-из `backend/` и `corepack pnpm generate:api` из `frontend/`.
+Для одной генерации из корня вызовите
+`sh ./gradlew :backend:openApiGenerate :backend:generateExchangeApi :emulator:openApiGenerate`,
+для frontend — `corepack pnpm generate:api` из `frontend/`.
 Каталоги сборки игнорируются Git.
 
 ## Допущения

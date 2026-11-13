@@ -1,0 +1,46 @@
+import org.openapitools.generator.gradle.plugin.tasks.GenerateTask
+
+plugins {
+    id 'org.springframework.boot' version '4.1.2' apply false
+    id 'org.openapi.generator' version '7.27.0' apply false
+}
+
+allprojects {
+    group = 'com.azhukov.integration'
+    version = '0.1.0-SNAPSHOT'
+}
+
+subprojects {
+    apply plugin: 'java'
+    java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+    repositories { mavenCentral() }
+    tasks.named('test') { useJUnitPlatform { excludeTags 'postgres' } }
+}
+
+ext.configureContract = { GenerateTask task, String contract, String boundary ->
+    def namespace = "com.azhukov.integration.contract.${boundary}"
+    task.inputSpec.set(rootProject.layout.projectDirectory.file("contracts/${contract}.openapi.yaml"))
+    task.outputDir.set(task.project.layout.buildDirectory.dir("generated/openapi/${boundary}"))
+    task.generatorName.set('spring')
+    task.library.set('spring-boot')
+    task.apiPackage.set("${namespace}.api")
+    task.modelPackage.set("${namespace}.model")
+    task.validateSpec.set(true)
+    task.cleanupOutput.set(true)
+    task.globalProperties.set([
+        apis: '', models: '',
+        apiDocs: 'false', apiTests: 'false', modelDocs: 'false', modelTests: 'false'
+    ])
+    task.configOptions.set([
+        interfaceOnly: 'true',
+        skipDefaultInterface: 'true',
+        useSpringBoot4: 'true',
+        useTags: 'true',
+        documentationProvider: 'none',
+        annotationLibrary: 'none',
+        openApiNullable: 'false',
+        generateJsonIncludeAnnotations: 'true',
+        generateJsonSetterNullsAnnotations: 'false',
+        hideGenerationTimestamp: 'true'
+    ])
+}
