@@ -15,7 +15,9 @@
     "test:assets": "node --test tests/build-assets.mjs"
   },
   "dependencies": {
+    "@radix-ui/react-alert-dialog": "1.2.1",
     "@radix-ui/react-compose-refs": "1.1.5",
+    "@radix-ui/react-dialog": "1.3.1",
     "@radix-ui/react-select": "2.4.1",
     "@radix-ui/react-slot": "1.5.0",
     "@tanstack/react-query": "^5.107.1",

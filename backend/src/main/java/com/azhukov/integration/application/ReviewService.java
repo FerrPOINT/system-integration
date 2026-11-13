@@ -55,10 +55,10 @@ public class ReviewService {
     public Issue get(Actor user,UUID id) { requireOperator(user); return loadContext(id,user,false).view(user.id()); }
 
     @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
-    public Page<Issue> list(Actor user,int page,Issue.Status status) {
+    public Page<Issue> list(Actor user,int page,int size,Issue.Status status) {
         requireOperator(user);
-        if (page<0) throw RuleViolation.invalid("Номер страницы не может быть отрицательным");
-        var rows=issues.list(page,status);
+        Page.requireValid(page,size);
+        var rows=issues.list(page,size,status);
         long total=issues.count(status);
         var states=exchanges.exchangeByTask(rows.stream().map(row -> row.value().taskId()).filter(Objects::nonNull).distinct().toList());
         var snapshots=issues.reconciliations(rows.stream().map(row -> row.value().latestReconciliationId()).filter(Objects::nonNull).distinct().toList());
@@ -71,7 +71,7 @@ public class ReviewService {
                 (saved!=null && !saved.value().taskId().equals(taskId))) throw RuleViolation.notFound();
             return toContext(row,state,saved).view(user.id());
         }).toList();
-        return new Page<>(items,page,total);
+        return new Page<>(items,page,size,total);
     }
 
     @Transactional(readOnly=true)

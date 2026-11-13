@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './support';
+import { login, waitForRegistry } from './support';
 
 test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive list', async ({ page }, testInfo) => {
   await login(page);
@@ -9,6 +9,8 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
   await page.getByLabel('Номер заявки').fill('REQ-800001');
   await page.getByLabel('Количество *', { exact: true }).fill('25');
   await page.getByLabel('Количество *', { exact: true }).press('Tab');
+  await expect(page.getByRole('button', { name: 'Отмена', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Создать', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
@@ -20,6 +22,25 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
   await expect(page.getByRole('heading', { name: name + ' обновлено', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'История', exact: true })).toBeVisible();
   await expect(page.getByText(/Название изменено:/)).toBeVisible();
+  const history = page.getByRole('region', { name: 'История', exact: true });
+  const historyViewport = page.locator('.task-history-viewport');
+  await expect.poll(async () => {
+    const state = await page.getByRole('region', { name: 'Состояние задания', exact: true }).boundingBox();
+    const events = await history.boundingBox();
+    return state && events && (testInfo.project.name === 'desktop'
+      ? events.x >= state.x + state.width && Math.abs(events.y - state.y) < 1
+      : events.y >= state.y + state.height);
+  }).toBe(true);
+  await expect.poll(() => new URL(page.url()).searchParams.get('size')).not.toBeNull();
+  const historySize = Number(new URL(page.url()).searchParams.get('size'));
+  await page.setViewportSize({ width: testInfo.project.name === 'desktop' ? 1440 : 390, height: 550 });
+  await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeLessThan(historySize);
+  await expect.poll(async () => {
+    const card = await history.boundingBox();
+    const viewport = await historyViewport.boundingBox();
+    return card && viewport && card.y + card.height <= viewport.y + viewport.height + 1;
+  }).toBe(true);
+  await page.setViewportSize({ width: testInfo.project.name === 'desktop' ? 1440 : 390, height: 1000 });
   await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
   await expect(page.getByRole('link', { name: name + ' обновлено', exact: true })).toBeVisible();
   if (testInfo.project.name === 'mobile') {
@@ -106,19 +127,20 @@ test('TC-09 / TC-12: empty filter, server error recovery and UTC rendering', asy
   await expect(page.getByRole('link', { name: 'Создать задание' })).toBeVisible();
   await page.goto('/tasks/' + taskId);
   const task = await (await page.request.get('/api/tasks/' + taskId)).json();
-  const time = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' }).format(new Date(task.createdAt)) + ' UTC';
-  await expect(page.getByText(time, { exact: true }).first()).toBeVisible();
+  const time = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' }).format(new Date(task.createdAt));
+  await expect(page.locator('.details time')).toHaveText(time);
   const otherZone = await page.context().browser()!.newContext({ baseURL: new URL(page.url()).origin, timezoneId: 'America/Los_Angeles' });
   try {
     const other = await otherZone.newPage();
     await login(other);
     await other.goto('/tasks/' + taskId);
-    await expect(other.getByText(time, { exact: true }).first()).toBeVisible();
+    await expect(other.locator('.details time')).toHaveText(time);
   } finally { await otherZone.close(); }
 });
 
 test('TC-08 / TC-09: expired server session clears protected screens and allows another login', async ({ page }) => {
   await login(page);
+  await waitForRegistry(page);
   const token = await (await page.request.get('/api/csrf')).json();
   expect((await page.request.post('/api/logout', { headers: { 'X-CSRF-TOKEN': token.token } })).status()).toBe(204);
   await page.getByRole('button', { name: 'Обновить', exact: true }).click();
@@ -154,8 +176,8 @@ test('TC-08: session refresh removes the previous owner cache before an in-place
   await page.getByLabel('Пароль *', { exact: true }).fill(process.env.SI_DEMO_PASSWORD!);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: 'Отмена', exact: true }).click();
-  await expect(page.getByText('Сохранённые задания', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Отмена', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0);
 });
 

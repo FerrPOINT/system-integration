@@ -24,8 +24,8 @@ export function ReconciliationCard() {
     <Button onClick={() => snapshot.refetch()}>Повторить</Button></>;
   const item = snapshot.data;
   return <>
-    <BackLink to={'/tasks/' + taskId}>К заданию</BackLink>
-    <PageHeader title="Сохранённая сверка" actions={<ReconcileButton taskId={taskId} />} />
+    <PageHeader back={<BackLink to={'/tasks/' + taskId}>К заданию</BackLink>}
+      title="Сохранённая сверка" actions={<ReconcileButton taskId={taskId} />} />
     <ErrorMessage error={snapshot.error} />
     <Card asChild><section className="reconciliation-panel" data-outcome={item.outcome}><CardContent className="base-page-stack"><Notice tone={item.outcome === 'MATCH' ? 'success' : 'danger'} title={<CardTitle asChild><h2>{outcomes[item.outcome]}</h2></CardTitle>}>
       {timestamp(item.checkedAt)} · Оператор {item.checkedBy}</Notice>

@@ -5,6 +5,27 @@
 эмулятор. Разработка идёт по [декомпозиции](docs/decomposition.md).
 Проверенные возможности и оставшаяся приёмка указаны в [текущей стадии](docs/current-stage.md).
 
+## Текущий локальный запуск
+
+По указанию пользователя разработка и preview работают на этом Windows-ПК,
+из `C:/git/azhukov/mini-crm/system-integration`. Интерфейс:
+[127.0.0.1:19673](http://127.0.0.1:19673/), локальный Vite с HMR.
+API, эмулятор и отдельная БД работают в Docker Desktop, проект
+`system-integration-load`, порты 19680/19681/19632. SSH-туннель не используется.
+Старая локальная БД обычного Compose сохранена.
+
+После настройки Node/Corepack по [AGENTS.md](AGENTS.md):
+
+```powershell
+docker compose -p system-integration-load -f compose.yml -f compose.load.yml --profile app up -d --no-build --wait postgres backend emulator
+node .local/toolchains/corepack/node_modules/corepack/dist/corepack.js pnpm --dir frontend dev
+```
+
+Эти команды используют подготовленные серверные образы; изменение backend
+требует их локальной сборки через общий host execution slot. Для полного
+Compose/UI-прогона Vite освобождает порт 19673 frontend-контейнеру.
+Приведённые ниже порты 195xx относятся к обычному Compose и публикации.
+
 ## Интерфейс
 
 В шапке и на экране входа доступны тёмная, светлая и серая темы.

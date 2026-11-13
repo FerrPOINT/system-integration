@@ -15,6 +15,7 @@
   border: 1px solid var(--color-border-strong); border-radius: var(--base-radius);
   background: transparent; color: var(--color-text-primary); font-weight: 500; cursor: pointer; text-decoration: none;
 }
+.base-icon-button { width: 44px; height: 44px; padding: 0; flex-shrink: 0; }
 .base-button:hover:not(:disabled) { background: var(--color-surface-raised); }
 .base-button[data-variant="default"] { background: var(--color-accent); color: var(--color-accent-foreground); border-color: transparent; }
 .base-button[data-variant="default"]:hover:not(:disabled) { background: var(--color-accent-hover); color: var(--color-accent-hover-foreground); }

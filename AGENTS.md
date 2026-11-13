@@ -19,12 +19,16 @@
 
 ## Рабочая среда
 
-Разработка, Git, зависимости, сборки и тесты выполняются на `firebat1`
-в `/opt/dev/system-integration`. Из Windows-чата работайте через SSH.
-Локальная Windows-копия сохраняет историю переноса; разработку в ней
-параллельно не ведём. Перед изменениями проверяйте host, путь, HEAD и dirty state.
-Изменяйте ресурсы Compose-проекта `system-integration` и его публикацию
-на `demo.azhukov-dev.ru`, сохраняя соседние приложения и их данные.
+Рабочую среду выбирает пользователь для конкретной задачи. Выбор другой
+задачи и наличие preview не переключают текущий workspace. Перед изменениями
+проверяйте host, путь, HEAD и dirty state.
+
+Для явно выбранного Firebat1 исходники и Git находятся в /opt/dev/system-integration;
+из Windows-чата работа выполняется через SSH. Для явно выбранной локальной
+среды используется C:/git/azhukov/mini-crm/system-integration и Docker context
+desktop-linux. У каждой изменяемой ветки и тестовой среды один владелец.
+Публичный demo.azhukov-dev.ru меняется только в порученном объёме.
+Сохраняйте соседние приложения и их данные.
 Mini-CRM на Firebat1 выведен из эксплуатации; его исходники сохранены в GitHub.
 Сохраняйте действующие TLS-материалы общего gateway и работающий Xray.
 Нагрузочные, UI и recovery-проверки запускайте через compose.load.yml:
@@ -39,18 +43,28 @@ Mini-CRM на Firebat1 выведен из эксплуатации; его ис
 Команды и завершение тестового стенда описаны в tests/load/README.md.
 Эмулятор и БД остаются доступны только на loopback.
 
-Для команд Node используйте проектный Node 26 из
-`.local/toolchains/node-v26.13.1-linux-x64/bin` и Corepack из
-`.local/toolchains/corepack/node_modules/.bin`. Системные toolchain соседних приложений
-не обновляйте. Сборки и тяжёлые проверки этого проекта выполняйте последовательно.
+При работе на Firebat1 используйте существующие Linux toolchains в
+/opt/dev/system-integration/.local/toolchains и кэши выбранного workspace;
+системные SDK соседей не обновляйте. На Firebat1 сборки и тяжёлые проверки
+идут последовательно. Команды Windows ниже применимы только к локальной среде.
+
+Для команд Node используйте проектный Windows Node 26 из
+`.local/toolchains/node-v26.13.1-win-x64` и Corepack из
+`.local/toolchains/corepack/node_modules/.bin`. Системные toolchain соседних
+приложений не обновляйте. Тяжёлые сборки выполняйте последовательно через общий
+host execution slot, соблюдая ограничения из пользовательского AGENTS.md.
+Для интерактивного локального preview поднимайте `postgres backend emulator`
+проекта `system-integration-load` и Vite на `127.0.0.1:19673`; `/api`
+проксируется на локальный `127.0.0.1:19680`. Для полного Compose/UI/recovery
+прогона Vite освобождает порт frontend-контейнеру той же группы.
 
 Из корня проекта:
 
-```sh
-export PATH="$PWD/.local/toolchains/corepack/node_modules/.bin:$PWD/.local/toolchains/node-v26.13.1-linux-x64/bin:$PATH"
-export COREPACK_HOME="$PWD/.local/toolchains/corepack-cache"
-export GRADLE_USER_HOME="$PWD/.local/gradle"
-export PLAYWRIGHT_BROWSERS_PATH="$PWD/.local/browsers"
+```powershell
+$env:PATH="$PWD/.local/toolchains/node-v26.13.1-win-x64;$PWD/.local/toolchains/corepack/node_modules/.bin;$env:PATH"
+$env:COREPACK_HOME="$PWD/.local/toolchains/corepack-cache"
+$env:GRADLE_USER_HOME="$PWD/.local/gradle"
+$env:PLAYWRIGHT_BROWSERS_PATH="$PWD/.local/browsers"
 ```
 
 Приватный `.env` при переносе на Linux использует LF и права `600`.

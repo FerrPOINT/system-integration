@@ -34,7 +34,7 @@ params={
 'CommandReceipts.execute/6:1':['actor:command:key'],'CommandReceipts.read/3:1':[U,'CREATE_TASK',K],'CommandReceipts.execute/6:2':[U,'NEW_COMMAND',K,'probe',201,'{}'],
 'DemoUsers.run/1:1':[uid(900004),'sql.probe','not-a-login-secret','INITIATOR'],'JdbcUserDetailsService.loadUserByUsername/1:1':['sql.owner.one'],
 'TaskRepository.insert/2:1':[NT,U,NO,'probe','REQ-110001',25],'TaskRepository.enqueue/1:1':[uid(105001)],'TaskRepository.rename/3:1':[ 'changed',2,T],
-'TaskRepository.history/5:1':[uid(600001),T,O,'USER',U,'RENAMED','probe','{}'],'TaskRepository.countHistory/1:1':[T],'TaskRepository.history/2:1':[T,0],
+'TaskRepository.history/5:1':[uid(600001),T,O,'USER',U,'RENAMED','probe','{}'],'TaskRepository.countHistory/1:1':[T],'TaskRepository.history/3:1':[T,20,0],
 'TaskRepository.lockDueExchange/0:1':[],'TaskRepository.lockQueue/1:1':[O],'TaskRepository.startAttempt/4:1':[C,2,O],'TaskRepository.startAttempt/4:2':[C,O,2,'PUT'],
 'TaskRepository.finishAttempt/2:1':['ACK',uid(500002)],'TaskRepository.ownsClaim/2:1':[uid(100002),uid(500002)],
 'TaskRepository.scheduleAfterInterruptedClaim/3:1':['2026-01-01T00:00:00Z',5,O],'TaskRepository.scheduleRetry/3:1':['GET',5,O],'TaskRepository.pauseQueue/1:1':[O],'TaskRepository.resumeDelivery/1:1':[O],
@@ -81,30 +81,30 @@ for operator,status,lower,upper in itertools.product([False,True],[None,'PENDING
  if upper:conditions+=' AND created_at < ?';values.append('2027-01-01T00:00:00Z')
  variant=f'operator={operator},status={status},from={lower},to={upper}'
  for offset in [0,9000,20000]:
-  add('TaskRepository.list/5:1','SELECT * FROM tasks'+conditions+' ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?',values+[offset],variant+f',offset={offset}')
+  add('TaskRepository.list/6:1','SELECT * FROM tasks'+conditions+' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',values+[20,offset],variant+f',offset={offset}')
  add('TaskRepository.countTasks/4:1','SELECT count(*) FROM tasks'+conditions,values,variant)
 issue_select=re.search(r'ISSUE_SELECT = """(.*?)"""',Path(inventory['ReviewRepository.get/2:1']['file']).read_text(),re.S).group(1)
 for locked in [False,True]:
  add('ReviewRepository.get/2:1',issue_select+' WHERE i.id = ?'+(' FOR UPDATE OF i' if locked else ''),[I],f'lock={locked}')
 for status,offset in itertools.product([None,'OPEN','RESOLVED'],[0,900,2000]):
- add('ReviewRepository.list/2:1',issue_select+(' WHERE i.status = ?' if status else '')+' ORDER BY i.opened_at DESC,i.id DESC LIMIT 20 OFFSET ?',
-     [status,offset] if status else [offset],f'status={status},offset={offset}')
+ add('ReviewRepository.list/3:1',issue_select+(' WHERE i.status = ?' if status else '')+' ORDER BY i.opened_at DESC,i.id DESC LIMIT ? OFFSET ?',
+     [status,20,offset] if status else [20,offset],f'status={status},offset={offset}')
 
 # Selective and empty date windows, minority/missing owners, and a deep hot history.
 for owner in [uid(900002),uid(999999)]:
  for status in [None,'PENDING','RUNNING','SUCCEEDED','REJECTED']:
   where=' WHERE owner_id = ?'+(' AND business_status = ?' if status else '')
   values=[owner,status] if status else [owner]
-  add('TaskRepository.list/5:1','SELECT * FROM tasks'+where+' ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?',values+[0],f'owner={owner},status={status}')
+  add('TaskRepository.list/6:1','SELECT * FROM tasks'+where+' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',values+[20,0],f'owner={owner},status={status}')
   add('TaskRepository.countTasks/4:1','SELECT count(*) FROM tasks'+where,values,f'owner={owner},status={status}')
 for start,end in [('2026-01-01T01:00:00Z','2026-01-01T01:00:20Z'),('2030-01-01T00:00:00Z','2030-01-02T00:00:00Z')]:
  for operator in [False,True]:
   where=' WHERE true'+('' if operator else ' AND owner_id = ?')+' AND created_at >= ? AND created_at < ?'
   values=[] if operator else [U]
   values += [start,end]
-  add('TaskRepository.list/5:1','SELECT * FROM tasks'+where+' ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?',values+[0],f'operator={operator},window={start}/{end}')
+  add('TaskRepository.list/6:1','SELECT * FROM tasks'+where+' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',values+[20,0],f'operator={operator},window={start}/{end}')
   add('TaskRepository.countTasks/4:1','SELECT count(*) FROM tasks'+where,values,f'operator={operator},window={start}/{end}')
-static('TaskRepository.history/2:1',[T,1000],'hot-history-deep-page')
+static('TaskRepository.history/3:1',[T,20,1000],'hot-history-deep-page')
 
 # Temporal correlation: same physical fixture for bound and literal-status probes.
 for operator,status,binding in itertools.product([False,True],['SUCCEEDED','PENDING'],['parameter','literal']):
@@ -113,10 +113,16 @@ for operator,status,binding in itertools.product([False,True],['SUCCEEDED','PEND
  if binding=='parameter':
   where+=' AND business_status = ?';values.append(status)
  else:where+=" AND business_status = '"+status+"'"
- add('TaskRepository.list/5:1','SELECT * FROM tasks'+where+' ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?',
-     values+[0],f'operator={operator},status={status},binding={binding},backlog-head','recent-backlog')
+ add('TaskRepository.list/6:1','SELECT * FROM tasks'+where+' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
+     values+[20,0],f'operator={operator},status={status},binding={binding},backlog-head','recent-backlog')
  add('TaskRepository.countTasks/4:1','SELECT count(*) FROM tasks'+where,values,
      f'operator={operator},status={status},binding={binding},backlog-count','recent-backlog')
+
+# Representative UI page sizes, including both accepted boundaries.
+for size in [1,7,100]:
+ add('TaskRepository.list/6:1','SELECT * FROM tasks WHERE true ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',[size,0],f'size={size}')
+ add('ReviewRepository.list/3:1',issue_select+' ORDER BY i.opened_at DESC,i.id DESC LIMIT ? OFFSET ?',[size,0],f'size={size}')
+ static('TaskRepository.history/3:1',[T,size,0],f'size={size}')
 
 covered={c['callSite'] for c in cases}
 assert set(inventory)==covered, {'uncovered':sorted(set(inventory)-covered),'stale':sorted(covered-set(inventory))}

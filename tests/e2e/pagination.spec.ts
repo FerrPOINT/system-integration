@@ -14,10 +14,16 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
     await page.reload();
     initial = await (await page.request.get('/api/tasks')).json();
   }
-  await expect(page.getByText('Страница 1 из ' + initial.totalPages + ' · Всего записей: ' + initial.totalItems, { exact: true })).toBeVisible();
+  async function expectSummary(current: number, total: number) {
+    await expect.poll(async () => {
+      const size=Number(new URL(page.url()).searchParams.get('size') || 20);
+      return await page.locator('.base-page-summary').innerText() === 'Страница ' + current + ' из ' + Math.ceil(total/size) + ' · Всего записей: ' + total;
+    }).toBe(true);
+  }
+  await expectSummary(1,initial.totalItems);
   await page.getByRole('button', { name: 'Страница 2', exact: true }).click();
   await expect(page).toHaveURL(/page=1/);
-  await expect(page.getByText('Страница 2 из ' + initial.totalPages + ' · Всего записей: ' + initial.totalItems, { exact: true })).toBeVisible();
+  await expectSummary(2,initial.totalItems);
   const filters = page.locator('.filter-panel');
   if (info.project.name === 'mobile') await filters.locator('summary').click();
   const filtered = page.waitForResponse(response => response.url().includes('/api/tasks?') && response.url().includes('businessStatus=SUCCEEDED') && response.status() === 200);
@@ -26,7 +32,7 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
   await expect(page).toHaveURL(/businessStatus=SUCCEEDED/);
   await expect(page).not.toHaveURL(/page=/);
   await expect(page.getByRole('button', { name: 'Применить', exact: true })).toHaveCount(0);
-  if (result.totalPages) await expect(page.getByText('Страница 1 из ' + result.totalPages + ' · Всего записей: ' + result.totalItems, { exact: true })).toBeVisible();
+  if (result.totalItems) await expectSummary(1,result.totalItems);
   await selectChoice(page, 'Результат', 'Все результаты');
   await expect(page).not.toHaveURL(/businessStatus=/);
   const from = page.getByLabel('Создано с (UTC, включительно)', { exact: true });
@@ -52,7 +58,7 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
 
 test('UI-09: invalid URL filters stay local and valid filters still load', async ({ page }) => {
   await login(page);
-  const invalid = ['businessStatus=toString', 'businessStatus=constructor', 'createdFrom=not-a-date', 'createdTo=not-a-date'];
+  const invalid = ['businessStatus=toString', 'businessStatus=constructor', 'createdFrom=not-a-date', 'createdTo=not-a-date', 'size=0', 'size=101', 'size=not-a-number'];
   const requests: URL[] = [];
   page.on('request', request => {
     const url = new URL(request.url());
@@ -112,6 +118,7 @@ test('UI-11: changing account outside the SPA clears the previous private card',
   await page.getByLabel('Название *', { exact: true }).fill(title);
   await page.getByLabel('Номер заявки').fill('REQ-880003');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
 
   async function signInOutsideSpa(username: string) {

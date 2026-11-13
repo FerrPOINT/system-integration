@@ -9,24 +9,26 @@ import { FormField } from '../../ui/form-field';
 import { Select } from '../../ui/select';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useRef, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { Link, Outlet, useSearchParams } from 'react-router-dom';
 import { listTasks } from '../../../build/generated/openapi/client';
 import type { BusinessStatus, GetSession200 } from '../../../build/generated/openapi/client';
 import { data, keys } from '../../app/api';
-import { Loading, Pagination } from '../../ui/Feedback';
+import { Loading, Pagination, RefreshButton } from '../../ui/Feedback';
 import { useMediaQuery } from '../../ui/use-media-query';
 import { businessLabels, deliveryLabels, timestamp } from '../../app/format';
+import { usePagination } from '../../app/use-pagination';
 import { BusinessBadge } from './business-badge';
 
 export function TaskList({ user }: { user: GetSession200 }) {
+  const createTrigger = useRef<HTMLAnchorElement>(null);
   const [search, setSearch] = useSearchParams();
-  const page = Number(search.get('page') || 0);
+  const { page, size, valid: validPage, viewportRef, changePage } = usePagination();
   const status = search.get('businessStatus') || undefined;
-  const params = { page, businessStatus: status as BusinessStatus | undefined,
+  const params = { page, size, businessStatus: status as BusinessStatus | undefined,
     createdFrom: search.get('createdFrom') || undefined, createdTo: search.get('createdTo') || undefined };
-  const validParameters = Number.isSafeInteger(page) && page >= 0 &&
+  const validParameters = validPage &&
     (!status || Object.hasOwn(businessLabels, status)) &&
     [params.createdFrom, params.createdTo].every(value => !value || Number.isFinite(Date.parse(value)));
   const validPeriod = !params.createdFrom || !params.createdTo || Date.parse(params.createdFrom) < Date.parse(params.createdTo);
@@ -39,16 +41,14 @@ export function TaskList({ user }: { user: GetSession200 }) {
     }
     setSearch(updated, { replace: true });
   }
-  const tasks = useQuery({ queryKey: [...keys.tasks, 'list', params], queryFn: ({ signal }) => data(listTasks(params, { signal })), enabled: valid });
+  const tasks = useQuery({ queryKey: [...keys.tasks, 'list', params], queryFn: ({ signal }) => data(listTasks(params, { signal })), enabled: valid, placeholderData: keepPreviousData });
   const mobile = useMediaQuery('(max-width: 760px)');
   const [filtersOpen, setFiltersOpen] = useState(!mobile || Boolean(status || params.createdFrom || params.createdTo));
-  function changePage(next: number) {
-    const updated = new URLSearchParams(search); updated.set('page', String(next)); setSearch(updated);
-  }
   return <>
-    <PageHeader title={user.role === 'OPERATOR' ? 'Все задания' : 'Мои задания'}
+    <div className="list-tools base-page-stack"><PageHeader title={user.role === 'OPERATOR' ? 'Все задания' : 'Мои задания'}
       context="Приём задания, доставка и результат исполнения показаны отдельно."
-      actions={user.role === 'INITIATOR' && <Button asChild variant="default"><Link to="/tasks/new">Создать задание</Link></Button>} />
+      actions={<>{user.role === 'INITIATOR' && <Button asChild variant="default"><Link ref={createTrigger} to={{ pathname: "/tasks/new", search: search.toString() }}>Создать задание</Link></Button>}
+        <RefreshButton pending={tasks.isFetching} disabled={!valid} onClick={() => tasks.refetch()} /></>} />
     <Disclosure className="filter-panel" open={filtersOpen} onToggle={event => setFiltersOpen(event.currentTarget.open)} summary={<>Фильтры <span className="muted">{status || params.createdFrom || params.createdTo ? 'Заданы условия' : 'Результат и период'}</span></>}>
     <div className="base-form filters">
       <FormField id="business-status" label="Результат">{attrs => <Select {...attrs} value={status || 'ALL'}
@@ -60,27 +60,30 @@ export function TaskList({ user }: { user: GetSession200 }) {
         onChange={event => changeFilters({ createdTo: event.target.value ? event.target.value + ':00Z' : undefined })} />}</FormField>
       <Button type="button" onClick={() => setSearch({}, { replace: true })}>Сбросить</Button>
     </div></Disclosure>
+    </div>
+    <section className="paged-list base-page-stack" aria-busy={tasks.isFetching}>
+    <div className="paged-viewport" ref={viewportRef}>
     {!valid ? <Notice role="alert" tone="danger">{validParameters ? 'Начало периода должно быть раньше конца.' : 'Некорректные параметры страницы. Сбросьте фильтры.'}</Notice> : tasks.isPending ? <Loading /> :
       tasks.isError ? <><ErrorMessage error={tasks.error} /><Button onClick={() => tasks.refetch()}>Повторить</Button></> :
-      <><div className="list-heading"><span>{tasks.isFetching ? 'Обновляем…' : 'Сохранённые задания'}</span>
-        <Button type="button" onClick={() => tasks.refetch()} disabled={tasks.isFetching}>Обновить</Button></div>
-        {tasks.data.items.length === 0 ? <Card><EmptyState headingLevel={2}
+        tasks.data.items.length === 0 ? <Card><EmptyState headingLevel={2}
           message={status || params.createdFrom || params.createdTo ? 'Ничего не найдено' : 'Заданий пока нет'}
           description={status || params.createdFrom || params.createdTo ? 'Измените условия или сбросьте фильтры, чтобы увидеть задания.' : 'Создайте первое задание. Здесь появятся доставка и результат исполнения.'}
           action={(status || params.createdFrom || params.createdTo) && <Button onClick={() => setSearch({})}>Сбросить фильтры</Button>} /></Card> : mobile ?
-          <ul className="task-cards">{tasks.data.items.map(task => <Card asChild key={task.taskId}><li className="task-card"><CardContent className="base-page-stack">
-            <CardTitle asChild><h2><Link to={'/tasks/' + task.taskId}>{task.title}</Link></h2></CardTitle>
+          <ul className="task-cards" data-page-items>{tasks.data.items.slice(0, size).map(task => <Card asChild key={task.taskId} data-page-item><li className="task-card"><CardContent className="base-page-stack">
+            <CardTitle asChild><h2><Link className="base-truncate" title={task.title} to={'/tasks/' + task.taskId}>{task.title}</Link></h2></CardTitle>
             <div className="task-card-status"><BusinessBadge status={task.businessStatus} /><span>{deliveryLabels[task.deliveryStatus]}</span></div>
             <dl><dt>Заявка</dt><dd>{task.request.reference}</dd><dt>Количество</dt><dd>{task.request.quantity}</dd>
-              <dt>Создано</dt><dd>{timestamp(task.createdAt)}</dd></dl>
+              <dt>Создано</dt><dd><time dateTime={task.createdAt}>{timestamp(task.createdAt, { showZone: false })}</time></dd></dl>
           </CardContent></li></Card>)}</ul> :
-          <Card><Table className="task-table"><caption className="sr-only">Реестр заданий</caption>
-            <thead><tr><th scope="col">Название / заявка</th><th scope="col">Доставка</th><th scope="col">Результат</th><th scope="col">Создано (UTC)</th></tr></thead>
-            <tbody>{tasks.data.items.map(task => <tr key={task.taskId}><td><Link to={'/tasks/' + task.taskId}>{task.title}</Link>
+          <Card><Table className="task-table" data-page-items><caption className="sr-only">Реестр заданий</caption>
+            <thead data-page-heading><tr><th scope="col">Название / заявка</th><th scope="col">Доставка</th><th scope="col">Результат</th><th scope="col">Создано (UTC)</th></tr></thead>
+            <tbody>{tasks.data.items.slice(0, size).map(task => <tr key={task.taskId} data-page-item><td><Link className="base-truncate" title={task.title} to={'/tasks/' + task.taskId}>{task.title}</Link>
               <small>{task.request.reference} · {task.request.quantity} ед.</small></td><td>{deliveryLabels[task.deliveryStatus]}</td>
-              <td><BusinessBadge status={task.businessStatus} /></td><td>{timestamp(task.createdAt)}</td></tr>)}</tbody>
+              <td><BusinessBadge status={task.businessStatus} /></td><td><time dateTime={task.createdAt}>{timestamp(task.createdAt, { showZone: false })}</time></td></tr>)}</tbody>
           </Table></Card>}
-        <Pagination page={page} totalItems={tasks.data.totalItems} totalPages={tasks.data.totalPages} pending={tasks.isFetching} onChange={changePage} />
-      </>}
+    </div>
+    <Pagination page={validPage ? page : 0} totalItems={tasks.data?.totalItems ?? 0} totalPages={tasks.data?.totalPages ?? 0} pending={tasks.isFetching || !valid} onChange={changePage} />
+    </section>
+    <Outlet context={createTrigger} />
   </>;
 }

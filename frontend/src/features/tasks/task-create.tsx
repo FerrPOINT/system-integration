@@ -1,19 +1,22 @@
 import { ErrorMessage } from '../../app/error-message';
-import { BackLink } from '../../ui/back-link';
-import { ActionGroup } from '../../ui/action-group';
-import { Card, CardContent } from '../../ui/card';
-import { PageHeader } from '../../ui/page-header';
 import { FormField } from '../../ui/form-field';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { Dialog, DiscardDialog } from '../../ui/dialog';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useBeforeUnload, useBlocker, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { createTask, getTask } from '../../../build/generated/openapi/client';
 import { csrf, data, keys } from '../../app/api';
 import { useCommandKey } from '../../app/use-command-key';
 
 export function NewTask() {
   const navigate = useNavigate();
+  const [search] = useSearchParams();
+  const returnFocusRef = useOutletContext<RefObject<HTMLAnchorElement | null>>();
+  const titleInput = useRef<HTMLInputElement>(null);
+  const [dirty, setDirty] = useState(false);
+  const saved = useRef(false);
   const client = useQueryClient();
   const command = useCommandKey();
   const create = useMutation({
@@ -24,19 +27,46 @@ export function NewTask() {
     onSuccess: async result => {
       await client.fetchQuery({ queryKey: keys.task(result.taskId), queryFn: ({ signal }) => data(getTask(result.taskId, { signal })) });
       await client.invalidateQueries({ queryKey: keys.tasks }, { throwOnError: true });
-      command.reset();
+      command.reset(); saved.current = true;
+      if (blocker.state === 'blocked') blocker.reset();
       navigate('/tasks/' + result.taskId);
     },
   });
-  return <><BackLink to="/tasks">К заданиям</BackLink><PageHeader title="Новое задание" />
-    <Card asChild><section className="readable"><CardContent className="base-page-stack"><p className="muted">Задание сохраняется сразу. Отправка исполнителю продолжится в фоне.</p>
-      <form className="base-form" onSubmit={event => { event.preventDefault(); create.mutate(new FormData(event.currentTarget)); }}>
-        <FormField id="field-title" label="Название" required>{attrs => <Input {...attrs} name="title" maxLength={160} pattern=".*\S.*" autoFocus />}</FormField>
-        <FormField id="field-reference" label="Номер заявки" required hint="REQ- и шесть цифр. После создания изменить нельзя.">{attrs => <Input {...attrs} name="reference" pattern="REQ-[0-9]{6}" placeholder="REQ-000001" />}</FormField>
-        <FormField id="field-quantity" label="Количество" required hint="Демонстрационное правило: до 100 единиц включительно — успех, больше — отказ.">{attrs => <Input {...attrs} name="quantity" type="number" min={1} max={1000} step={1} defaultValue={25} />}</FormField>
-        <ErrorMessage error={create.error} />
-        <ActionGroup align="start"><Button variant="default" disabled={create.isPending}>{create.isPending ? 'Сохраняем…' : 'Создать'}</Button>
-          <Link to="/tasks">Отмена</Link></ActionGroup>
+  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
+    !saved.current && (dirty || create.isPending) && currentLocation.pathname !== nextLocation.pathname);
+  useEffect(() => {
+    if (blocker.state === 'blocked' && create.isPending) blocker.reset();
+  }, [blocker, create.isPending]);
+  useBeforeUnload(useCallback(event => {
+    if (!saved.current && (dirty || create.isPending)) { event.preventDefault(); event.returnValue = ''; }
+  }, [dirty, create.isPending]));
+  const close = () => navigate({ pathname: '/tasks', search: search.toString() }, { replace: true });
+  return <>
+    <Dialog open title="Новое задание" description="Задание сохранится сразу, отправка исполнителю продолжится в фоне."
+      onClose={close} pending={create.isPending} returnFocusRef={returnFocusRef}>
+      <form className="base-dialog-form" onChange={event => {
+        const form = new FormData(event.currentTarget);
+        setDirty(Boolean(form.get('title') || form.get('reference') || form.get('quantity') !== '25'));
+      }} onSubmit={event => { event.preventDefault(); if (!create.isPending) create.mutate(new FormData(event.currentTarget)); }}>
+        <div className="base-dialog-body base-page-stack">
+          <fieldset className="base-form-fieldset base-form" disabled={create.isPending} aria-label="Данные задания">
+            <FormField id="field-title" label="Название" required>{attrs => <Input {...attrs} ref={titleInput} name="title" maxLength={160} pattern=".*\S.*" autoFocus />}</FormField>
+            <div className="task-input-row">
+              <FormField id="field-reference" label="Номер заявки" required hint="REQ- и шесть цифр. После создания изменить нельзя.">{attrs => <Input {...attrs} name="reference" pattern="REQ-[0-9]{6}" placeholder="REQ-000001" />}</FormField>
+              <FormField id="field-quantity" label="Количество" required hint="От 1 до 1000 единиц.">{attrs => <Input {...attrs} name="quantity" type="number" min={1} max={1000} step={1} defaultValue={25} />}</FormField>
+            </div>
+            <p className="muted">До 100 единиц включительно — успешное исполнение, больше — бизнес-отказ.</p>
+          </fieldset>
+          <ErrorMessage error={create.error} />
+        </div>
+        <div className="base-dialog-footer">
+          <Button type="button" onClick={close} disabled={create.isPending}>Отмена</Button>
+          <Button variant="default" disabled={create.isPending}>{create.isPending ? 'Сохраняем…' : 'Создать'}</Button>
+        </div>
       </form>
-    </CardContent></section></Card></>;
+    </Dialog>
+    <DiscardDialog open={blocker.state === 'blocked' && !create.isPending} returnFocusRef={titleInput}
+      onCancel={() => blocker.state === 'blocked' && blocker.reset()}
+      onDiscard={() => blocker.state === 'blocked' && blocker.proceed()} />
+  </>;
 }

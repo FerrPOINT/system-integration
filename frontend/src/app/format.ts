@@ -7,6 +7,6 @@ export const deliveryLabels: Record<DeliveryStatus, string> = {
   QUEUED: 'В очереди', RETRY_WAIT: 'Ожидает отправки', UNKNOWN: 'Доставка не подтверждена',
   ACKNOWLEDGED: 'Получено исполнителем', NEEDS_REVIEW: 'Нужен разбор', STOPPED: 'Отправка остановлена',
 };
-export function timestamp(value: string) {
-  return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' }).format(new Date(value)) + ' UTC';
+export function timestamp(value: string, { showZone = true }: { showZone?: boolean } = {}) {
+  return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' }).format(new Date(value)) + (showZone ? ' UTC' : '');
 }
