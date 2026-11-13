@@ -22,8 +22,8 @@ from jdbc_inventory import collect
 
 inventory=collect(['backend/src/main/java','backend/emulator/src/main/java'])
 cases=[]
-def add(key,sql,values=(),variant='default'):
- cases.append({'callSite':key,'variant':variant,'database':inventory[key]['database'],'sql':bind(sql,values),'template':sql,'parameters':list(values)})
+def add(key,sql,values=(),variant='default',fixture='base'):
+ cases.append({'callSite':key,'variant':variant,'database':inventory[key]['database'],'sql':bind(sql,values),'template':sql,'parameters':list(values),'fixture':fixture})
 def static(key,params=(),variant='default'):
  strings=inventory[key]['strings']
  assert len(strings)==1,(key,strings)
@@ -102,6 +102,18 @@ for start,end in [('2026-01-01T01:00:00Z','2026-01-01T01:00:20Z'),('2030-01-01T0
   add('TaskRepository.countTasks/4:1','SELECT count(*) FROM tasks'+where,values,f'operator={operator},window={start}/{end}')
 static('TaskRepository.history/2:1',[T,1000],'hot-history-deep-page')
 
+# Temporal correlation: same physical fixture for bound and literal-status probes.
+for operator,status,binding in itertools.product([False,True],['SUCCEEDED','PENDING'],['parameter','literal']):
+ where=' WHERE true'+('' if operator else ' AND owner_id = ?')
+ values=[] if operator else [U]
+ if binding=='parameter':
+  where+=' AND business_status = ?';values.append(status)
+ else:where+=" AND business_status = '"+status+"'"
+ add('TaskRepository.list/5:1','SELECT * FROM tasks'+where+' ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?',
+     values+[0],f'operator={operator},status={status},binding={binding},backlog-head','recent-backlog')
+ add('TaskRepository.countTasks/4:1','SELECT count(*) FROM tasks'+where,values,
+     f'operator={operator},status={status},binding={binding},backlog-count','recent-backlog')
+
 covered={c['callSite'] for c in cases}
 assert set(inventory)==covered, {'uncovered':sorted(set(inventory)-covered),'stale':sorted(covered-set(inventory))}
 app_fixture="""
@@ -163,6 +175,20 @@ FROM operations CROSS JOIN LATERAL (SELECT right(id::text,12)::int-100000 i)n CR
 UPDATE feed_position SET last_cursor=10000 WHERE id=1;
 ANALYZE operations; ANALYZE faults; ANALYZE result_events;
 """
+hot_backlog_fixture="""
+UPDATE tasks SET business_status=CASE WHEN right(id::text,12)::int<=5000 THEN 'SUCCEEDED' ELSE 'PENDING' END,
+owner_id=CASE WHEN right(id::text,12)::int%2=0 THEN '00000000-0000-0000-0000-000000900001'::uuid ELSE '00000000-0000-0000-0000-000000900002'::uuid END;
+INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,delivery_status,business_status,created_at)
+SELECT ('00000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,
+CASE WHEN i%2=0 THEN '00000000-0000-0000-0000-000000900001'::uuid ELSE '00000000-0000-0000-0000-000000900002'::uuid END,
+('00000000-0000-0000-0000-'||lpad((100000+i)::text,12,'0'))::uuid,'Recent backlog '||i,'REQ-'||(100000+i),25,'QUEUED','PENDING',
+'2026-01-02'::timestamptz+i*interval '1 second' FROM generate_series(30001,40000)i;
+ANALYZE tasks;
+"""
+scenario_sql={
+ 'base':'',
+ 'recent-backlog':hot_backlog_fixture
+}
 def psql(db,sql):
  return subprocess.check_output(['docker','exec','-i',CONTAINER,'psql','-XqAt','-v','ON_ERROR_STOP=1','-U','si_admin','-d',db],
                                  input=sql,text=True,stderr=subprocess.PIPE)
@@ -175,18 +201,22 @@ OUT.mkdir(parents=True,exist_ok=True)
 plans=[]
 for db,fixture in [('si_test',app_fixture),('si_emulator_test',emu_fixture)]:
  commands=['BEGIN;',fixture]
- for c in cases:
-  if c['database']!=db:continue
-  marker=json.dumps({'callSite':c['callSite'],'variant':c['variant']},separators=(',',':'))
-  commands.extend(['SAVEPOINT probe;',r'\echo CASE:'+marker,'EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON) '+c['sql']+';','ROLLBACK TO SAVEPOINT probe;'])
-  template=c['template']
-  for index in range(template.count('?')):template=template.replace('?', '$'+str(index+1),1)
-  for mode in ['force_custom_plan','force_generic_plan']:
-   prepared_meta=json.dumps({'callSite':c['callSite'],'variant':c['variant'],'planMode':mode},separators=(',',':'))
-   arguments='('+','.join(sql_literal(v) for v in c['parameters'])+')' if c['parameters'] else ''
-   commands.extend(['SAVEPOINT probe;',f'SET LOCAL plan_cache_mode={mode};','PREPARE sql_probe AS '+template+';',
-    r'\echo CASE:'+prepared_meta,'EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON) EXECUTE sql_probe'+arguments+';',
-    'DEALLOCATE sql_probe;','ROLLBACK TO SAVEPOINT probe;'])
+ for scenario,setup in scenario_sql.items():
+  if not any(c['database']==db and c['fixture']==scenario for c in cases):continue
+  commands.extend(['SAVEPOINT fixture_scenario;',setup])
+  for c in cases:
+    if c['database']!=db or c['fixture']!=scenario:continue
+    marker=json.dumps({'callSite':c['callSite'],'variant':c['variant'],'fixture':scenario},separators=(',',':'))
+    commands.extend(['SAVEPOINT probe;',r'\echo CASE:'+marker,'EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON) '+c['sql']+';','ROLLBACK TO SAVEPOINT probe;'])
+    template=c['template']
+    for index in range(template.count('?')):template=template.replace('?', '$'+str(index+1),1)
+    for mode in ['force_custom_plan','force_generic_plan']:
+     prepared_meta=json.dumps({'callSite':c['callSite'],'variant':c['variant'],'planMode':mode,'fixture':scenario},separators=(',',':'))
+     arguments='('+','.join(sql_literal(v) for v in c['parameters'])+')' if c['parameters'] else ''
+     commands.extend(['SAVEPOINT probe;',f'SET LOCAL plan_cache_mode={mode};','PREPARE sql_probe AS '+template+';',
+      r'\echo CASE:'+prepared_meta,'EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON) EXECUTE sql_probe'+arguments+';',
+      'DEALLOCATE sql_probe;','ROLLBACK TO SAVEPOINT probe;'])
+  commands.append('ROLLBACK TO SAVEPOINT fixture_scenario;')
  commands.append('ROLLBACK;')
  try:raw=psql(db,'\n'.join(commands))
  except subprocess.CalledProcessError as error:
@@ -201,11 +231,11 @@ for db,fixture in [('si_test',app_fixture),('si_emulator_test',emu_fixture)]:
 summary={'recordedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),
  'sourceCommit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
 
- 'fixture':{'tasks':10000,'history':21000,'queue':5000,'issues':1000,'operations':10000,'events':20000,'rolledBack':True},
+ 'fixture':{'tasks':10000,'temporalBacklog':{'oldSucceeded':5000,'recentPending':15000,'comparison':'bound versus enum-literal status on the same fixture; existing V6 index'},'history':21000,'queue':5000,'issues':1000,'operations':10000,'events':20000,'rolledBack':True},
  'limitations':['Synthetic SQL-plan fixtures, not end-to-end load qualification','Prepared parameter types are inferred by PostgreSQL; JDBC bind types may differ for arithmetic expressions',
                 'Single-session EXPLAIN does not establish concurrent lock or CPU causality','No normal application data changed'],
  'callSites':list(inventory.values()),'cases':cases,'plans':plans}
 (OUT/'report.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2))
 slow=sorted(plans,key=lambda p:p['explain']['Execution Time'],reverse=True)[:12]
 print(json.dumps({'callSites':len(inventory),'cases':len(cases),'plans':len(plans),'fixtureRolledBack':True,
- 'slowest':[{'callSite':p['callSite'],'variant':p['variant'],'ms':p['explain']['Execution Time'],'node':p['explain']['Plan']['Node Type']} for p in slow]},ensure_ascii=False,indent=2))
+ 'slowest':[{'callSite':p['callSite'],'variant':p['variant'],'fixture':p['fixture'],'ms':p['explain']['Execution Time'],'node':p['explain']['Plan']['Node Type']} for p in slow]},ensure_ascii=False,indent=2))
