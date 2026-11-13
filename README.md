@@ -132,7 +132,16 @@ sh ./gradlew --no-daemon --max-workers=2 :test :emulator:test :bootJar :emulator
 ```
 
 Транзакционные и API-тесты отдельно используют настоящий PostgreSQL `si_test`.
-После запуска Compose и загрузки `.env`, из `backend/`:
+Используется отдельный PostgreSQL system-integration-load на 19632;
+фоновые приложения этого проекта должны быть остановлены. Обычный стенд
+продолжает работать. Из корня с загруженным окружением:
+
+~~~sh
+docker compose -p system-integration-load -f compose.yml -f compose.load.yml --profile app stop backend emulator
+docker compose -p system-integration-load -f compose.yml -f compose.load.yml --profile app up -d --wait postgres
+~~~
+
+Затем из `backend/`:
 
 ```sh
 sh ./gradlew --no-daemon --max-workers=2 :integrationTest :emulator:integrationTest
@@ -164,6 +173,9 @@ node tests/demo.mjs clear REQ-900004
 node tests/demo.mjs inspect <operation-id>
 ```
 
+После исчерпания пяти вызовов снятия недоступности недостаточно:
+войдите оператором, откройте задание, выполните свежую сверку, перейдите
+к разбору и выберите «Повторить обмен» с причиной. Новая серия сохранит ID.
 Снятие режима потери ответа выпускает удержанные события. Файл
 `tests/results/demo.json` содержит ID созданных заданий и операций.
 Браузерные сценарии и нагрузка запускаются по [инструкции тестов](tests/README.md)

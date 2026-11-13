@@ -141,10 +141,10 @@ UI-12 проверяет корректный 503 при создании: фо�
 проверяет то же правило с настоящим исчерпанием Hikari и PostgreSQL, включая
 соседний случай запрещённой роли.
 
-Native PostgreSQL-тесты backend используют выделенные si_test/si_emulator_test
-выделенного PostgreSQL на 19632. UI, recovery и нагрузка используют
-собственный PostgreSQL проекта system-integration-load на 19632.
-Тяжёлые проверки выполняются последовательно; данные si_app/si_emulator
+Native PostgreSQL-тесты, UI, recovery и нагрузка используют один выделенный
+PostgreSQL проекта system-integration-load на 19632 с БД si_test/si_emulator_test.
+Native-тесты требуют остановленных backend/emulator; их команды есть в корневом README.
+Тяжёлые проверки выполняются последовательно; данные обычных si_app/si_emulator
 не являются тестовыми fixtures.
 
 SI-10 добавляет UI остановки/продолжения на обоих размерах, номера
