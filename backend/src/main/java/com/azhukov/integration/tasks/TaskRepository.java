@@ -2,7 +2,7 @@ package com.azhukov.integration.tasks;
 
 import com.azhukov.integration.auth.AppUser;
 import com.azhukov.integration.contract.internal.model.*;
-import com.azhukov.integration.http.ApiProblem;
+import com.azhukov.integration.domain.RuleViolation;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -55,7 +55,7 @@ public class TaskRepository {
         var rows = jdbc.query("SELECT * FROM tasks WHERE id = ?" +
             (user.isOperator() ? "" : " AND owner_id = ?") + (lock ? " FOR UPDATE" : ""),
             taskRow, user.isOperator() ? new Object[]{id} : new Object[]{id, user.id()});
-        return rows.stream().findFirst().orElseThrow(ApiProblem::notFound);
+        return rows.stream().findFirst().orElseThrow(RuleViolation::notFound);
     }
 
     public record ExchangeTask(Task task, long version, com.azhukov.integration.contract.external.model.Result result) {}
@@ -63,7 +63,7 @@ public class TaskRepository {
     public ExchangeTask exchange(UUID operationId, boolean lock) {
         return jdbc.query("SELECT * FROM tasks WHERE operation_id = ?" + (lock ? " FOR UPDATE" : ""),
             this::mapExchange, operationId)
-            .stream().findFirst().orElseThrow(ApiProblem::notFound);
+            .stream().findFirst().orElseThrow(RuleViolation::notFound);
     }
 
     private ExchangeTask mapExchange(java.sql.ResultSet rs, int n) throws java.sql.SQLException {

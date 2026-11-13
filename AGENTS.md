@@ -40,6 +40,7 @@ Mini-CRM на Firebat1 выведен из эксплуатации; его ис
 ```sh
 export PATH="$PWD/.local/toolchains/corepack/node_modules/.bin:$PWD/.local/toolchains/node-v26.13.1-linux-x64/bin:$PATH"
 export COREPACK_HOME="$PWD/.local/toolchains/corepack-cache"
+export GRADLE_USER_HOME="$PWD/.local/gradle"
 export PLAYWRIGHT_BROWSERS_PATH="$PWD/.local/browsers"
 ```
 

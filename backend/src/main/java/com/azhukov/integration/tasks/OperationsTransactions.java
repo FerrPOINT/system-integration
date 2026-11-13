@@ -6,7 +6,7 @@ import com.azhukov.integration.contract.external.model.OperationState;
 import com.azhukov.integration.contract.external.model.Result;
 import com.azhukov.integration.contract.internal.model.*;
 import com.azhukov.integration.contract.ExchangeProtocol;
-import com.azhukov.integration.http.ApiProblem;
+import com.azhukov.integration.domain.RuleViolation;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Isolation;
@@ -50,7 +50,7 @@ public class OperationsTransactions {
     @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
     public IssuePage list(AppUser user,int page,IssueStatus status) {
         requireOperator(user);
-        if (page < 0) throw ApiProblem.invalid("Номер страницы не может быть отрицательным");
+        if (page < 0) throw RuleViolation.invalid("Номер страницы не может быть отрицательным");
         var rows=issues.list(page,status);
         long total=issues.count(status);
         long pages=(total+19)/20;
@@ -63,7 +63,7 @@ public class OperationsTransactions {
             var snapshot=snapshotId==null ? null : snapshots.get(snapshotId);
             if ((taskId!=null && state==null) || (snapshotId!=null && snapshot==null) ||
                 (snapshot!=null && !snapshot.value().getTaskId().equals(taskId)))
-                throw ApiProblem.notFound();
+                throw RuleViolation.notFound();
             return view(new Context(row,state,snapshot),user);
         }).toList();
         return new IssuePage(items,page,(long)page+1<pages,total,pages);
@@ -243,11 +243,11 @@ public class OperationsTransactions {
     }
     private static void version(Context context,long expected) {
         if (context.issue().value().getIssueRevision()!=expected)
-            throw new ApiProblem(409,"ISSUE_REVISION_CONFLICT","Проблема уже изменена. Обновите карточку");
+            throw new RuleViolation(RuleViolation.Code.ISSUE_REVISION_CONFLICT,"Проблема уже изменена. Обновите карточку");
     }
     private static void requireOperator(AppUser user) {
-        if (!user.isOperator()) throw new ApiProblem(403,"ACCESS_DENIED","Действие доступно оператору");
+        if (!user.isOperator()) throw new RuleViolation(RuleViolation.Code.ACCESS_DENIED,"Действие доступно оператору");
     }
-    private static ApiProblem stale() { return new ApiProblem(409,"SNAPSHOT_STALE","Сверка устарела. Выполните новую сверку"); }
-    private static ApiProblem notAllowed() { return new ApiProblem(409,"ACTION_NOT_ALLOWED","Действие недоступно в текущем состоянии"); }
+    private static RuleViolation stale() { return new RuleViolation(RuleViolation.Code.SNAPSHOT_STALE,"Сверка устарела. Выполните новую сверку"); }
+    private static RuleViolation notAllowed() { return new RuleViolation(RuleViolation.Code.ACTION_NOT_ALLOWED,"Действие недоступно в текущем состоянии"); }
 }

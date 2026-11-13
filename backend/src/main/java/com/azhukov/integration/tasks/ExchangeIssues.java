@@ -2,7 +2,7 @@ package com.azhukov.integration.tasks;
 
 import com.azhukov.integration.contract.external.model.Result;
 import com.azhukov.integration.contract.internal.model.*;
-import com.azhukov.integration.http.ApiProblem;
+import com.azhukov.integration.domain.RuleViolation;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
@@ -130,7 +130,7 @@ public class ExchangeIssues {
 
     public StoredIssue get(UUID id,boolean lock) {
         return jdbc.query(ISSUE_SELECT + " WHERE i.id = ?" + (lock ? " FOR UPDATE OF i" : ""),this::mapIssue,id)
-            .stream().findFirst().orElseThrow(ApiProblem::notFound);
+            .stream().findFirst().orElseThrow(RuleViolation::notFound);
     }
 
     public long count(IssueStatus status) {
@@ -163,7 +163,7 @@ public class ExchangeIssues {
     public SavedReconciliation reconciliation(UUID task,UUID id) {
         return jdbc.query("SELECT snapshot::text,exchange_version FROM reconciliations WHERE id = ? AND task_id = ?",
             this::mapReconciliation,id,task)
-            .stream().findFirst().orElseThrow(ApiProblem::notFound);
+            .stream().findFirst().orElseThrow(RuleViolation::notFound);
     }
 
     private SavedReconciliation mapReconciliation(java.sql.ResultSet rs,int n) throws java.sql.SQLException {

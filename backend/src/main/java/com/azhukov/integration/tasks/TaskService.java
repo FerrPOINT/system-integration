@@ -2,7 +2,8 @@ package com.azhukov.integration.tasks;
 
 import com.azhukov.integration.auth.AppUser;
 import com.azhukov.integration.contract.internal.model.*;
-import com.azhukov.integration.http.ApiProblem;
+import com.azhukov.integration.domain.RuleViolation;
+import com.azhukov.integration.domain.task.TaskTitle;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Isolation;
@@ -30,7 +31,7 @@ public class TaskService {
         if ((from != null && !from.getOffset().equals(ZoneOffset.UTC)) ||
             (to != null && !to.getOffset().equals(ZoneOffset.UTC)) ||
             (from != null && to != null && !to.isAfter(from)))
-            throw ApiProblem.invalid("Укажите корректный период в UTC: начало включено, конец исключён");
+            throw RuleViolation.invalid("Укажите корректный период в UTC: начало включено, конец исключён");
         var rows = tasks.list(user, page, status, from, to);
         long total = tasks.countTasks(user, status, from, to);
         long pages = (total + 19) / 20;
@@ -56,14 +57,12 @@ public class TaskService {
         return commands.execute(user.id(), "RENAME_TASK", key, new RenameCommand(id, input),
             200, RenameTaskResult.class, () -> {
                 var task = tasks.get(id, user, true);
-                if (!task.getTitleRevision().equals(input.getExpectedTitleRevision()))
-                    throw new ApiProblem(409, "TITLE_REVISION_CONFLICT", "Название уже изменено. Обновите карточку");
-                long revision = Math.addExact(task.getTitleRevision(), 1);
-                if (revision > 9007199254740991L) throw ApiProblem.invalid("Достигнут предел версии");
-                tasks.rename(id, input.getTitle(), revision);
+                var renamed = new TaskTitle(task.getTitle(),task.getTitleRevision())
+                    .rename(input.getTitle(),input.getExpectedTitleRevision());
+                tasks.rename(id, renamed.value(), renamed.revision());
                 tasks.history(task, user.id(), HistoryEvent.TypeEnum.RENAMED,
                     "Название изменено: «" + task.getTitle() + "» → «" + input.getTitle() + "»");
-                return new RenameTaskResult(input.getTitle(), revision);
+                return new RenameTaskResult(renamed.value(), renamed.revision());
             });
     }
 
@@ -78,11 +77,11 @@ public class TaskService {
     }
 
     private static void requireInitiator(AppUser user) {
-        if (user.isOperator()) throw new ApiProblem(403, "ACCESS_DENIED", "Действие доступно инициатору");
+        if (user.isOperator()) throw new RuleViolation(RuleViolation.Code.ACCESS_DENIED, "Действие доступно инициатору");
     }
 
     private static void checkPage(int page) {
-        if (page < 0) throw ApiProblem.invalid("Номер страницы не может быть отрицательным");
+        if (page < 0) throw RuleViolation.invalid("Номер страницы не может быть отрицательным");
     }
 
     private record RenameCommand(UUID taskId, RenameTaskRequest input) {}

@@ -6,7 +6,7 @@ import com.azhukov.integration.contract.external.model.Result;
 import com.azhukov.integration.contract.internal.model.DeliveryStatus;
 import com.azhukov.integration.contract.internal.model.HistoryEvent;
 import com.azhukov.integration.contract.ExchangeProtocol;
-import com.azhukov.integration.http.ApiProblem;
+import com.azhukov.integration.domain.RuleViolation;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
@@ -181,7 +181,7 @@ public class ExchangeTasks {
     private TaskRepository.ExchangeTask find(UUID id) {
         if (id == null) return null;
         try { return tasks.exchange(id,true); }
-        catch (ApiProblem notFound) { if (notFound.status() == 404) return null; throw notFound; }
+        catch (RuleViolation notFound) { if (notFound.code() == RuleViolation.Code.NOT_FOUND) return null; throw notFound; }
     }
 
     private void finishAttempt(Claim claim, String outcome) {

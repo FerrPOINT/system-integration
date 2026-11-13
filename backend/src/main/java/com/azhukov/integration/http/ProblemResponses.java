@@ -1,6 +1,7 @@
 package com.azhukov.integration.http;
 
 import com.azhukov.integration.contract.internal.model.Problem;
+import com.azhukov.integration.domain.RuleViolation;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -27,24 +28,35 @@ public class ProblemResponses {
 
     public ProblemResponses(ObjectMapper json) { this.json = json; }
 
-    @ExceptionHandler(ApiProblem.class)
-    ResponseEntity<Problem> handle(ApiProblem error) {
-        return ResponseEntity.status(error.status()).contentType(MediaType.APPLICATION_PROBLEM_JSON)
-            .body(new Problem(error.code(),error.status(),Problem.CodeEnum.fromValue(error.code())).detail(error.getMessage()));
+    @ExceptionHandler(RuleViolation.class)
+    ResponseEntity<Problem> handle(RuleViolation error) {
+        int status = switch (error.code()) {
+            case VALIDATION_FAILED -> 400;
+            case NOT_FOUND -> 404;
+            case ACCESS_DENIED -> 403;
+            case IDEMPOTENCY_CONFLICT, TITLE_REVISION_CONFLICT, ISSUE_REVISION_CONFLICT,
+                 SNAPSHOT_STALE, ACTION_NOT_ALLOWED -> 409;
+        };
+        return response(status,error.code().name(),error.getMessage());
+    }
+
+    private ResponseEntity<Problem> response(int status,String code,String detail) {
+        return ResponseEntity.status(status).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(new Problem(code,status,Problem.CodeEnum.fromValue(code)).detail(detail));
     }
 
     @ExceptionHandler({CannotCreateTransactionException.class, DataAccessResourceFailureException.class})
     ResponseEntity<Problem> unavailable(Exception error, HttpServletRequest request) {
         log.warn("database unavailable method={} path={} exception={}",
             request.getMethod(),request.getRequestURI(),error.getClass().getSimpleName());
-        return handle(new ApiProblem(503,"SERVICE_UNAVAILABLE","Хранилище временно недоступно. Повторите действие позже"));
+        return response(503,"SERVICE_UNAVAILABLE","Хранилище временно недоступно. Повторите действие позже");
     }
 
     @ExceptionHandler({BindException.class, HandlerMethodValidationException.class, jakarta.validation.ConstraintViolationException.class,
         HttpMessageNotReadableException.class, MissingRequestValueException.class,
         MethodArgumentTypeMismatchException.class})
     ResponseEntity<Problem> validation(Exception error) {
-        return handle(ApiProblem.invalid("Проверьте поля запроса"));
+        return response(400,"VALIDATION_FAILED","Проверьте поля запроса");
     }
 
     public void write(HttpServletResponse response, int status, String code) throws IOException {

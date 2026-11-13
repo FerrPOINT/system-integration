@@ -1,6 +1,6 @@
 package com.azhukov.integration.tasks;
 
-import com.azhukov.integration.http.ApiProblem;
+import com.azhukov.integration.domain.RuleViolation;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -34,7 +34,7 @@ public class CommandReceipts {
         if (!stored.isEmpty()) {
             var receipt = stored.getFirst();
             if (!receipt.fingerprint().equals(fingerprint))
-                throw new ApiProblem(409, "IDEMPOTENCY_CONFLICT", "Ключ уже использован для другой команды");
+                throw new RuleViolation(RuleViolation.Code.IDEMPOTENCY_CONFLICT, "Ключ уже использован для другой команды");
             return json.readValue(receipt.body(), type);
         }
         T result = operation.get();
