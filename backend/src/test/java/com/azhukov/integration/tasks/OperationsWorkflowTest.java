@@ -172,6 +172,31 @@ class OperationsWorkflowTest extends PostgresTest {
     }
 
     @Test
+    void unicodeBlankReasonCannotMutateAnIssueButMeaningfulUnicodeTextIsPreserved() throws Exception {
+        var scenario=difference();
+        var history=count("task_history");
+        var receipts=count("command_receipts");
+        var revision=scenario.revision();
+        for (var reason:new String[]{"\u2003","\u00a0","\u3000"}) {
+            status(400,command(scenario.op(),"retry",scenario.issue(),UUID.randomUUID(),Map.of(
+                "expectedIssueRevision",revision,"reconciliationId",scenario.reconciliation(),"reason",reason)));
+            status(400,command(scenario.op(),"resolve",scenario.issue(),UUID.randomUUID(),Map.of(
+                "expectedIssueRevision",revision,"reconciliationId",scenario.reconciliation(),
+                "action","APPLY_EXTERNAL_RESULT","reason",reason)));
+        }
+        assertEquals(history,count("task_history"));
+        assertEquals(receipts,count("command_receipts"));
+        assertEquals(revision,body(issue(scenario.op(),scenario.issue())).get("issueRevision").asLong());
+        var reason="Проверено\u2003оператором";
+        var decision=command(scenario.op(),"resolve",scenario.issue(),UUID.randomUUID(),Map.of(
+            "expectedIssueRevision",revision,"reconciliationId",scenario.reconciliation(),
+            "action","APPLY_EXTERNAL_RESULT","reason",reason));
+        status(200,decision);
+        assertEquals(reason,body(decision).get("reason").asString());
+        assertEquals("SUCCEEDED",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id = ?",String.class,scenario.task()));
+    }
+
+    @Test
     void applyExternalResultIsAtomicAndTheFeedDuplicateHasNoEffect() throws Exception {
         var scenario=difference();
         var key=UUID.randomUUID();

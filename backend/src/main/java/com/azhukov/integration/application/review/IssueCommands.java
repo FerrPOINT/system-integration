@@ -7,7 +7,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 public final class IssueCommands {
-    private static final Pattern NON_BLANK=Pattern.compile("\\S");
+    private static final Pattern NON_BLANK=Pattern.compile("\\S",Pattern.UNICODE_CHARACTER_CLASS);
     private IssueCommands() {}
 
     public record Take(long expectedIssueRevision) {
