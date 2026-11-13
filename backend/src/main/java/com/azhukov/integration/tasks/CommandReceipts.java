@@ -1,6 +1,7 @@
 package com.azhukov.integration.tasks;
 
 import com.azhukov.integration.domain.RuleViolation;
+import com.azhukov.integration.application.port.CommandReceiptStore;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -11,7 +12,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 @Component
-public class CommandReceipts {
+public class CommandReceipts implements CommandReceiptStore {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
 
@@ -21,8 +22,8 @@ public class CommandReceipts {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public <T> T execute(UUID actor, String command, UUID key, Object input,
-                         int status, Class<T> type, Supplier<T> operation) {
+    public <T> T execute(UUID actor, Command command, UUID key, Object input,
+                         Class<T> type, Supplier<T> operation) {
         // The transaction lock also serializes a first command, before a receipt exists.
         // A hash collision only serializes unrelated commands; the full primary key decides identity.
         jdbc.query("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", rs -> {}, actor + ":" + command + ":" + key);
@@ -30,7 +31,7 @@ public class CommandReceipts {
         var stored = jdbc.query("""
             SELECT fingerprint, response_body::text FROM command_receipts
             WHERE actor_id = ? AND command_type = ? AND idempotency_key = ?
-            """, (rs, row) -> new Receipt(rs.getString(1), rs.getString(2)), actor, command, key);
+            """, (rs, row) -> new Receipt(rs.getString(1), rs.getString(2)), actor, command.name(), key);
         if (!stored.isEmpty()) {
             var receipt = stored.getFirst();
             if (!receipt.fingerprint().equals(fingerprint))
@@ -41,8 +42,15 @@ public class CommandReceipts {
         jdbc.update("""
             INSERT INTO command_receipts (actor_id,command_type,idempotency_key,fingerprint,http_status,response_body)
             VALUES (?,?,?,?,?,?::jsonb)
-            """, actor, command, key, fingerprint, status, json.writeValueAsString(result));
+            """, actor, command.name(), key, fingerprint, responseStatus(command), json.writeValueAsString(result));
         return result;
+    }
+
+    private static int responseStatus(Command command) {
+        return switch (command) {
+            case CREATE_TASK -> 201;
+            case RENAME_TASK, RECONCILE, TAKE_ISSUE, RETRY_EXCHANGE, RESOLVE_ISSUE -> 200;
+        };
     }
 
     private record Receipt(String fingerprint, String body) {}

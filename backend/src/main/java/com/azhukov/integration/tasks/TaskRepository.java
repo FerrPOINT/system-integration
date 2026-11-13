@@ -1,7 +1,10 @@
 package com.azhukov.integration.tasks;
 
+import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.application.Actor;
-import com.azhukov.integration.contract.internal.model.*;
+import com.azhukov.integration.application.port.TaskStore;
+import com.azhukov.integration.application.task.CreateTask;
+import com.azhukov.integration.application.task.HistoryEntry;
 import com.azhukov.integration.domain.task.Task;
 import com.azhukov.integration.domain.task.TaskTitle;
 import com.azhukov.integration.domain.task.TaskInput;
@@ -27,7 +30,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Repository
-public class TaskRepository {
+public class TaskRepository implements TaskStore {
     private static final Logger log = LoggerFactory.getLogger(TaskRepository.class);
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
@@ -40,7 +43,16 @@ public class TaskRepository {
     private final RowMapper<Task> taskRow = this::mapTask;
 
     private Task mapTask(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
-        return mapTask(rs,storedResult(rs));
+        var business = BusinessStatus.valueOf(rs.getString("business_status"));
+        var stored = rs.getString("accepted_result");
+        TaskOutcome outcome = null;
+        if (stored != null && business.isTerminal()) {
+            var result = json.readTree(stored);
+            outcome = new TaskOutcome(BusinessStatus.valueOf(result.get("status").asString()),
+                OffsetDateTime.parse(result.get("completedAt").asString()),
+                result.has("rejectionCode") ? result.get("rejectionCode").asString() : null);
+        }
+        return mapTask(rs,business,outcome);
     }
 
     private com.azhukov.integration.contract.external.model.Result storedResult(java.sql.ResultSet rs) throws java.sql.SQLException {
@@ -48,11 +60,7 @@ public class TaskRepository {
         return value == null ? null : json.readValue(value,com.azhukov.integration.contract.external.model.Result.class);
     }
 
-    private Task mapTask(java.sql.ResultSet rs, com.azhukov.integration.contract.external.model.Result result) throws java.sql.SQLException {
-        var business = BusinessStatus.valueOf(rs.getString("business_status"));
-        TaskOutcome outcome = null;
-        if (result != null && (business == BusinessStatus.SUCCEEDED || business == BusinessStatus.REJECTED))
-            outcome = new TaskOutcome(BusinessStatus.valueOf(result.getStatus().getValue()),result.getCompletedAt(),result.getRejectionCode());
+    private Task mapTask(java.sql.ResultSet rs, BusinessStatus business, TaskOutcome outcome) throws java.sql.SQLException {
         return new Task(rs.getObject("id",UUID.class),rs.getObject("operation_id",UUID.class),
             rs.getObject("owner_id",UUID.class),new TaskTitle(rs.getString("title"),rs.getLong("title_revision")),
             new TaskInput(rs.getString("request_reference"),rs.getInt("request_quantity")),
@@ -76,8 +84,12 @@ public class TaskRepository {
     }
 
     private ExchangeTask mapExchange(java.sql.ResultSet rs, int n) throws java.sql.SQLException {
+        var business = BusinessStatus.valueOf(rs.getString("business_status"));
         var result = storedResult(rs);
-        return new ExchangeTask(mapTask(rs,result),rs.getLong("exchange_version"),result);
+        var outcome = result != null && business.isTerminal()
+            ? new TaskOutcome(BusinessStatus.valueOf(result.getStatus().getValue()),result.getCompletedAt(),result.getRejectionCode())
+            : null;
+        return new ExchangeTask(mapTask(rs,business,outcome),rs.getLong("exchange_version"),result);
     }
 
     public Map<UUID,ExchangeTask> exchangeByTask(List<UUID> ids) {
@@ -112,14 +124,14 @@ public class TaskRepository {
         return where.toString();
     }
 
-    public Task insert(UUID owner, CreateTaskRequest input) {
+    public Task insert(UUID owner, CreateTask input) {
         UUID id = UUID.randomUUID();
         UUID operationId = UUID.randomUUID();
         return jdbc.query("""
             INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity)
             VALUES (?,?,?,?,?,?) RETURNING *
-            """, taskRow, id, owner, operationId, input.getTitle(),
-            input.getRequest().getReference(), input.getRequest().getQuantity()).getFirst();
+            """, taskRow, id, owner, operationId, input.title(),
+            input.request().reference(), input.request().quantity()).getFirst();
     }
 
     public void enqueue(UUID operationId) {
@@ -131,23 +143,23 @@ public class TaskRepository {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void history(Task task, UUID actorId, HistoryEvent.TypeEnum type, String summary) {
+    public void history(Task task, UUID actorId, HistoryType type, String summary) {
         history(task, actorId, type, summary, java.util.Map.of());
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void history(Task task, UUID actorId, HistoryEvent.TypeEnum type, String summary, Object details) {
+    public void history(Task task, UUID actorId, HistoryType type, String summary, Object details) {
         UUID eventId = UUID.randomUUID();
         jdbc.update("""
             INSERT INTO task_history(id,task_id,operation_id,actor,actor_user_id,event_type,summary,details)
             VALUES (?,?,?,?,?,?,?,?::jsonb)
             """, eventId, task.id(), task.operationId(),
-            actorId == null ? "SYSTEM" : "USER", actorId, type.getValue(), summary, json.writeValueAsString(details));
+            actorId == null ? "SYSTEM" : "USER", actorId, type.name(), summary, json.writeValueAsString(details));
         var references = json.valueToTree(details);
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override public void afterCommit() {
                 log.info("audit eventId={} taskId={} operationId={} type={} actorUserId={} attemptId={} resultVersion={} issueId={} reconciliationId={}",
-                    eventId,task.id(),task.operationId(),type.getValue(),actorId,
+                    eventId,task.id(),task.operationId(),type.name(),actorId,
                     references.get("attemptId"),references.get("resultVersion"),
                     references.get("issueId"),references.get("reconciliationId"));
             }
@@ -158,21 +170,22 @@ public class TaskRepository {
         return jdbc.queryForObject("SELECT count(*) FROM task_history WHERE task_id = ?", Long.class, id);
     }
 
-    public List<HistoryEvent> history(UUID id, int page) {
+    public List<HistoryEntry> history(UUID id, int page) {
         return jdbc.query("""
             SELECT * FROM task_history WHERE task_id = ?
             ORDER BY occurred_at DESC, id DESC LIMIT 20 OFFSET ?
             """, (rs, row) -> {
-                var event = json.readValue(rs.getString("details"), HistoryEvent.class);
-                return event.eventId(rs.getObject("id", UUID.class)).taskId(id)
-                    .operationId(rs.getObject("operation_id", UUID.class))
-                    .occurredAt(rs.getObject("occurred_at", OffsetDateTime.class))
-                    .actor(HistoryEvent.ActorEnum.fromValue(rs.getString("actor")))
-                    .actorUserId(rs.getObject("actor_user_id", UUID.class))
-                    .type(HistoryEvent.TypeEnum.fromValue(rs.getString("event_type")))
-                    .summary(rs.getString("summary"));
+                var details = json.readValue(rs.getString("details"),HistoryDetails.class);
+                return new HistoryEntry(rs.getObject("id",UUID.class),id,rs.getObject("operation_id",UUID.class),
+                    rs.getObject("occurred_at",OffsetDateTime.class),HistoryEntry.Actor.valueOf(rs.getString("actor")),
+                    rs.getObject("actor_user_id",UUID.class),HistoryType.valueOf(rs.getString("event_type")),rs.getString("summary"),
+                    details.attemptId(),details.resultVersion(),details.issueId(),details.reconciliationId(),
+                    details.previousAssigneeId(),details.assignedTo());
             }, id, (long) page * 20);
     }
+
+    private record HistoryDetails(UUID attemptId,Integer resultVersion,UUID issueId,UUID reconciliationId,
+                                  UUID previousAssigneeId,UUID assignedTo) {}
 
     public record Queue(String step, int attempts, UUID claim, OffsetDateTime until) {}
 

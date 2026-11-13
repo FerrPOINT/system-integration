@@ -1,7 +1,11 @@
 package com.azhukov.integration.web;
 
 import com.azhukov.integration.auth.AppUser;
-import com.azhukov.integration.tasks.TaskService;
+import com.azhukov.integration.application.TaskService;
+import com.azhukov.integration.application.task.CreateTask;
+import com.azhukov.integration.application.task.RenameTask;
+import com.azhukov.integration.application.task.HistoryEntry;
+import com.azhukov.integration.domain.task.TaskInput;
 import com.azhukov.integration.contract.internal.api.TasksApi;
 import com.azhukov.integration.contract.internal.model.*;
 import org.springframework.http.ResponseEntity;
@@ -18,7 +22,8 @@ public class TasksController implements TasksApi {
 
     @Override
     public ResponseEntity<CreateTaskResult> createTask(String csrf, UUID key, CreateTaskRequest input) {
-        return ResponseEntity.status(201).body(tasks.create(AppUser.current().actor(), key, input));
+        var command = new CreateTask(input.getTitle(),new TaskInput(input.getRequest().getReference(),input.getRequest().getQuantity()));
+        return ResponseEntity.status(201).body(new CreateTaskResult(tasks.create(AppUser.current().actor(), key, command).taskId()));
     }
 
     @Override
@@ -34,12 +39,15 @@ public class TasksController implements TasksApi {
 
     @Override
     public ResponseEntity<RenameTaskResult> renameTask(String csrf, UUID key, UUID id, RenameTaskRequest input) {
-        return ResponseEntity.ok(tasks.rename(AppUser.current().actor(), key, id, input));
+        var result = tasks.rename(AppUser.current().actor(), key, id, new RenameTask(input.getTitle(),input.getExpectedTitleRevision()));
+        return ResponseEntity.ok(new RenameTaskResult(result.title(),result.titleRevision()));
     }
 
     @Override
     public ResponseEntity<HistoryPage> listTaskHistory(UUID id, Integer page) {
-        return ResponseEntity.ok(tasks.history(AppUser.current().actor(), id, page));
+        var result = tasks.history(AppUser.current().actor(), id, page);
+        return ResponseEntity.ok(new HistoryPage(result.items().stream().map(TasksController::view).toList(),
+            result.page(),result.hasNext(),result.totalItems(),result.totalPages()));
     }
     private static Task view(com.azhukov.integration.domain.task.Task value) {
         var task = new Task(value.id(),value.operationId(),value.ownerId(),value.title().value(),value.title().revision(),
@@ -51,5 +59,13 @@ public class TasksController implements TasksApi {
                 .rejectionCode(outcome.rejectionCode() == null ? null : TaskResult.RejectionCodeEnum.fromValue(outcome.rejectionCode())));
         }
         return task;
+    }
+    private static HistoryEvent view(HistoryEntry value) {
+        return new HistoryEvent(value.eventId(),value.taskId(),value.operationId(),value.occurredAt(),
+            HistoryEvent.ActorEnum.fromValue(value.actor().name()),HistoryEvent.TypeEnum.fromValue(value.type().name()),value.summary())
+            .actorUserId(value.actorUserId()).attemptId(value.attemptId())
+            .resultVersion(value.resultVersion() == null ? null : HistoryEvent.ResultVersionEnum.fromValue(value.resultVersion()))
+            .issueId(value.issueId()).reconciliationId(value.reconciliationId())
+            .previousAssigneeId(value.previousAssigneeId()).assignedTo(value.assignedTo());
     }
 }

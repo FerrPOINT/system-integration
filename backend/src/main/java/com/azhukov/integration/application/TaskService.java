@@ -1,11 +1,15 @@
-package com.azhukov.integration.tasks;
+package com.azhukov.integration.application;
 
-import com.azhukov.integration.application.Actor;
-import com.azhukov.integration.contract.internal.model.*;
+import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.domain.RuleViolation;
 import com.azhukov.integration.domain.task.Task;
 import com.azhukov.integration.domain.task.BusinessStatus;
-import com.azhukov.integration.application.TaskPage;
+import com.azhukov.integration.application.port.TaskStore;
+import com.azhukov.integration.application.port.CommandReceiptStore;
+import com.azhukov.integration.application.port.CommandReceiptStore.Command;
+import com.azhukov.integration.application.task.CreateTask;
+import com.azhukov.integration.application.task.RenameTask;
+import com.azhukov.integration.application.task.HistoryEntry;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Isolation;
@@ -16,10 +20,10 @@ import java.util.UUID;
 
 @Service
 public class TaskService {
-    private final TaskRepository tasks;
-    private final CommandReceipts commands;
+    private final TaskStore tasks;
+    private final CommandReceiptStore commands;
 
-    public TaskService(TaskRepository tasks, CommandReceipts commands) {
+    public TaskService(TaskStore tasks, CommandReceiptStore commands) {
         this.tasks = tasks;
         this.commands = commands;
     }
@@ -28,7 +32,7 @@ public class TaskService {
     public Task get(Actor user, UUID id) { return tasks.get(id, user, false); }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public TaskPage list(Actor user, int page, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
+    public Page<Task> list(Actor user, int page, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
         checkPage(page);
         if ((from != null && !from.getOffset().equals(ZoneOffset.UTC)) ||
             (to != null && !to.getOffset().equals(ZoneOffset.UTC)) ||
@@ -36,45 +40,43 @@ public class TaskService {
             throw RuleViolation.invalid("Укажите корректный период в UTC: начало включено, конец исключён");
         var rows = tasks.list(user, page, status, from, to);
         long total = tasks.countTasks(user, status, from, to);
-        long pages = (total + 19) / 20;
-        return new TaskPage(rows, page, (long) page + 1 < pages, total, pages);
+        return new Page<>(rows,page,total);
     }
 
     @Transactional
-    public CreateTaskResult create(Actor user, UUID key, CreateTaskRequest input) {
+    public CreateTask.Result create(Actor user, UUID key, CreateTask input) {
         requireInitiator(user);
-        return commands.execute(user.id(), "CREATE_TASK", key, input, 201, CreateTaskResult.class, () -> {
+        return commands.execute(user.id(), Command.CREATE_TASK, key, input, CreateTask.Result.class, () -> {
             var task = tasks.insert(user.id(), input);
             tasks.enqueue(task.operationId());
-            tasks.history(task, user.id(), HistoryEvent.TypeEnum.CREATED, "Задание принято и поставлено в очередь");
-            return new CreateTaskResult(task.id());
+            tasks.history(task, user.id(), HistoryType.CREATED, "Задание принято и поставлено в очередь");
+            return new CreateTask.Result(task.id());
         });
     }
 
     @Transactional
-    public RenameTaskResult rename(Actor user, UUID key, UUID id, RenameTaskRequest input) {
+    public RenameTask.Result rename(Actor user, UUID key, UUID id, RenameTask input) {
         requireInitiator(user);
         // Check access even on receipt replay; a receipt must never expand visibility.
         tasks.get(id, user, false);
-        return commands.execute(user.id(), "RENAME_TASK", key, new RenameCommand(id, input),
-            200, RenameTaskResult.class, () -> {
+        return commands.execute(user.id(), Command.RENAME_TASK, key, new RenameCommand(id, input),
+            RenameTask.Result.class, () -> {
                 var task = tasks.get(id, user, true);
-                var renamed = task.rename(input.getTitle(),input.getExpectedTitleRevision());
+                var renamed = task.rename(input.title(),input.expectedTitleRevision());
                 tasks.rename(id, renamed.title().value(), renamed.title().revision());
-                tasks.history(task, user.id(), HistoryEvent.TypeEnum.RENAMED,
-                    "Название изменено: «" + task.title().value() + "» → «" + input.getTitle() + "»");
-                return new RenameTaskResult(renamed.title().value(), renamed.title().revision());
+                tasks.history(task, user.id(), HistoryType.RENAMED,
+                    "Название изменено: «" + task.title().value() + "» → «" + input.title() + "»");
+                return new RenameTask.Result(renamed.title().value(), renamed.title().revision());
             });
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public HistoryPage history(Actor user, UUID id, int page) {
+    public Page<HistoryEntry> history(Actor user, UUID id, int page) {
         checkPage(page);
         tasks.get(id, user, false);
         var rows = tasks.history(id, page);
         long total = tasks.countHistory(id);
-        long pages = (total + 19) / 20;
-        return new HistoryPage(rows, page, (long) page + 1 < pages, total, pages);
+        return new Page<>(rows,page,total);
     }
 
     private static void requireInitiator(Actor user) {
@@ -85,5 +87,5 @@ public class TaskService {
         if (page < 0) throw RuleViolation.invalid("Номер страницы не может быть отрицательным");
     }
 
-    private record RenameCommand(UUID taskId, RenameTaskRequest input) {}
+    private record RenameCommand(UUID taskId, RenameTask input) {}
 }

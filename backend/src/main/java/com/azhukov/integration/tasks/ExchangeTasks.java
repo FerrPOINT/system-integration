@@ -1,5 +1,6 @@
 package com.azhukov.integration.tasks;
 
+import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.contract.ExchangeReply;
 import com.azhukov.integration.contract.external.model.OperationInput;
 import com.azhukov.integration.contract.external.model.Result;
@@ -40,14 +41,14 @@ public class ExchangeTasks {
             tasks.scheduleAfterInterruptedClaim(state.task().operationId(),queue.until(),delay(queue.attempts()));
             state = delivery(state, DeliveryStatus.UNKNOWN);
             issues.temporary(state, queue.attempts() >= 4);
-            tasks.history(state.task(), null, HistoryEvent.TypeEnum.DELIVERY_UNCERTAIN,
+            tasks.history(state.task(), null, HistoryType.DELIVERY_UNCERTAIN,
                 "Прерванная попытка: следующее действие — уточняющий GET", Map.of("attemptId",queue.claim()));
             return null;
         }
         UUID claim = UUID.randomUUID();
         int number = Math.addExact(queue.attempts(),1);
         tasks.startAttempt(state.task().operationId(),claim,queue.step(),number);
-        tasks.history(state.task(), null, HistoryEvent.TypeEnum.DELIVERY_ATTEMPT,
+        tasks.history(state.task(), null, HistoryType.DELIVERY_ATTEMPT,
             "Попытка " + number + ": " + queue.step(), Map.of("attemptId",claim));
         return new Claim(state.task().operationId(), claim, queue.step(), number, input(state));
     }
@@ -58,7 +59,7 @@ public class ExchangeTasks {
         boolean owned = tasks.ownsClaim(claim.operationId(),claim.attemptId());
         if (!owned) {
             finishAttempt(claim, "LATE_RESPONSE_IGNORED");
-            tasks.history(state.task(),null,HistoryEvent.TypeEnum.DELIVERY_ATTEMPT,
+            tasks.history(state.task(),null,HistoryType.DELIVERY_ATTEMPT,
                 "Поздний исход попытки не изменил состояние",Map.of("attemptId",claim.attemptId()));
             return;
         }
@@ -92,7 +93,7 @@ public class ExchangeTasks {
         state = delivery(state, repeatPut ? DeliveryStatus.RETRY_WAIT : DeliveryStatus.UNKNOWN);
         tasks.scheduleRetry(claim.operationId(),repeatPut ? "PUT" : "GET",delay(claim.number()));
         if (!repeatPut || claim.number() >= 4) issues.temporary(state, claim.number() >= 4);
-        if (!repeatPut) tasks.history(state.task(), null, HistoryEvent.TypeEnum.DELIVERY_UNCERTAIN,
+        if (!repeatPut) tasks.history(state.task(), null, HistoryType.DELIVERY_UNCERTAIN,
             "Исход доставки неизвестен; запланирован уточняющий GET", Map.of("attemptId",claim.attemptId()));
         finishAttempt(claim, missing ? "NOT_FOUND" : reply.connectionFailed() ? "CONNECT_FAILED" : "TEMPORARY_FAILURE");
     }
@@ -142,7 +143,7 @@ public class ExchangeTasks {
             int newVersion = received.getVersion().getValue();
             if (oldVersion == newVersion && state.result().equals(received)) return;
             if (oldVersion > newVersion) {
-                tasks.history(state.task(), null, HistoryEvent.TypeEnum.RESULT_IGNORED, "Запоздалый снимок не изменил результат",
+                tasks.history(state.task(), null, HistoryType.RESULT_IGNORED, "Запоздалый снимок не изменил результат",
                     Map.of("resultVersion",newVersion));
                 return;
             }
@@ -167,7 +168,7 @@ public class ExchangeTasks {
         tasks.applyResult(result);
         tasks.removeQueue(result.getOperationId());
         issues.confirm(state);
-        tasks.history(state.task(), actor, HistoryEvent.TypeEnum.RESULT_APPLIED,
+        tasks.history(state.task(), actor, HistoryType.RESULT_APPLIED,
             "Принят внешний результат: " + result.getStatus().getValue(), Map.of("resultVersion",result.getVersion().getValue()));
     }
 
@@ -175,7 +176,7 @@ public class ExchangeTasks {
         state = delivery(state, DeliveryStatus.ACKNOWLEDGED);
         tasks.removeQueue(state.task().operationId());
         issues.confirm(state);
-        tasks.history(state.task(), null, HistoryEvent.TypeEnum.DELIVERY_ACKNOWLEDGED, "Исполнитель подтвердил получение операции");
+        tasks.history(state.task(), null, HistoryType.DELIVERY_ACKNOWLEDGED, "Исполнитель подтвердил получение операции");
     }
 
     private TaskRepository.ExchangeTask find(UUID id) {

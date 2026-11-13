@@ -1,7 +1,9 @@
 package com.azhukov.integration.tasks;
 
+import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.contract.ExchangeReply;
 import com.azhukov.integration.application.Actor;
+import com.azhukov.integration.application.port.CommandReceiptStore.Command;
 import com.azhukov.integration.contract.external.model.OperationState;
 import com.azhukov.integration.contract.external.model.Result;
 import com.azhukov.integration.contract.internal.model.*;
@@ -80,7 +82,7 @@ public class OperationsTransactions {
     @Transactional
     public Reconciliation saveReconciliation(Actor user,UUID key,TaskRepository.ExchangeTask before,ExchangeReply reply) {
         requireOperator(user);
-        return commands.execute(user.id(),"RECONCILE",key,before.task().id(),200,Reconciliation.class,() -> {
+        return commands.execute(user.id(),Command.RECONCILE,key,before.task().id(),Reconciliation.class,() -> {
             var current=tasks.exchange(before.task().operationId(),true);
             if (current.version()!=before.version()) throw stale();
             OperationState external=null;
@@ -107,7 +109,7 @@ public class OperationsTransactions {
                 .issueId(issue);
             if (external!=null) saved.external(external);
             issues.saveReconciliation(saved,current.version());
-            tasks.history(current.task(),user.id(),HistoryEvent.TypeEnum.RECONCILED,"Сверка: "+outcome.getValue(),
+            tasks.history(current.task(),user.id(),HistoryType.RECONCILED,"Сверка: "+outcome.getValue(),
                 Map.of("reconciliationId",saved.getReconciliationId()));
             return saved;
         });
@@ -116,7 +118,7 @@ public class OperationsTransactions {
     @Transactional
     public Issue take(Actor user,UUID key,UUID id,TakeIssueRequest input) {
         requireOperator(user);
-        return commands.execute(user.id(),"TAKE_ISSUE",key,new Target(id,input),200,Issue.class,() -> {
+        return commands.execute(user.id(),Command.TAKE_ISSUE,key,new Target(id,input),Issue.class,() -> {
             var context=context(id,user,true);
             version(context,input.getExpectedIssueRevision());
             requireAction(context,user,TAKE_OWNERSHIP);
@@ -125,7 +127,7 @@ public class OperationsTransactions {
             var details=new LinkedHashMap<String,Object>();
             details.put("issueId",id); details.put("assignedTo",user.id());
             if (previous!=null) details.put("previousAssigneeId",previous);
-            tasks.history(context.state().task(),user.id(),HistoryEvent.TypeEnum.RESPONSIBILITY_CHANGED,
+            tasks.history(context.state().task(),user.id(),HistoryType.RESPONSIBILITY_CHANGED,
                 previous==null ? "Оператор взял разбор на себя" : "Разбор передан другому оператору",details);
             return view(context(id,user,false),user);
         });
@@ -134,7 +136,7 @@ public class OperationsTransactions {
     @Transactional
     public Issue retry(Actor user,UUID key,UUID id,RetryRequest input) {
         requireOperator(user);
-        return commands.execute(user.id(),"RETRY_EXCHANGE",key,new Target(id,input),200,Issue.class,() -> {
+        return commands.execute(user.id(),Command.RETRY_EXCHANGE,key,new Target(id,input),Issue.class,() -> {
             var context=context(id,user,true);
             version(context,input.getExpectedIssueRevision());
             boolean protocolError=context.issue().value().getKind()==Issue.KindEnum.PROTOCOL_ERROR;
@@ -149,7 +151,7 @@ public class OperationsTransactions {
             } else issues.advanceRevision(id);
             var details=new LinkedHashMap<String,Object>(); details.put("issueId",id);
             if (input.getReconciliationId()!=null) details.put("reconciliationId",input.getReconciliationId());
-            tasks.history(context.state().task(),user.id(),HistoryEvent.TypeEnum.RETRY_QUEUED,
+            tasks.history(context.state().task(),user.id(),HistoryType.RETRY_QUEUED,
                 "Повтор назначен оператором: "+input.getReason(),details);
             return view(context(id,user,false),user);
         });
@@ -158,7 +160,7 @@ public class OperationsTransactions {
     @Transactional
     public IssueResolution resolve(Actor user,UUID key,UUID id,ResolveIssueRequest input) {
         requireOperator(user);
-        return commands.execute(user.id(),"RESOLVE_ISSUE",key,new Target(id,input),200,IssueResolution.class,() -> {
+        return commands.execute(user.id(),Command.RESOLVE_ISSUE,key,new Target(id,input),IssueResolution.class,() -> {
             var context=context(id,user,true);
             version(context,input.getExpectedIssueRevision());
             requireFresh(context,input.getReconciliationId());
@@ -173,7 +175,7 @@ public class OperationsTransactions {
                 tasks.delivery(context.state().task().operationId(),DeliveryStatus.STOPPED);
                 tasks.removeQueue(context.state().task().operationId());
             }
-            tasks.history(context.state().task(),user.id(),HistoryEvent.TypeEnum.ISSUE_RESOLVED,
+            tasks.history(context.state().task(),user.id(),HistoryType.ISSUE_RESOLVED,
                 "Решение оператора: "+input.getReason(),Map.of("issueId",id,"reconciliationId",input.getReconciliationId()));
             return resolution;
         });

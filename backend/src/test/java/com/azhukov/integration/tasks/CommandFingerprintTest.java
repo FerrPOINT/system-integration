@@ -1,6 +1,9 @@
 package com.azhukov.integration.tasks;
 
 import com.azhukov.integration.contract.internal.model.*;
+import com.azhukov.integration.application.task.CreateTask;
+import com.azhukov.integration.application.task.RenameTask;
+import com.azhukov.integration.domain.task.TaskInput;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
@@ -33,8 +36,10 @@ class CommandFingerprintTest {
         inputs.put("retry-with-snapshot", new Target(id,new RetryRequest(2L,"Повтор").reconciliationId(snapshot)));
         inputs.put("resolve", new Target(id,new ResolveIssueRequest(2L,snapshot,ResolutionAction.ACKNOWLEDGE_DIFFERENCE,"Проверено")));
         inputs.put("reconcile",id);
+        inputs.put("create-application",new CreateTask("Проверка заявки",new TaskInput("REQ-000001",25)));
+        inputs.put("rename-application",new RenameCommand(id,new RenameTask("Новое имя",9007199254740990L)));
         return inputs.entrySet().stream().map(entry -> DynamicTest.dynamicTest(entry.getKey(),() -> {
-            var expected = fixtures.get(entry.getKey());
+            var expected = fixtures.get(entry.getKey().replace("-application",""));
             // Compare the persisted JSON, not Jackson's in-memory IntNode versus LongNode.
             assertEquals(expected.get("input"),json.readTree(json.writeValueAsString(entry.getValue())),"Persisted input shape changed");
             assertEquals(expected.get("sha256").asString(),ContentFingerprint.of(json,entry.getValue()));
@@ -54,6 +59,6 @@ class CommandFingerprintTest {
         assertNotEquals(ContentFingerprint.of(json,Map.of()),ContentFingerprint.of(json,explicitNull));
     }
 
-    private record RenameCommand(UUID taskId,RenameTaskRequest input) {}
+    private record RenameCommand(UUID taskId,Object input) {}
     private record Target(UUID id,Object input) {}
 }

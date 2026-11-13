@@ -1,5 +1,6 @@
 package com.azhukov.integration.tasks;
 
+import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.contract.external.model.Result;
 import com.azhukov.integration.contract.internal.model.*;
 import com.azhukov.integration.domain.RuleViolation;
@@ -40,7 +41,7 @@ public class ExchangeIssues {
             operationId, scope, fingerprint, kind, reason, json.writeValueAsString(evidence));
         if (inserted.isEmpty()) return jdbc.queryForObject("SELECT id FROM exchange_issues WHERE scope = ? AND fingerprint = ?",
             UUID.class, scope, fingerprint);
-        if (state != null) tasks.history(state.task(), null, HistoryEvent.TypeEnum.ISSUE_OPENED, reason, Map.of("issueId", id));
+        if (state != null) tasks.history(state.task(), null, HistoryType.ISSUE_OPENED, reason, Map.of("issueId", id));
         return id;
     }
 
@@ -66,7 +67,7 @@ public class ExchangeIssues {
             UPDATE exchange_issues SET status = 'RESOLVED',issue_revision = issue_revision + 1
             WHERE task_id = ? AND status = 'OPEN' AND kind IN ('DELIVERY_UNCERTAIN','DELIVERY_DELAYED') RETURNING id
             """, (rs,n) -> rs.getObject(1,UUID.class), state.task().id());
-        for (UUID id : ids) tasks.history(state.task(), null, HistoryEvent.TypeEnum.ISSUE_RESOLVED,
+        for (UUID id : ids) tasks.history(state.task(), null, HistoryType.ISSUE_RESOLVED,
             "Получение подтверждено; проблема доставки закрыта", Map.of("issueId", id));
     }
 
@@ -79,7 +80,7 @@ public class ExchangeIssues {
         UUID id = temporary.getFirst();
         jdbc.update("UPDATE exchange_issues SET kind = 'PROTOCOL_ERROR',summary = ?,evidence = ?::jsonb,issue_revision = issue_revision + 1 WHERE id = ?",
             reason, json.writeValueAsString(Map.of("reason",reason,"local",snapshot(state))), id);
-        tasks.history(state.task(), null, HistoryEvent.TypeEnum.ISSUE_OPENED, reason, Map.of("issueId",id));
+        tasks.history(state.task(), null, HistoryType.ISSUE_OPENED, reason, Map.of("issueId",id));
         return id;
     }
 
