@@ -65,7 +65,7 @@ test('history links the same task, operation, author and one terminal result', (
 
 test('final snapshot requires every accepted operation, history and cursor, including warmup records', () => {
   const digests = { ids: 'ids', requests: 'requests', results: 'results' };
-  const snapshot = { app: { ...digests, records: 2, pending: 0, badLocalState: 0, queued: 0, openIssues: 0, badCreationHistory: 0, badTerminalHistory: 0, lastCursor: 4 },
+  const snapshot = { app: { ...digests, records: 2, pending: 0, badLocalState: 0, queued: 0, openIssues: 0, badCreationHistory: 0, badTerminalHistory: 0, badRenameHistory: 0, lastCursor: 4 },
     emulator: { ...digests, accepted: 2, executed: 2, duplicateExecutions: 0, unpublished: 0, lastCursor: 4 } };
   verifyFinishedSnapshot(snapshot, 2);
   assert.throws(() => verifyFinishedSnapshot(snapshot, 3));
@@ -76,6 +76,8 @@ test('final snapshot requires every accepted operation, history and cursor, incl
     x => { x.app.openIssues = 1; },
     x => { x.app.badCreationHistory = 1; },
     x => { delete x.app.badTerminalHistory; },
+    x => { x.app.badRenameHistory = 1; },
+    x => { delete x.app.badRenameHistory; },
     x => { x.emulator.executed = 1; },
     x => { x.emulator.duplicateExecutions = 1; },
     x => { x.emulator.unpublished = 1; },

@@ -82,7 +82,7 @@ export function verifyFinishedSnapshot({ app, emulator }, expectedRecords) {
   if (!(app.records > 0) || (expectedRecords !== undefined && app.records !== expectedRecords) ||
       app.records !== emulator.accepted || app.records !== emulator.executed ||
       app.pending !== 0 || app.badLocalState !== 0 || app.queued !== 0 || app.openIssues !== 0 ||
-      app.badCreationHistory !== 0 || app.badTerminalHistory !== 0 || emulator.duplicateExecutions !== 0 ||
+      app.badCreationHistory !== 0 || app.badTerminalHistory !== 0 || app.badRenameHistory !== 0 || emulator.duplicateExecutions !== 0 ||
       emulator.unpublished !== 0 || app.lastCursor !== emulator.lastCursor)
     reject('FINAL_OPERATION_COUNTS_OR_HISTORY_DIFFER');
   for (const field of ['ids', 'requests', 'results']) {

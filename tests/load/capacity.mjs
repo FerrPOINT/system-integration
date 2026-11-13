@@ -6,6 +6,7 @@ import { ApiSession, ApiFailure, localOrigin, parallel } from '../support/http.m
 import { qualifiedLoadEnvironment } from './environment.mjs';
 import { loadSnapshot, observeLoad, pipelineSummary, drainLoad, loadIntegrity } from './metrics.mjs';
 
+import { verifyClientTasks } from './nf08-workload.mjs';
 import { verifyCreatedTasks, verifyFinishedSnapshot } from './integrity.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
@@ -83,10 +84,13 @@ async function stage(mode, count) {
             if (typeof result?.taskId !== 'string') throw new ApiFailure(201, 'INVALID_CREATE_RESULT');
             created.push({ taskId: result.taskId, client: client.index, ownerId: client.userId, title, reference });
           } else {
-            const result = await client.session.command('PATCH', '/api/tasks/' + client.task.taskId, {
+            const input = {
               title: 'Capacity client ' + client.index + ' rename ' + client.counter, expectedTitleRevision: client.task.titleRevision,
-            });
-            client.task.titleRevision = result.titleRevision;
+            };
+            const result = await client.session.command('PATCH', '/api/tasks/' + client.task.taskId, input);
+            if (result.title !== input.title || result.titleRevision !== input.expectedTitleRevision + 1)
+              throw new ApiFailure(200, 'INVALID_RENAME_RESULT');
+            client.task.titleRevision = result.titleRevision; client.task.title = result.title;
           }
           if (measured) stat.successes++;
         } catch (error) {
@@ -105,6 +109,8 @@ async function stage(mode, count) {
     measuredSeconds = Math.max(0, Math.min(performance.now(), end) - warmEnd) / 1000;
     await observation.stop();
   }
+  const renamed = await verifyClientTasks(clients);
+  if (Object.keys(renamed.errors).length) reason = 'rename-state-error';
   const reads = operations.slice(0, 2).flatMap(item => item.latencies);
   const writes = operations.slice(2).flatMap(item => item.latencies);
   if (!reason && (!reads.length || p95(reads) > 2000 || (mode === 'mixed' && (!writes.length || p95(writes) > 3000))))
@@ -154,7 +160,7 @@ async function stage(mode, count) {
     operations: operations.map(item => ({ ...item, count: item.latencies.length, p95Ms: p95(item.latencies), latencies: undefined })),
     warmupErrors, observation: { samples: observation.samples, errors: observation.errors },
     drain,
-    external, databaseIntegrity, pipeline: await pipelineSummary(resources, startedAt), stoppedFor: reason || null, passed: !reason };
+    external, renamed, databaseIntegrity, pipeline: await pipelineSummary(resources, startedAt), stoppedFor: reason || null, passed: !reason };
   console.log(mode + ' ' + count + ' clients: ' + (result.passed ? 'PASS' : reason) + ', read p95=' + result.readP95Ms + ', pending=' + after.app.pending);
   return result;
 }

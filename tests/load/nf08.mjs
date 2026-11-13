@@ -3,7 +3,7 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 import { createHash } from 'node:crypto';
-import { prepareNf08Clients, runNf08Workload, validateNf08Workload } from './nf08-workload.mjs';
+import { prepareNf08Clients, runNf08Workload, validateNf08Workload, verifyClientTasks } from './nf08-workload.mjs';
 import { ApiFailure, localOrigin } from '../support/http.mjs';
 import { qualifiedLoadEnvironment } from './environment.mjs';
 import { observeLoad, drainLoad, loadIntegrity, pipelineSummary } from './metrics.mjs';
@@ -23,6 +23,8 @@ const resources = qualifiedLoadEnvironment(sourceCommit);
 const resourceTotal = { cpu: resources.reduce((sum, item) => sum + item.cpu, 0), memory: resources.reduce((sum, item) => sum + item.memory, 0) };
 
 const externalDriver = process.env.SI_LOAD_PROFILE === 'nf08-external';
+let externalFinished = false;
+if (externalDriver) process.stdin.once('end', () => { if (!externalFinished) process.exit(1); });
 const clients = await prepareNf08Clients(dataset, origin, process.env.SI_DEMO_PASSWORD);
 const observation = await observeLoad(resources);
 const serverWindowStartedAt = new Date().toISOString();
@@ -30,10 +32,10 @@ let workload;
 try {
   if (externalDriver) {
     const input = createInterface({ input: process.stdin, terminal: false });
-    console.log(JSON.stringify({ type: 'nf08-start', sourceCommit, serverWindowStartedAt }));
+    console.log(JSON.stringify({ type: 'nf08-start', sourceCommit, serverWindowStartedAt, controllerPid: process.pid }));
     let line;
     try { for await (const item of input) { line = item; break; } }
-    finally { input.close(); }
+    finally { input.close(); process.stdin.resume(); }
     if (!line) throw new Error('External driver ended without a workload report');
     const message = JSON.parse(line);
     if (message.type !== 'nf08-workload' || message.sourceCommit !== sourceCommit)
@@ -43,8 +45,17 @@ try {
 } finally { await observation.stop(); }
 validateNf08Workload(workload);
 const { startedAt, finishedAt, measurements, created, allCreated, warmupErrors, generator } = workload;
+if (externalDriver) {
+  for (const [index, final] of workload.finalTasks.entries()) {
+    const client = clients[index];
+    if (final.taskId !== client.task.taskId || final.userId !== client.userId)
+      throw new Error('External driver changed its allocated owner/task');
+    client.task = { ...client.task, title: final.title, titleRevision: final.titleRevision };
+  }
+}
 const p95 = values => { const sorted = [...values].sort((a, b) => a - b); return sorted.length ? sorted[Math.ceil(0.95 * sorted.length) - 1] : null; };
 const externalErrors = {};
+const renamed = await verifyClientTasks(clients);
 const progressWaitStartedAt = new Date().toISOString();
 let externalProgressObserved = false;
 if (created.length) {
@@ -110,7 +121,7 @@ const errors = measurements.reduce((total, stat) => total + Object.values(stat.e
 const report = {
   sourceCommit, driver: externalDriver ? 'external-ssh' : 'local', generator, serverWindowStartedAt,
   startedAt, finishedAt, clients: 20, warmupSeconds: 30, measuredSeconds: 120, initialCount: 5000, resources, warmupErrors,
-  resourceTotal, idempotency, drain, finalIntegrity, pipeline, observation: { samples: observation.samples, errors: observation.errors },
+  resourceTotal, idempotency, renamed, drain, finalIntegrity, pipeline, observation: { samples: observation.samples, errors: observation.errors },
   operations: measurements.map(stat => ({ operation: stat.operation, count: stat.latencies.length, share: stat.latencies.length / counts.reduce((a, b) => a + b, 0),
     successes: stat.successes, errors: stat.errors, p95Ms: p95(stat.latencies) })),
   readP95Ms: p95(reads), writeP95Ms: p95(writes), errors,
@@ -120,12 +131,13 @@ const report = {
     checkStartedAt: externalCheckStartedAt, checkFinishedAt: externalCheckFinishedAt },
 };
 report.sourceUnchanged = git('rev-parse', 'HEAD') === sourceCommit && !git('status', '--porcelain');
-report.passed = observation.errors.length === 0 && observation.samples.every(sample => sample.containers.every(item => item.running && !item.oom && !item.restarted)) && idempotency.passed && report.sourceUnchanged && errors === 0 && Object.keys(warmupErrors).length === 0 && counts.every(count => count > 0) && Math.max(...counts) - Math.min(...counts) <= 20 &&
+report.passed = observation.errors.length === 0 && observation.samples.every(sample => sample.containers.every(item => item.running && !item.oom && !item.restarted)) && idempotency.passed && report.sourceUnchanged && Object.keys(renamed.errors).length === 0 && errors === 0 && Object.keys(warmupErrors).length === 0 && counts.every(count => count > 0) && Math.max(...counts) - Math.min(...counts) <= 20 &&
   report.readP95Ms <= 2000 && report.writeP95Ms <= 3000 && Object.keys(externalErrors).length === 0 && external.completed > 0 && finalIntegrity.passed;
 await mkdir(new URL('../results/', import.meta.url), { recursive: true });
 const output = new URL('../results/' + (externalDriver ? 'nf08-external' : 'nf08') + '.json', import.meta.url);
 const serialized = JSON.stringify(report, null, 2);
 await writeFile(output, serialized);
+if (externalDriver) externalFinished = true;
 if (externalDriver) console.log(JSON.stringify({ type: 'nf08-finished', sourceCommit, passed: report.passed,
   readP95Ms: report.readP95Ms, writeP95Ms: report.writeP95Ms, errors: report.errors,
   expectedRecords: finalIntegrity.expectedRecords, reportSha256: createHash('sha256').update(serialized).digest('hex') }));

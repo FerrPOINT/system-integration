@@ -50,7 +50,7 @@ export async function runNf08Workload(clients, { warmupMs = 30_000, measureMs = 
         }
         if (client.action === 1) {
           const result = await client.session.get('/api/tasks/' + client.task.taskId);
-          if (result.taskId !== client.task.taskId || result.ownerId !== client.userId || result.titleRevision < client.task.titleRevision) throw new ApiFailure(200, 'INVALID_TASK_STATE');
+          if (result.taskId !== client.task.taskId || result.ownerId !== client.userId || !Number.isSafeInteger(result.titleRevision) || result.titleRevision !== client.task.titleRevision || result.title !== client.task.title) throw new ApiFailure(200, 'INVALID_TASK_STATE');
           client.task = result;
         }
         if (client.action === 2) {
@@ -64,10 +64,14 @@ export async function runNf08Workload(clients, { warmupMs = 30_000, measureMs = 
           allCreated.push(createdTask);
         }
         if (client.action === 3) {
-          const result = await client.session.command('PATCH', '/api/tasks/' + client.task.taskId, {
+          const input = {
             title: `NF08 client ${client.index} rename ${client.counter}`, expectedTitleRevision: client.task.titleRevision,
-          });
-          client.task.titleRevision = result.titleRevision;
+          };
+          const result = await client.session.command('PATCH', '/api/tasks/' + client.task.taskId, input);
+        if (result.title !== input.title || result.titleRevision !== input.expectedTitleRevision + 1)
+          throw new ApiFailure(200, 'INVALID_RENAME_RESULT');
+        client.task.titleRevision = result.titleRevision;
+        client.task.title = result.title;
         }
         if (measured) { stat.successes++; if (createdTask) created.push(createdTask); }
       } catch (error) {
@@ -92,6 +96,8 @@ export async function runNf08Workload(clients, { warmupMs = 30_000, measureMs = 
   const hostTotalDelta = last.total - first.total;
   const hostCpuStable = hostCpuAfter.length === hostCpuBefore.length && hostTotalDelta > 0;
   return { startedAt, finishedAt, measurements, created, allCreated, warmupErrors,
+    finalTasks: clients.map(client => ({ index: client.index, userId: client.userId,
+      taskId: client.task.taskId, title: client.task.title, titleRevision: client.task.titleRevision })),
     warmupSeconds: warmupMs / 1000, measuredSeconds: measureMs / 1000,
     generator: { host: hostname(), platform: process.platform, nodeVersion: process.version,
       pid: process.pid, cpuMicros: process.cpuUsage(cpuBefore), durationMs: performance.now() - monotonicStart,
@@ -106,10 +112,16 @@ export async function runNf08Workload(clients, { warmupMs = 30_000, measureMs = 
 
 export function validateNf08Workload(workload) {
   const reject = () => { throw new Error('Incomplete or malformed NF08 workload report'); };
-  if (!workload || workload.warmupSeconds !== 30 || workload.measuredSeconds !== 120 ||
+  const utc = value => typeof value === 'string' && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+  if (!workload || !utc(workload.startedAt) || !utc(workload.finishedAt) || workload.finishedAt < workload.startedAt ||
+      workload.warmupSeconds !== 30 || workload.measuredSeconds !== 120 ||
       !Number.isFinite(workload.generator?.durationMs) || workload.generator.durationMs < 150000 ||
       !Array.isArray(workload.measurements) || workload.measurements.length !== 4 ||
       !Array.isArray(workload.created) || !Array.isArray(workload.allCreated) ||
+      !Array.isArray(workload.finalTasks) || workload.finalTasks.length !== 20 ||
+      workload.finalTasks.some((task, index) => task.index !== index || typeof task.userId !== 'string' ||
+        typeof task.taskId !== 'string' || typeof task.title !== 'string' ||
+        !Number.isSafeInteger(task.titleRevision) || task.titleRevision < 1) ||
       !workload.warmupErrors || typeof workload.warmupErrors !== 'object' || Array.isArray(workload.warmupErrors)) reject();
   if (Object.values(workload.warmupErrors).some(value => !Number.isInteger(value) || value < 0)) reject();
   for (const [index, stat] of workload.measurements.entries()) {
@@ -121,4 +133,20 @@ export function validateNf08Workload(workload) {
     if (errors.some(value => !Number.isInteger(value) || value < 0) ||
         stat.successes + errors.reduce((sum, value) => sum + value, 0) !== stat.latencies.length) reject();
   }
+}
+
+export async function verifyClientTasks(clients) {
+  const errors = {};
+  await parallel(clients, 4, async client => {
+    try {
+      const actual = await client.session.get('/api/tasks/' + client.task.taskId);
+      if (actual.taskId !== client.task.taskId || actual.ownerId !== client.userId ||
+          actual.title !== client.task.title || actual.titleRevision !== client.task.titleRevision)
+        throw new ApiFailure(200, 'INVALID_RENAME_STATE');
+    } catch (error) {
+      const code = error instanceof ApiFailure ? error.status + ':' + error.code : error.name;
+      errors[code] = (errors[code] || 0) + 1;
+    }
+  });
+  return { checked: clients.length, errors };
 }

@@ -139,6 +139,10 @@ export async function loadIntegrity(resources) {
           OR EXISTS (SELECT 1 FROM task_history h WHERE h.task_id=t.id AND h.event_type='CREATED' AND (h.actor<>'USER' OR h.actor_user_id IS DISTINCT FROM t.owner_id))),
         'badTerminalHistory',(SELECT count(*) FROM tasks t WHERE (SELECT count(*) FROM task_history h WHERE h.task_id=t.id AND h.event_type='RESULT_APPLIED' AND h.details->>'resultVersion'='2')<>1
           OR EXISTS (SELECT 1 FROM task_history h WHERE h.task_id=t.id AND h.event_type='RESULT_APPLIED' AND h.details->>'resultVersion'='2' AND h.actor<>'SYSTEM')),
+        'badRenameHistory',(SELECT count(*) FROM tasks t WHERE t.title_revision-1 <>
+          (SELECT count(*) FROM task_history h WHERE h.task_id=t.id AND h.event_type='RENAMED')
+          OR EXISTS (SELECT 1 FROM task_history h WHERE h.task_id=t.id AND h.event_type='RENAMED'
+            AND (h.actor<>'USER' OR h.actor_user_id IS DISTINCT FROM t.owner_id))),
         'lastCursor',(SELECT last_cursor FROM incoming_position WHERE id=1),
         'ids',md5(string_agg(operation_id::text,',' ORDER BY operation_id)),
         'requests',md5(string_agg(concat_ws('|',operation_id,request_reference,request_quantity),',' ORDER BY operation_id)),
