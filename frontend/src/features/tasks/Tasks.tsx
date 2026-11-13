@@ -79,14 +79,14 @@ export function TaskList({ user }: { user: GetSession200 }) {
           description={status || params.createdFrom || params.createdTo ? 'Измените условия или сбросьте фильтры, чтобы увидеть задания.' : 'Создайте первое задание. Здесь появятся доставка и результат исполнения.'}
           action={(status || params.createdFrom || params.createdTo) && <Button onClick={() => setSearch({})}>Сбросить фильтры</Button>} /></Card> : mobile ?
           <ul className="task-cards" data-page-items>{tasks.data.items.slice(0, size).map(task => <Card asChild key={task.taskId} data-page-item><li className="task-card"><CardContent className="base-page-stack">
-            <CardTitle asChild><h2><Link to={'/tasks/' + task.taskId}>{task.title}</Link></h2></CardTitle>
+            <CardTitle asChild><h2><Link className="base-truncate" title={task.title} to={'/tasks/' + task.taskId}>{task.title}</Link></h2></CardTitle>
             <div className="task-card-status"><BusinessBadge status={task.businessStatus} /><span>{deliveryLabels[task.deliveryStatus]}</span></div>
             <dl><dt>Заявка</dt><dd>{task.request.reference}</dd><dt>Количество</dt><dd>{task.request.quantity}</dd>
               <dt>Создано</dt><dd>{timestamp(task.createdAt)}</dd></dl>
           </CardContent></li></Card>)}</ul> :
           <Card><Table className="task-table" data-page-items><caption className="sr-only">Реестр заданий</caption>
             <thead data-page-heading><tr><th scope="col">Название / заявка</th><th scope="col">Доставка</th><th scope="col">Результат</th><th scope="col">Создано (UTC)</th></tr></thead>
-            <tbody>{tasks.data.items.slice(0, size).map(task => <tr key={task.taskId} data-page-item><td><Link to={'/tasks/' + task.taskId}>{task.title}</Link>
+            <tbody>{tasks.data.items.slice(0, size).map(task => <tr key={task.taskId} data-page-item><td><Link className="base-truncate" title={task.title} to={'/tasks/' + task.taskId}>{task.title}</Link>
               <small>{task.request.reference} · {task.request.quantity} ед.</small></td><td>{deliveryLabels[task.deliveryStatus]}</td>
               <td><BusinessBadge status={task.businessStatus} /></td><td>{timestamp(task.createdAt)}</td></tr>)}</tbody>
           </Table></Card>}
@@ -191,7 +191,7 @@ function History({ id, canReview, refreshInterval }: { id: string; canReview: bo
     {!valid ? <Notice role="alert" tone="danger">Некорректные параметры страницы.</Notice> : history.isPending ? <Loading /> : history.isError ? <><ErrorMessage error={history.error} />
       <Button onClick={() => history.refetch()}>Повторить</Button></> : <>
       <Timeline data-page-items>{history.data.items.slice(0, size).map(event => <TimelineItem key={event.eventId} data-page-item data-event-id={event.eventId}><TimelineMarker /><TimelineContent>
-        <p>{event.summary}</p><small><time dateTime={event.occurredAt}>{timestamp(event.occurredAt)}</time> ·
+        <p className="base-truncate" title={event.summary}>{event.summary}</p><small><time dateTime={event.occurredAt}>{timestamp(event.occurredAt)}</time> ·
           {event.actor === 'SYSTEM' ? ' Система' : ` Пользователь ${event.actorUserId}`}</small>
         {canReview && event.reconciliationId && <Link to={'/tasks/' + id + '/reconciliations/' + event.reconciliationId}>Открыть сохранённую сверку</Link>}
         {canReview && event.issueId && <Link to={'/issues/' + event.issueId}>Открыть разбор</Link>}

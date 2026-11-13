@@ -71,7 +71,7 @@ export function IssueList() {
       <ErrorMessage error={issues.error} />
       {issues.data.items.length === 0 ? <Card><EmptyState message="Проблем в выбранном состоянии нет." /></Card> :
         <ul className="issue-cards" data-page-items>{issues.data.items.slice(0, size).map(issue => <Card asChild key={issue.issueId} data-page-item><li><CardContent className="base-page-stack">
-          <CardTitle asChild><h2><Link to={'/issues/' + issue.issueId}>{kinds[issue.kind]}</Link></h2></CardTitle><p>{issue.summary}</p>
+          <CardTitle asChild><h2><Link className="base-truncate" title={kinds[issue.kind]} to={'/issues/' + issue.issueId}>{kinds[issue.kind]}</Link></h2></CardTitle><p className="base-truncate" title={issue.summary}>{issue.summary}</p>
           <div className="issue-meta"><small>{timestamp(issue.openedAt)}</small><small>{issue.assignedTo ? 'Ответственный: ' + issue.assignedTo : 'Ответственный пока не назначен'}</small>
           {issue.nextAttemptAt && <small>Следующая попытка: {timestamp(issue.nextAttemptAt)}</small>}</div>
         </CardContent></li></Card>)}</ul>}

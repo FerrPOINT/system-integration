@@ -731,6 +731,8 @@ dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
 
 /* A separate footer keeps list navigation outside the scrolling content. */
 .paged-list { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
-.paged-viewport { flex: 1; min-height: 0; min-width: 0; overflow: auto; scrollbar-gutter: stable; }
+.paged-viewport { flex: 1; min-height: 0; min-width: 0; overflow: auto; }
 .pagination-footer { flex-shrink: 0; border-block-start: 1px solid var(--color-border); padding-block-start: 12px; }
 .paged-list > :not(.paged-viewport) { flex-shrink: 0; }
+
+.base-truncate { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
