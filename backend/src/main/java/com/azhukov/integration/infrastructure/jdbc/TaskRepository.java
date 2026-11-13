@@ -5,6 +5,7 @@ import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.application.Actor;
 import com.azhukov.integration.application.port.TaskStore;
+import com.azhukov.integration.application.port.ExchangeStore;
 import com.azhukov.integration.application.task.CreateTask;
 import com.azhukov.integration.application.task.HistoryEntry;
 import com.azhukov.integration.domain.task.Task;
@@ -32,7 +33,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Repository
-public class TaskRepository implements TaskStore {
+public class TaskRepository implements TaskStore, ExchangeStore {
     private static final Logger log = LoggerFactory.getLogger(TaskRepository.class);
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;

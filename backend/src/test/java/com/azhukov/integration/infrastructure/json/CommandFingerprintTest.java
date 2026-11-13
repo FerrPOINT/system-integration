@@ -1,4 +1,4 @@
-package com.azhukov.integration.tasks;
+package com.azhukov.integration.infrastructure.json;
 
 import com.azhukov.integration.contract.internal.model.*;
 import com.azhukov.integration.application.task.CreateTask;

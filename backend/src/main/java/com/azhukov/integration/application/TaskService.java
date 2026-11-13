@@ -5,6 +5,7 @@ import com.azhukov.integration.domain.RuleViolation;
 import com.azhukov.integration.domain.task.Task;
 import com.azhukov.integration.domain.task.BusinessStatus;
 import com.azhukov.integration.application.port.TaskStore;
+import com.azhukov.integration.application.port.ExchangeStore;
 import com.azhukov.integration.application.port.CommandReceiptStore;
 import com.azhukov.integration.application.port.CommandReceiptStore.Command;
 import com.azhukov.integration.application.task.CreateTask;
@@ -21,10 +22,12 @@ import java.util.UUID;
 @Service
 public class TaskService {
     private final TaskStore tasks;
+    private final ExchangeStore exchange;
     private final CommandReceiptStore commands;
 
-    public TaskService(TaskStore tasks, CommandReceiptStore commands) {
+    public TaskService(TaskStore tasks, ExchangeStore exchange, CommandReceiptStore commands) {
         this.tasks = tasks;
+        this.exchange = exchange;
         this.commands = commands;
     }
 
@@ -48,7 +51,7 @@ public class TaskService {
         requireInitiator(user);
         return commands.execute(user.id(), Command.CREATE_TASK, key, input, CreateTask.Result.class, () -> {
             var task = tasks.insert(user.id(), input);
-            tasks.enqueue(task.operationId());
+            exchange.enqueue(task.operationId());
             tasks.history(task, user.id(), HistoryType.CREATED, "Задание принято и поставлено в очередь");
             return new CreateTask.Result(task.id());
         });

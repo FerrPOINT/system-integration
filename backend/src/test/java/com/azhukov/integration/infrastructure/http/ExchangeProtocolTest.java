@@ -1,6 +1,5 @@
-package com.azhukov.integration.exchange;
+package com.azhukov.integration.infrastructure.http;
 
-import com.azhukov.integration.infrastructure.http.ExchangeProtocol;
 import com.azhukov.integration.domain.task.TaskInput;
 import com.azhukov.integration.domain.task.BusinessStatus;
 import com.azhukov.integration.domain.exchange.OperationIdentity;
@@ -8,7 +7,6 @@ import com.azhukov.integration.domain.exchange.OperationResult;
 import org.junit.jupiter.api.Test;
 import com.azhukov.integration.domain.exchange.DeliveryAttempt;
 import com.azhukov.integration.application.port.ExternalExchange;
-import com.azhukov.integration.infrastructure.http.ExchangeReply;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.UUID;

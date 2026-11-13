@@ -1,6 +1,7 @@
 package com.azhukov.integration.application;
 
 import com.azhukov.integration.application.port.TaskStore;
+import com.azhukov.integration.application.port.ExchangeStore;
 import com.azhukov.integration.domain.exchange.ExchangeState;
 import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.application.port.ExternalExchange.DeliveryReply;
@@ -20,25 +21,28 @@ import java.util.UUID;
 @Service
 public class ExchangeTasks {
     private final TaskStore tasks;
+    private final ExchangeStore exchanges;
     private final IssueService issues;
 
-    public ExchangeTasks(TaskStore tasks, IssueService issues) {
-        this.tasks = tasks; this.issues = issues;
+    public ExchangeTasks(TaskStore tasks, ExchangeStore exchanges, IssueService issues) {
+        this.tasks = tasks;
+        this.exchanges = exchanges;
+        this.issues = issues;
     }
 
     @Transactional
     public DeliveryAttempt claim() {
         // All writers lock the task before its queue/issue rows to keep a single lock order.
-        var state = tasks.lockDueExchange();
+        var state = exchanges.lockDueExchange();
         if (state == null) return null;
-        var queue = tasks.lockQueue(state.task().operationId());
+        var queue = exchanges.lockQueue(state.task().operationId());
         if (queue.claim() != null) {
-            tasks.finishAttempt(queue.claim(),"INTERRUPTED");
+            exchanges.finishAttempt(queue.claim(),"INTERRUPTED");
             if (DeliveryAttempt.exhausted(queue.automaticAttempts())) {
                 pauseAutomaticSeries(state,queue.claim());
                 return null;
             }
-            tasks.scheduleAfterInterruptedClaim(state.task().operationId(),queue.until(),DeliveryAttempt.delay(queue.automaticAttempts()));
+            exchanges.scheduleAfterInterruptedClaim(state.task().operationId(),queue.until(),DeliveryAttempt.delay(queue.automaticAttempts()));
             state = delivery(state, DeliveryStatus.UNKNOWN);
             issues.temporary(state, false);
             tasks.history(state.task(), null, HistoryType.DELIVERY_UNCERTAIN,
@@ -51,7 +55,7 @@ public class ExchangeTasks {
         }
         UUID claim = UUID.randomUUID();
         int number = Math.addExact(queue.attempts(),1);
-        tasks.startAttempt(state.task().operationId(),claim,queue.step(),number);
+        exchanges.startAttempt(state.task().operationId(),claim,queue.step(),number);
         tasks.history(state.task(), null, HistoryType.DELIVERY_ATTEMPT,
             "Попытка " + number + ": " + queue.step(), Map.of("attemptId",claim));
         return new DeliveryAttempt(state.task().operationId(), claim, queue.step(), number, queue.automaticAttempts()+1, state.task().request());
@@ -59,8 +63,8 @@ public class ExchangeTasks {
 
     @Transactional
     public void finish(DeliveryAttempt claim, DeliveryReply reply) {
-        var state = tasks.exchange(claim.operationId(), true);
-        boolean owned = tasks.ownsClaim(claim.operationId(),claim.attemptId());
+        var state = exchanges.exchange(claim.operationId(), true);
+        boolean owned = exchanges.ownsClaim(claim.operationId(),claim.attemptId());
         if (!owned) {
             finishAttempt(claim, "LATE_RESPONSE_IGNORED");
             tasks.history(state.task(),null,HistoryType.DELIVERY_ATTEMPT,
@@ -81,12 +85,12 @@ public class ExchangeTasks {
         if (decision.status()==DeliveryStatus.NEEDS_REVIEW) {
             issues.protocol(state,reply.protocolFailure(),reply.evidence());
             state=delivery(state,DeliveryStatus.NEEDS_REVIEW);
-            tasks.pauseQueue(claim.operationId());
+            exchanges.pauseQueue(claim.operationId());
             finishAttempt(claim,"PROTOCOL_ERROR");
             return;
         }
         state=delivery(state,decision.status());
-        tasks.scheduleRetry(claim.operationId(),decision.nextStep(),decision.delaySeconds());
+        exchanges.scheduleRetry(claim.operationId(),decision.nextStep(),decision.delaySeconds());
         if (decision.temporaryIssue()) issues.temporary(state,false);
         if (decision.uncertainHistory()) tasks.history(state.task(),null,HistoryType.DELIVERY_UNCERTAIN,
             "Исход доставки неизвестен; запланирован уточняющий GET",Map.of("attemptId",claim.attemptId()));
@@ -94,20 +98,20 @@ public class ExchangeTasks {
     }
 
     @Transactional(readOnly = true)
-    public long cursor() { return tasks.cursor(false); }
+    public long cursor() { return exchanges.cursor(false); }
 
     @Transactional
     public boolean consume(long expected, List<IncomingEvent> page) {
-        long current = tasks.cursor(true);
+        long current = exchanges.cursor(true);
         if (current != expected) return false;
         var ids=page.stream().map(event -> event.result()==null ? event.operationId() : event.result().operationId())
             .filter(java.util.Objects::nonNull).distinct().toList();
-        var states=new java.util.HashMap<>(tasks.lockExchanges(ids));
+        var states=new java.util.HashMap<>(exchanges.lockExchanges(ids));
         for (var event : page) {
             receive(event,states);
             current = event.cursor();
         }
-        tasks.advanceCursor(current);
+        exchanges.advanceCursor(current);
         return true;
     }
 
@@ -147,8 +151,8 @@ public class ExchangeTasks {
 
     @Transactional(propagation=Propagation.MANDATORY)
     public ExchangeState apply(ExchangeState state, OperationResult result, UUID actor) {
-        tasks.applyResult(result);
-        tasks.removeQueue(result.operationId());
+        exchanges.applyResult(result);
+        exchanges.removeQueue(result.operationId());
         issues.confirm(state);
         tasks.history(state.task(), actor, HistoryType.RESULT_APPLIED,
             "Принят внешний результат: " + result.status().name(), Map.of("resultVersion",result.version()));
@@ -157,23 +161,23 @@ public class ExchangeTasks {
 
     private void pauseAutomaticSeries(ExchangeState state,UUID lastAttempt) {
         state=delivery(state,DeliveryStatus.NEEDS_REVIEW);
-        tasks.pauseQueue(state.task().operationId());
+        exchanges.pauseQueue(state.task().operationId());
         issues.exhausted(state,lastAttempt);
     }
 
     private void acknowledge(ExchangeState state) {
         state = delivery(state, DeliveryStatus.ACKNOWLEDGED);
-        tasks.removeQueue(state.task().operationId());
+        exchanges.removeQueue(state.task().operationId());
         issues.confirm(state);
         tasks.history(state.task(), null, HistoryType.DELIVERY_ACKNOWLEDGED, "Исполнитель подтвердил получение операции");
     }
 
     private void finishAttempt(DeliveryAttempt claim, String outcome) {
-        tasks.finishAttempt(claim.attemptId(),outcome);
+        exchanges.finishAttempt(claim.attemptId(),outcome);
     }
 
     private ExchangeState delivery(ExchangeState state, DeliveryStatus status) {
-        tasks.delivery(state.task().operationId(),status);
+        exchanges.delivery(state.task().operationId(),status);
         return state.withDeliveryStatus(status);
     }
 

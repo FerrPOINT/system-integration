@@ -1,6 +1,5 @@
-package com.azhukov.integration.exchange;
+package com.azhukov.integration.infrastructure.http;
 
-import com.azhukov.integration.infrastructure.http.ExchangeClient;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
