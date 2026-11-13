@@ -1,9 +1,12 @@
 package com.azhukov.integration.tasks;
 
+import com.azhukov.integration.application.port.TaskStore;
+import com.azhukov.integration.domain.exchange.ExchangeState;
 import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.contract.ExchangeReply;
 import com.azhukov.integration.application.Actor;
 import com.azhukov.integration.application.port.CommandReceiptStore.Command;
+import com.azhukov.integration.application.port.CommandReceiptStore;
 import com.azhukov.integration.domain.exchange.OperationSnapshot;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.contract.internal.model.*;
@@ -28,21 +31,21 @@ import static com.azhukov.integration.contract.internal.model.Issue.AllowedActio
 
 @Service
 public class OperationsTransactions {
-    private final TaskRepository tasks;
+    private final TaskStore tasks;
     private final ExchangeIssues issues;
     private final ExchangeTasks exchange;
-    private final CommandReceipts commands;
+    private final CommandReceiptStore commands;
     private final ObjectMapper json;
     private final ExchangeProtocol protocol;
 
-    public OperationsTransactions(TaskRepository tasks,ExchangeIssues issues,ExchangeTasks exchange,
-                                  CommandReceipts commands,ObjectMapper json) {
+    public OperationsTransactions(TaskStore tasks,ExchangeIssues issues,ExchangeTasks exchange,
+                                  CommandReceiptStore commands,ObjectMapper json) {
         this.tasks=tasks; this.issues=issues; this.exchange=exchange; this.commands=commands; this.json=json;
         this.protocol=new ExchangeProtocol();
     }
 
     @Transactional(readOnly=true)
-    public TaskRepository.ExchangeTask snapshot(Actor user,UUID task) {
+    public ExchangeState snapshot(Actor user,UUID task) {
         requireOperator(user);
         return tasks.exchange(tasks.get(task,user,false).operationId(),false);
     }
@@ -80,7 +83,7 @@ public class OperationsTransactions {
     }
 
     @Transactional
-    public Reconciliation saveReconciliation(Actor user,UUID key,TaskRepository.ExchangeTask before,ExchangeReply reply) {
+    public Reconciliation saveReconciliation(Actor user,UUID key,ExchangeState before,ExchangeReply reply) {
         requireOperator(user);
         return commands.execute(user.id(),Command.RECONCILE,key,before.task().id(),Reconciliation.class,() -> {
             var current=tasks.exchange(before.task().operationId(),true);
@@ -181,7 +184,7 @@ public class OperationsTransactions {
         });
     }
 
-    private record Context(ExchangeIssues.StoredIssue issue,TaskRepository.ExchangeTask state,ExchangeIssues.SavedReconciliation reconciliation) {}
+    private record Context(ExchangeIssues.StoredIssue issue,ExchangeState state,ExchangeIssues.SavedReconciliation reconciliation) {}
     private record Target(UUID id,Object input) {}
 
     private Context context(UUID id,Actor user,boolean lock) { return context(issues.get(id,false),user,lock); }
@@ -230,12 +233,12 @@ public class OperationsTransactions {
         return value==null ? null : protocol.state(json.valueToTree(value));
     }
 
-    private boolean matches(TaskRepository.ExchangeTask state,OperationSnapshot external) {
+    private boolean matches(ExchangeState state,OperationSnapshot external) {
         if (external==null) return state.task().deliveryStatus()!=DeliveryStatus.ACKNOWLEDGED && state.result()==null;
         return sameIdentity(state,external) && state.task().deliveryStatus()==DeliveryStatus.ACKNOWLEDGED && Objects.equals(state.result(),external.result());
     }
 
-    private boolean sameIdentity(TaskRepository.ExchangeTask state,OperationSnapshot external) {
+    private boolean sameIdentity(ExchangeState state,OperationSnapshot external) {
         return external.operationId().equals(state.task().operationId()) && external.request().equals(ExchangeTasks.input(state));
     }
 

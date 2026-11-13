@@ -1,5 +1,7 @@
 package com.azhukov.integration.tasks;
 
+import com.azhukov.integration.application.port.TaskStore;
+import com.azhukov.integration.domain.exchange.ExchangeState;
 import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.contract.internal.model.*;
@@ -18,13 +20,13 @@ import java.time.OffsetDateTime;
 public class ExchangeIssues {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
-    private final TaskRepository tasks;
+    private final TaskStore tasks;
 
-    public ExchangeIssues(JdbcTemplate jdbc, ObjectMapper json, TaskRepository tasks) {
+    public ExchangeIssues(JdbcTemplate jdbc, ObjectMapper json, TaskStore tasks) {
         this.jdbc = jdbc; this.json = json; this.tasks = tasks;
     }
 
-    public UUID open(TaskRepository.ExchangeTask state, UUID operationId, String kind, String reason,
+    public UUID open(ExchangeState state, UUID operationId, String kind, String reason,
                      Object content, OperationResult received, Long cursor) {
         var scope = operationId == null ? "feed" : operationId.toString();
         var fingerprint = ContentFingerprint.of(json, java.util.Arrays.asList(reason, content));
@@ -45,7 +47,7 @@ public class ExchangeIssues {
         return id;
     }
 
-    public void temporary(TaskRepository.ExchangeTask state, boolean delayed) {
+    public void temporary(ExchangeState state, boolean delayed) {
         var existing = jdbc.query("""
             SELECT id FROM exchange_issues WHERE task_id = ? AND status = 'OPEN'
             AND kind IN ('DELIVERY_UNCERTAIN','DELIVERY_DELAYED') ORDER BY opened_at LIMIT 1 FOR UPDATE
@@ -62,7 +64,7 @@ public class ExchangeIssues {
             reason, reason, null, null);
     }
 
-    public void confirm(TaskRepository.ExchangeTask state) {
+    public void confirm(ExchangeState state) {
         var ids = jdbc.query("""
             UPDATE exchange_issues SET status = 'RESOLVED',issue_revision = issue_revision + 1
             WHERE task_id = ? AND status = 'OPEN' AND kind IN ('DELIVERY_UNCERTAIN','DELIVERY_DELAYED') RETURNING id
@@ -71,7 +73,7 @@ public class ExchangeIssues {
             "Получение подтверждено; проблема доставки закрыта", Map.of("issueId", id));
     }
 
-    public UUID protocol(TaskRepository.ExchangeTask state, String reason, Object content) {
+    public UUID protocol(ExchangeState state, String reason, Object content) {
         var temporary = jdbc.query("""
             SELECT id FROM exchange_issues WHERE task_id = ? AND status = 'OPEN'
             AND kind IN ('DELIVERY_UNCERTAIN','DELIVERY_DELAYED') ORDER BY opened_at LIMIT 1 FOR UPDATE
@@ -84,7 +86,7 @@ public class ExchangeIssues {
         return id;
     }
 
-    public void observe(TaskRepository.ExchangeTask state, OperationResult result) {
+    public void observe(ExchangeState state, OperationResult result) {
         UUID issue = jdbc.queryForObject("""
             SELECT id FROM exchange_issues WHERE task_id = ? AND status = 'OPEN' AND kind = 'PROTOCOL_ERROR'
             ORDER BY opened_at DESC LIMIT 1
@@ -98,7 +100,7 @@ public class ExchangeIssues {
             json.writeValueAsString(result), ContentFingerprint.of(json,result));
     }
 
-    public Map<String,Object> snapshot(TaskRepository.ExchangeTask state) {
+    public Map<String,Object> snapshot(ExchangeState state) {
         var snapshot = new LinkedHashMap<String,Object>();
         snapshot.put("request", state.task().request());
         snapshot.put("deliveryStatus", state.task().deliveryStatus());

@@ -1,5 +1,7 @@
-package com.azhukov.integration.tasks;
+package com.azhukov.integration.infrastructure.jdbc;
 
+import com.azhukov.integration.domain.exchange.ExchangeState;
+import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.application.Actor;
 import com.azhukov.integration.application.port.TaskStore;
@@ -55,9 +57,9 @@ public class TaskRepository implements TaskStore {
         return mapTask(rs,business,outcome);
     }
 
-    private com.azhukov.integration.domain.exchange.OperationResult storedResult(java.sql.ResultSet rs) throws java.sql.SQLException {
+    private OperationResult storedResult(java.sql.ResultSet rs) throws java.sql.SQLException {
         var value = rs.getString("accepted_result");
-        return value == null ? null : json.readValue(value,com.azhukov.integration.domain.exchange.OperationResult.class);
+        return value == null ? null : json.readValue(value,OperationResult.class);
     }
 
     private Task mapTask(java.sql.ResultSet rs, BusinessStatus business, TaskOutcome outcome) throws java.sql.SQLException {
@@ -75,24 +77,22 @@ public class TaskRepository implements TaskStore {
         return rows.stream().findFirst().orElseThrow(RuleViolation::notFound);
     }
 
-    public record ExchangeTask(Task task, long version, com.azhukov.integration.domain.exchange.OperationResult result) {}
-
-    public ExchangeTask exchange(UUID operationId, boolean lock) {
+    public ExchangeState exchange(UUID operationId, boolean lock) {
         return jdbc.query("SELECT * FROM tasks WHERE operation_id = ?" + (lock ? " FOR UPDATE" : ""),
             this::mapExchange, operationId)
             .stream().findFirst().orElseThrow(RuleViolation::notFound);
     }
 
-    private ExchangeTask mapExchange(java.sql.ResultSet rs, int n) throws java.sql.SQLException {
+    private ExchangeState mapExchange(java.sql.ResultSet rs, int n) throws java.sql.SQLException {
         var business = BusinessStatus.valueOf(rs.getString("business_status"));
         var result = storedResult(rs);
         var outcome = result != null && business.isTerminal()
             ? new TaskOutcome(result.status(),result.completedAt(),result.rejectionCode())
             : null;
-        return new ExchangeTask(mapTask(rs,business,outcome),rs.getLong("exchange_version"),result);
+        return new ExchangeState(mapTask(rs,business,outcome),rs.getLong("exchange_version"),result);
     }
 
-    public Map<UUID,ExchangeTask> exchangeByTask(List<UUID> ids) {
+    public Map<UUID,ExchangeState> exchangeByTask(List<UUID> ids) {
         if (ids.isEmpty()) return Map.of();
         var placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
         return jdbc.query("SELECT * FROM tasks WHERE id IN (" + placeholders + ")", this::mapExchange, ids.toArray())
@@ -187,8 +187,6 @@ public class TaskRepository implements TaskStore {
     private record HistoryDetails(UUID attemptId,Integer resultVersion,UUID issueId,UUID reconciliationId,
                                   UUID previousAssigneeId,UUID assignedTo) {}
 
-    public record Queue(String step, int attempts, UUID claim, OffsetDateTime until) {}
-
     public UUID lockDueOperation() {
         return jdbc.query("""
             SELECT t.operation_id FROM tasks t JOIN delivery_queue q ON q.operation_id = t.operation_id
@@ -235,7 +233,7 @@ public class TaskRepository implements TaskStore {
         jdbc.update("UPDATE tasks SET delivery_status = ?,exchange_version = exchange_version + 1 WHERE operation_id = ? AND delivery_status <> ?",status.name(),operation,status.name());
     }
 
-    public void applyResult(com.azhukov.integration.domain.exchange.OperationResult result) {
+    public void applyResult(OperationResult result) {
         jdbc.update("UPDATE tasks SET accepted_result = ?::jsonb,business_status = ?,delivery_status = 'ACKNOWLEDGED',exchange_version = exchange_version + 1 WHERE operation_id = ?",
             json.writeValueAsString(result),result.status().name(),result.operationId());
     }

@@ -1,5 +1,7 @@
 package com.azhukov.integration.tasks;
 
+import com.azhukov.integration.application.port.TaskStore;
+import com.azhukov.integration.domain.exchange.ExchangeState;
 import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.contract.ExchangeReply;
 import com.azhukov.integration.domain.task.TaskInput;
@@ -18,11 +20,11 @@ import java.util.UUID;
 
 @Service
 public class ExchangeTasks {
-    private final TaskRepository tasks;
+    private final TaskStore tasks;
     private final ExchangeIssues issues;
     private final ExchangeProtocol protocol;
 
-    public ExchangeTasks(TaskRepository tasks, ExchangeIssues issues) {
+    public ExchangeTasks(TaskStore tasks, ExchangeIssues issues) {
         this.tasks = tasks; this.issues = issues;
         this.protocol = new ExchangeProtocol();
     }
@@ -133,38 +135,22 @@ public class ExchangeTasks {
             issues.open(null, received.operationId(), "RESULT_CONFLICT", "Неизвестная внешняя операция", received, received, cursor);
             return;
         }
-        try { identity(state).requireSame(received.identity()); }
-        catch (IllegalArgumentException different) {
-            issues.open(state, received.operationId(), "RESULT_CONFLICT", "Запрос события не совпадает с заданием", received, received, cursor);
-            return;
-        }
-        if (state.result() != null) {
-            int oldVersion = state.result().version();
-            int newVersion = received.version();
-            if (oldVersion == newVersion && state.result().equals(received)) return;
-            if (oldVersion > newVersion) {
-                tasks.history(state.task(), null, HistoryType.RESULT_IGNORED, "Запоздалый снимок не изменил результат",
-                    Map.of("resultVersion",newVersion));
-                return;
-            }
-        }
-        if (state.task().deliveryStatus() == DeliveryStatus.NEEDS_REVIEW) {
-            issues.observe(state, received);
-            return;
-        }
-        if (state.task().deliveryStatus() == DeliveryStatus.STOPPED) {
-            issues.open(state, received.operationId(), "RECONCILIATION_DIFFERENCE",
+        switch (state.disposition(received)) {
+            case REQUEST_MISMATCH -> issues.open(state, received.operationId(), "RESULT_CONFLICT",
+                "Запрос события не совпадает с заданием", received, received, cursor);
+            case DUPLICATE -> { }
+            case OLDER -> tasks.history(state.task(), null, HistoryType.RESULT_IGNORED,
+                "Запоздалый снимок не изменил результат", Map.of("resultVersion",received.version()));
+            case OBSERVE -> issues.observe(state, received);
+            case STOPPED -> issues.open(state, received.operationId(), "RECONCILIATION_DIFFERENCE",
                 "Внешний снимок после остановки отправки требует решения оператора", received, received, cursor);
-            return;
+            case CONFLICT -> issues.open(state, received.operationId(), "RESULT_CONFLICT",
+                "Разное содержимое одной версии результата", received, received, cursor);
+            case APPLY -> apply(state, received, null);
         }
-        if (state.result() != null && state.result().version() == received.version()) {
-            issues.open(state, received.operationId(), "RESULT_CONFLICT", "Разное содержимое одной версии результата", received, received, cursor);
-            return;
-        }
-        apply(state, received, null);
     }
 
-    public void apply(TaskRepository.ExchangeTask state, OperationResult result, UUID actor) {
+    public void apply(ExchangeState state, OperationResult result, UUID actor) {
         tasks.applyResult(result);
         tasks.removeQueue(result.operationId());
         issues.confirm(state);
@@ -172,14 +158,14 @@ public class ExchangeTasks {
             "Принят внешний результат: " + result.status().name(), Map.of("resultVersion",result.version()));
     }
 
-    public void acknowledge(TaskRepository.ExchangeTask state) {
+    public void acknowledge(ExchangeState state) {
         state = delivery(state, DeliveryStatus.ACKNOWLEDGED);
         tasks.removeQueue(state.task().operationId());
         issues.confirm(state);
         tasks.history(state.task(), null, HistoryType.DELIVERY_ACKNOWLEDGED, "Исполнитель подтвердил получение операции");
     }
 
-    private TaskRepository.ExchangeTask find(UUID id) {
+    private ExchangeState find(UUID id) {
         if (id == null) return null;
         try { return tasks.exchange(id,true); }
         catch (RuleViolation notFound) { if (notFound.code() == RuleViolation.Code.NOT_FOUND) return null; throw notFound; }
@@ -189,17 +175,17 @@ public class ExchangeTasks {
         tasks.finishAttempt(claim.attemptId(),outcome);
     }
 
-    private TaskRepository.ExchangeTask delivery(TaskRepository.ExchangeTask state, DeliveryStatus status) {
+    private ExchangeState delivery(ExchangeState state, DeliveryStatus status) {
         tasks.delivery(state.task().operationId(),status);
-        return new TaskRepository.ExchangeTask(state.task().withDeliveryStatus(status),state.version(),state.result());
+        return state.withDeliveryStatus(status);
     }
 
     public static int delay(int attempts) { return switch(attempts) { case 1 -> 2; case 2 -> 5; case 3 -> 15; default -> 60; }; }
-    public static TaskInput input(TaskRepository.ExchangeTask state) {
+    public static TaskInput input(ExchangeState state) {
         return state.task().request();
     }
-    public static OperationIdentity identity(TaskRepository.ExchangeTask state) {
-        return new OperationIdentity(state.task().operationId(),input(state));
+    public static OperationIdentity identity(ExchangeState state) {
+        return state.identity();
     }
 
     private UUID operationId(JsonNode raw) {

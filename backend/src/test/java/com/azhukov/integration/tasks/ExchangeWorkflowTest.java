@@ -1,5 +1,6 @@
 package com.azhukov.integration.tasks;
 
+import com.azhukov.integration.infrastructure.jdbc.TaskRepository;
 import com.azhukov.integration.contract.ExchangeReply;
 import com.azhukov.integration.support.PostgresTest;
 import org.junit.jupiter.api.Test;

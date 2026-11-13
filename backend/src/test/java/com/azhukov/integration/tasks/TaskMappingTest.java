@@ -1,5 +1,6 @@
 package com.azhukov.integration.tasks;
 
+import com.azhukov.integration.infrastructure.jdbc.TaskRepository;
 import com.azhukov.integration.application.Actor;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.BusinessStatus;
