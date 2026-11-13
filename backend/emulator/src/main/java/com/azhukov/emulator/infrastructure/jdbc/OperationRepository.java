@@ -10,6 +10,9 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.sql.Statement;
 import java.util.UUID;
 
 @Repository
@@ -80,23 +83,38 @@ public class OperationRepository implements OperationStore {
             json.writeValueAsString(result),result.completedAt(),result.operationId());
     }
 
-    public boolean publishNext() {
-        // Holding the counter until commit makes cursor order equal commit order.
-        long previous = jdbc.queryForObject("SELECT last_cursor FROM feed_position WHERE id = 1 FOR UPDATE",Long.class);
-        var events = jdbc.query("""
-            SELECT e.operation_id,e.version,e.copy_number FROM result_events e
-            WHERE e.cursor IS NULL AND (e.publish_after <= clock_timestamp() OR
-                (e.version = 1 AND EXISTS (SELECT 1 FROM faults f WHERE f.bound_operation_id = e.operation_id AND f.mode = 'DELAY_RESULT')
-                AND EXISTS (SELECT 1 FROM result_events terminal WHERE terminal.operation_id = e.operation_id AND terminal.version = 2 AND terminal.cursor IS NOT NULL)))
-            ORDER BY e.created_at,e.version,e.copy_number LIMIT 1 FOR UPDATE OF e
-            """,(rs,n) -> new EventKey(rs.getObject(1,UUID.class),rs.getInt(2),rs.getInt(3)));
-        if (events.isEmpty()) return false;
-        long next = Math.addExact(previous,1);
-        var event = events.getFirst();
-        jdbc.update("UPDATE result_events SET cursor = ? WHERE operation_id = ? AND version = ? AND copy_number = ?",
-            next,event.id(),event.version(),event.copy());
+    public int publish(int limit) {
+        // Counter lock is held until commit: higher cursors can never become visible first.
+        long previous=jdbc.queryForObject("SELECT last_cursor FROM feed_position WHERE id = 1 FOR UPDATE",Long.class);
+        var events=jdbc.query("""
+            WITH candidates AS MATERIALIZED (
+                SELECT e.operation_id,e.version,e.copy_number,e.created_at FROM result_events e
+                WHERE e.cursor IS NULL AND (e.publish_after <= clock_timestamp() OR
+                    (e.version = 1 AND EXISTS (SELECT 1 FROM faults f WHERE f.bound_operation_id = e.operation_id AND f.mode = 'DELAY_RESULT')
+                    AND EXISTS (SELECT 1 FROM result_events terminal WHERE terminal.operation_id = e.operation_id AND terminal.version = 2 AND terminal.cursor IS NOT NULL)))
+                ORDER BY e.created_at,e.version,e.copy_number,e.operation_id LIMIT ?
+            )
+            SELECT e.operation_id,e.version,e.copy_number,c.created_at
+            FROM result_events e JOIN candidates c
+                ON c.operation_id=e.operation_id AND c.version=e.version AND c.copy_number=e.copy_number
+            ORDER BY e.operation_id,e.version,e.copy_number FOR UPDATE OF e
+            """,(rs,n) -> new EventKey(rs.getObject(1,UUID.class),rs.getInt(2),rs.getInt(3),rs.getObject(4,OffsetDateTime.class)),limit);
+        if (events.isEmpty()) return 0;
+        // Select eligibility once; a held RUNNING made eligible by this batch belongs to the next transaction.
+        events.sort(Comparator.comparing(EventKey::createdAt).thenComparingInt(EventKey::version)
+            .thenComparingInt(EventKey::copy).thenComparing(EventKey::id));
+        var updates=new ArrayList<Object[]>(events.size());
+        long next=previous;
+        for (var event:events) {
+            next=Math.addExact(next,1);
+            updates.add(new Object[]{next,event.id(),event.version(),event.copy()});
+        }
+        var counts=jdbc.batchUpdate("UPDATE result_events SET cursor = ? WHERE operation_id = ? AND version = ? AND copy_number = ?",updates);
+        if (counts.length!=events.size()) throw new IllegalStateException("Publication batch returned an incomplete result");
+        for (int count:counts)
+            if (count!=1 && count!=Statement.SUCCESS_NO_INFO) throw new IllegalStateException("Selected publication event was not updated");
         jdbc.update("UPDATE feed_position SET last_cursor = ? WHERE id = 1",next);
-        return true;
+        return events.size();
     }
 
     public void lockFaultConfiguration(String reference) {
@@ -108,6 +126,9 @@ public class OperationRepository implements OperationStore {
     }
 
     public void releaseEvents(UUID operation) {
+        // Publication uses this same order within an operation; the caller already holds its fault row.
+        jdbc.query("SELECT version,copy_number FROM result_events WHERE operation_id = ? AND cursor IS NULL ORDER BY version,copy_number FOR UPDATE",
+            rs -> {},operation);
         jdbc.update("UPDATE result_events SET publish_after = clock_timestamp() WHERE operation_id = ? AND cursor IS NULL",operation);
     }
 
@@ -115,5 +136,5 @@ public class OperationRepository implements OperationStore {
         jdbc.update("DELETE FROM faults WHERE reference = ?",reference);
     }
 
-    private record EventKey(UUID id, int version, int copy) {}
+    private record EventKey(UUID id,int version,int copy,OffsetDateTime createdAt) {}
 }

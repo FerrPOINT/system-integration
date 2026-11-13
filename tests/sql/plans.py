@@ -52,11 +52,12 @@ params={
 'OperationRepository.fault/1:1':[O],'OperationRepository.event/3:1':[O,1,1,result,False],
 'OperationRepository.lockOperation/1:1':[O],'OperationRepository.exists/1:1':[O],'OperationRepository.lockFault/1:1':['REQ-100001'],
 'OperationRepository.insert/2:1':[NO,'REQ-110001',25],'OperationRepository.bindFault/2:1':[uid(100003),'REQ-100002'],
-'OperationRepository.complete/1:1':[result,'2026-01-02T00:00:00Z',O],'OperationRepository.publishNext/0:1':[],
-'OperationRepository.publishNext/0:2':[],'OperationRepository.publishNext/0:3':[20001,O,1,0],'OperationRepository.publishNext/0:4':[20001],
+'OperationRepository.complete/1:1':[result,'2026-01-02T00:00:00Z',O],'OperationRepository.publish/1:1':[],
+'OperationRepository.publish/1:2':[25],'OperationRepository.publish/1:3':[20001,uid(105001),1,0],'OperationRepository.publish/1:4':[20001],
 'OperationRepository.lockFaultConfiguration/1:1':['fault:REQ-100001'],'OperationRepository.configure/2:1':['REQ-100002','DELAY_RESULT'],
-'OperationRepository.releaseEvents/1:1':[O],'OperationRepository.clearFault/1:1':['REQ-100001']}
+'OperationRepository.releaseEvents/1:1':[uid(105001)],'OperationRepository.releaseEvents/1:2':[uid(105001)],'OperationRepository.clearFault/1:1':['REQ-100001']}
 for key,values in params.items():static(key,values)
+for batch in [1,10,50]:static('OperationRepository.publish/1:2',[batch],f'batch={batch}')
 static('TaskRepository.ownsClaim/2:1',[uid(100006),uid(500006)],'active-lease-owned')
 static('ReviewRepository.temporary/1:1',[T],'no-temporary-issue')
 static('ReviewRepository.confirm/1:1',[T],'no-temporary-issue')

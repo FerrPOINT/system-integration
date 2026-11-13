@@ -39,3 +39,6 @@ management:
       group:
         readiness:
           include: readinessState,db
+si:
+  emulator:
+    publication-batch-size: ${SI_EMULATOR_PUBLICATION_BATCH_SIZE:25}

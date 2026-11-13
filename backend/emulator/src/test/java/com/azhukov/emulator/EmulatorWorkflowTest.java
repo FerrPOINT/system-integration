@@ -10,6 +10,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.*;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -30,6 +38,8 @@ class EmulatorWorkflowTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper json;
     @Autowired MockMvc mvc;
+    @Autowired PlatformTransactionManager transactions;
+    @MockitoSpyBean JdbcTemplate publicationSql;
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry properties) {
@@ -43,6 +53,90 @@ class EmulatorWorkflowTest {
         assertEquals("si_emulator_test",jdbc.queryForObject("SELECT current_database()",String.class));
         jdbc.execute("TRUNCATE result_events,faults,operations CASCADE");
         jdbc.update("UPDATE feed_position SET last_cursor = 0 WHERE id = 1");
+    }
+
+    @Test
+    void batchCounterAndAllCursorAssignmentsRollbackTogether() {
+        service.accept(UUID.randomUUID(),new OperationRequest("REQ-000008",25));
+        assertTrue(service.executeNext());
+        new TransactionTemplate(transactions).executeWithoutResult(tx -> {
+            assertEquals(2,service.publish(25));
+            tx.setRollbackOnly();
+        });
+        assertEquals(0,jdbc.queryForObject("SELECT last_cursor FROM feed_position WHERE id=1",Long.class));
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM result_events WHERE cursor IS NOT NULL",Integer.class));
+        assertEquals(2,service.publish(25));
+        assertEquals(java.util.List.of(1L,2L),operations.events(0,100).stream().map(ResultEvent::cursor).toList());
+    }
+
+    @Test
+    void concurrentPublishersExposeNoHigherCursorBeforeTheFirstBatchCommits() throws Exception {
+        for (int n=0;n<25;n++) service.accept(UUID.randomUUID(),new OperationRequest("REQ-000009",25));
+        while (service.executeNext()) {}
+        var selected=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        try (var pool=Executors.newVirtualThreadPerTaskExecutor()) {
+            var first=pool.submit(() -> new TransactionTemplate(transactions).execute(tx -> {
+                int count=service.publish(25);
+                selected.countDown();
+                try { assertTrue(release.await(5,TimeUnit.SECONDS)); }
+                catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new IllegalStateException(interrupted); }
+                return count;
+            }));
+            try {
+                assertTrue(selected.await(2,TimeUnit.SECONDS));
+                var second=pool.submit(() -> service.publish(25));
+                awaitBlockedTransaction();
+                assertTrue(operations.events(0,100).isEmpty(),"Uncommitted cursors must not be visible");
+                release.countDown();
+                assertEquals(25,first.get(5,TimeUnit.SECONDS));
+                assertEquals(25,second.get(5,TimeUnit.SECONDS));
+            } finally { release.countDown(); }
+        }
+        assertEquals(java.util.stream.LongStream.rangeClosed(1,50).boxed().toList(),
+            operations.events(0,100).stream().map(ResultEvent::cursor).toList());
+    }
+
+    @Test
+    void initialBatchDoesNotPullLateRunningIntoADeadlockWithConcurrentFaultRelease() throws Exception {
+        UUID id=UUID.randomUUID();
+        var input=new OperationRequest("REQ-000010",25);
+        service.configure(input.reference(),FaultMode.DELAY_RESULT);
+        service.accept(id,input);
+        assertTrue(service.executeNext());
+        var selected=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var firstBatch=new AtomicBoolean(true);
+        doAnswer(call -> {
+            if (firstBatch.compareAndSet(true,false)) {
+                selected.countDown();
+                assertTrue(release.await(5,TimeUnit.SECONDS));
+            }
+            return call.callRealMethod();
+        }).when(publicationSql).batchUpdate(startsWith("UPDATE result_events SET cursor"),org.mockito.ArgumentMatchers.<Object[]>anyList());
+        try (var pool=Executors.newVirtualThreadPerTaskExecutor()) {
+            var publishing=pool.submit(() -> service.publish(2));
+            try {
+                assertTrue(selected.await(2,TimeUnit.SECONDS));
+                var clearing=pool.submit(() -> service.clear(input.reference()));
+                awaitBlockedTransaction();
+                release.countDown();
+                assertEquals(1,publishing.get(5,TimeUnit.SECONDS),"Only the initially eligible terminal belongs to this batch");
+                clearing.get(5,TimeUnit.SECONDS);
+            } finally { release.countDown(); }
+        }
+        assertEquals(1,service.publish(2));
+        assertEquals(java.util.List.of(2,1),operations.events(0,100).stream().map(e -> e.result().version()).toList());
+    }
+
+    private void awaitBlockedTransaction() throws InterruptedException {
+        long until=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);
+        do {
+            int blocked=jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND cardinality(pg_blocking_pids(pid))>0",Integer.class);
+            if (blocked>0) return;
+            Thread.sleep(10);
+        } while (System.nanoTime()<until);
+        fail("The controlled competing transaction did not reach its database lock");
     }
 
     @Test
@@ -148,12 +242,12 @@ class EmulatorWorkflowTest {
         assertTrue(service.accept(id,input).dropResponse());
         var before = json.valueToTree(operations.get(id));
         assertEquals(1,before.get("executions").asInt());
-        assertFalse(service.publishNext());
+        assertFalse(service.publish(1)>0);
         assertEquals(0,operations.events(0,100).size());
         assertFalse(service.accept(id,input).dropResponse());
         assertEquals(before,json.valueToTree(operations.get(id)));
         service.clear(input.reference());
-        while (service.publishNext()) { }
+        while (service.publish(1)>0) { }
         assertEquals(2,operations.events(0,100).size());
     }
 
@@ -166,7 +260,7 @@ class EmulatorWorkflowTest {
         UUID duplicateId = UUID.randomUUID(), lateId = UUID.randomUUID();
         service.accept(duplicateId,duplicate); service.accept(lateId,late);
         while (service.executeNext()) { }
-        while (service.publishNext()) { }
+        while (service.publish(1)>0) { }
         var events = operations.events(0,100);
         assertEquals(5,events.size());
         var duplicates = events.stream().filter(e -> e.result().operationId().equals(duplicateId) && e.result().version() == 2).toList();

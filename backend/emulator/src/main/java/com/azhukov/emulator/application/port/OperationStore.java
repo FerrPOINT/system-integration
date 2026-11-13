@@ -16,7 +16,7 @@ public interface OperationStore {
     void insert(UUID id,OperationRequest input);
     void bindFault(String reference,UUID id);
     void complete(OperationResult result);
-    boolean publishNext();
+    int publish(int limit);
     void lockFaultConfiguration(String reference);
     void configure(String reference,FaultMode mode);
     void releaseEvents(UUID operation);

@@ -11,6 +11,7 @@ import java.util.UUID;
 
 @Service
 public class OperationService {
+    public static final int MAX_PUBLICATION_BATCH=100;
     private final OperationStore operations;
     public OperationService(OperationStore operations) { this.operations=operations; }
     public record Accepted(Operation operation,boolean created,boolean dropResponse) {}
@@ -53,7 +54,10 @@ public class OperationService {
     }
 
     @Transactional
-    public boolean publishNext() { return operations.publishNext(); }
+    public int publish(int limit) {
+        if (limit<1 || limit>MAX_PUBLICATION_BATCH) throw new RuleViolation(RuleViolation.Code.VALIDATION_FAILED);
+        return operations.publish(limit);
+    }
 
     @Transactional
     public void configure(String reference,FaultMode mode) {

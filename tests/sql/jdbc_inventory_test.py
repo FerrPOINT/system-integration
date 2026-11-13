@@ -51,7 +51,7 @@ class Repository {
 
     def test_unsupported_calls_ambiguous_overloads_and_missing_method_fail(self):
         with self.assertRaisesRegex(ValueError,'Add SQL coverage'):
-            self.collect_source('class Repository {\n    void run() { jdbc.batchUpdate("SQL"); }\n}')
+            self.collect_source('class Repository {\n    void run() { jdbc.execute("SQL"); }\n}')
         with self.assertRaisesRegex(ValueError,'Ambiguous method'):
             self.collect_source('class Repository {\n    void run(UUID id) { jdbc.query("SELECT 1",rs -> {}); }\n    void run(String id) {}\n}')
         with self.assertRaisesRegex(ValueError,'enclosing method'):
