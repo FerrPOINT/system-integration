@@ -1,0 +1,75 @@
+{
+  "create": {
+    "input": {
+      "title": "Проверка заявки",
+      "request": {
+        "reference": "REQ-000001",
+        "quantity": 25
+      }
+    },
+    "canonical": "{\"request\":{\"quantity\":25,\"reference\":\"REQ-000001\"},\"title\":\"Проверка заявки\"}",
+    "sha256": "6427b531c6c8869e01e47cb31c1dc06483728773b05a5a0840a5d9954210efe8"
+  },
+  "rename": {
+    "input": {
+      "taskId": "00000000-0000-4000-8000-000000000001",
+      "input": {
+        "title": "Новое имя",
+        "expectedTitleRevision": 9007199254740990
+      }
+    },
+    "canonical": "{\"input\":{\"expectedTitleRevision\":9007199254740990,\"title\":\"Новое имя\"},\"taskId\":\"00000000-0000-4000-8000-000000000001\"}",
+    "sha256": "8dec6372310fec48f6364b002cffb565407c66d65719c1655f20c6236d8d2f36"
+  },
+  "take": {
+    "input": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "input": {
+        "expectedIssueRevision": 2
+      }
+    },
+    "canonical": "{\"id\":\"00000000-0000-4000-8000-000000000001\",\"input\":{\"expectedIssueRevision\":2}}",
+    "sha256": "76ebe43b440380ddb078ee6cd0e2a24cae0a6d67d5ca33ef9f8ab446d5b5f342"
+  },
+  "retry": {
+    "input": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "input": {
+        "expectedIssueRevision": 2,
+        "reason": "Повтор"
+      }
+    },
+    "canonical": "{\"id\":\"00000000-0000-4000-8000-000000000001\",\"input\":{\"expectedIssueRevision\":2,\"reason\":\"Повтор\"}}",
+    "sha256": "2519ab1ff0d0521ded43d556f78f795e54437b4ddf2b1b580e33da599cbb6b41"
+  },
+  "retry-with-snapshot": {
+    "input": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "input": {
+        "expectedIssueRevision": 2,
+        "reason": "Повтор",
+        "reconciliationId": "00000000-0000-4000-8000-000000000099"
+      }
+    },
+    "canonical": "{\"id\":\"00000000-0000-4000-8000-000000000001\",\"input\":{\"expectedIssueRevision\":2,\"reason\":\"Повтор\",\"reconciliationId\":\"00000000-0000-4000-8000-000000000099\"}}",
+    "sha256": "7eaf07fd8107de552d4a2264e3eb7fd7ec73b07365d81ab72be5f159249ce37b"
+  },
+  "resolve": {
+    "input": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "input": {
+        "expectedIssueRevision": 2,
+        "reconciliationId": "00000000-0000-4000-8000-000000000099",
+        "action": "ACKNOWLEDGE_DIFFERENCE",
+        "reason": "Проверено"
+      }
+    },
+    "canonical": "{\"id\":\"00000000-0000-4000-8000-000000000001\",\"input\":{\"action\":\"ACKNOWLEDGE_DIFFERENCE\",\"expectedIssueRevision\":2,\"reason\":\"Проверено\",\"reconciliationId\":\"00000000-0000-4000-8000-000000000099\"}}",
+    "sha256": "48b2afa688ad8bfd39bfff2051d757102e735ca1a0ec7dced6f57f1e71631cc1"
+  },
+  "reconcile": {
+    "input": "00000000-0000-4000-8000-000000000001",
+    "canonical": "\"00000000-0000-4000-8000-000000000001\"",
+    "sha256": "1831acac551c658a7f7abeacb83c31741e98fc9ac3458bd361f7d7f9bb4c348e"
+  }
+}
