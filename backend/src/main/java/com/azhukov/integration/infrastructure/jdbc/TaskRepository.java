@@ -108,12 +108,13 @@ public class TaskRepository implements TaskStore {
             .collect(java.util.stream.Collectors.toMap(row -> row.task().operationId(),row -> row));
     }
 
-    public List<Task> list(Actor user, int page, BusinessStatus status,
+    public List<Task> list(Actor user, int page, int size, BusinessStatus status,
                            OffsetDateTime from, OffsetDateTime to) {
         var args = new ArrayList<Object>();
         var sql = "SELECT * FROM tasks" + taskConditions(user, status, from, to, args)
-            + " ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?";
-        args.add((long) page * 20);
+            + " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?";
+        args.add(size);
+        args.add((long) page * size);
         return jdbc.query(sql, taskRow, args.toArray());
     }
 
@@ -179,10 +180,10 @@ public class TaskRepository implements TaskStore {
         return jdbc.queryForObject("SELECT count(*) FROM task_history WHERE task_id = ?", Long.class, id);
     }
 
-    public List<HistoryEntry> history(UUID id, int page) {
+    public List<HistoryEntry> history(UUID id, int page, int size) {
         return jdbc.query("""
             SELECT * FROM task_history WHERE task_id = ?
-            ORDER BY occurred_at DESC, id DESC LIMIT 20 OFFSET ?
+            ORDER BY occurred_at DESC, id DESC LIMIT ? OFFSET ?
             """, (rs, row) -> {
                 var details = json.readValue(rs.getString("details"),HistoryDetails.class);
                 return new HistoryEntry(rs.getObject("id",UUID.class),id,rs.getObject("operation_id",UUID.class),
@@ -190,7 +191,7 @@ public class TaskRepository implements TaskStore {
                     rs.getObject("actor_user_id",UUID.class),HistoryType.valueOf(rs.getString("event_type")),rs.getString("summary"),
                     details.attemptId(),details.resultVersion(),details.issueId(),details.reconciliationId(),
                     details.previousAssigneeId(),details.assignedTo());
-            }, id, (long) page * 20);
+            }, id, size, (long) page * size);
     }
 
     private record HistoryDetails(UUID attemptId,Integer resultVersion,UUID issueId,UUID reconciliationId,

@@ -30,8 +30,8 @@ public class TasksController implements TasksApi {
     public ResponseEntity<Task> getTask(UUID id) { return ResponseEntity.ok(view(tasks.get(AppUser.current().actor(), id))); }
 
     @Override
-    public ResponseEntity<TaskPage> listTasks(Integer page, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
-        var result = tasks.list(AppUser.current().actor(), page,
+    public ResponseEntity<TaskPage> listTasks(Integer page, Integer size, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
+        var result = tasks.list(AppUser.current().actor(), page, size,
             status == null ? null : com.azhukov.integration.domain.task.BusinessStatus.valueOf(status.getValue()), from, to);
         return ResponseEntity.ok(new TaskPage(result.items().stream().map(TasksController::view).toList(),
             result.page(),result.hasNext(),result.totalItems(),result.totalPages()));
@@ -44,8 +44,8 @@ public class TasksController implements TasksApi {
     }
 
     @Override
-    public ResponseEntity<HistoryPage> listTaskHistory(UUID id, Integer page) {
-        var result = tasks.history(AppUser.current().actor(), id, page);
+    public ResponseEntity<HistoryPage> listTaskHistory(UUID id, Integer page, Integer size) {
+        var result = tasks.history(AppUser.current().actor(), id, page, size);
         return ResponseEntity.ok(new HistoryPage(result.items().stream().map(TasksController::view).toList(),
             result.page(),result.hasNext(),result.totalItems(),result.totalPages()));
     }

@@ -14,7 +14,7 @@ import { Select } from '../../ui/select';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { createTask, getTask, listTaskHistory, listTasks, renameTask } from '../../../build/generated/openapi/client';
 import type { BusinessStatus, GetSession200, Task } from '../../../build/generated/openapi/client';
@@ -25,6 +25,7 @@ import { useCommandKey } from '../../app/use-command-key';
 import { businessLabels, deliveryLabels, timestamp } from '../../app/format';
 import { ReconcileButton } from '../operations/Operations';
 import { taskRefreshInterval } from './refresh-interval';
+import { usePagination } from '../../app/use-pagination';
 
 function BusinessBadge({ status }: { status: BusinessStatus }) {
   return <Badge tone={status === 'SUCCEEDED' ? 'success' : status === 'REJECTED' ? 'danger' : status === 'RUNNING' ? 'info' : 'neutral'}>{businessLabels[status]}</Badge>;
@@ -32,11 +33,11 @@ function BusinessBadge({ status }: { status: BusinessStatus }) {
 
 export function TaskList({ user }: { user: GetSession200 }) {
   const [search, setSearch] = useSearchParams();
-  const page = Number(search.get('page') || 0);
+  const { page, size, valid: validPage, viewportRef, changePage } = usePagination();
   const status = search.get('businessStatus') || undefined;
-  const params = { page, businessStatus: status as BusinessStatus | undefined,
+  const params = { page, size, businessStatus: status as BusinessStatus | undefined,
     createdFrom: search.get('createdFrom') || undefined, createdTo: search.get('createdTo') || undefined };
-  const validParameters = Number.isSafeInteger(page) && page >= 0 &&
+  const validParameters = validPage &&
     (!status || Object.hasOwn(businessLabels, status)) &&
     [params.createdFrom, params.createdTo].every(value => !value || Number.isFinite(Date.parse(value)));
   const validPeriod = !params.createdFrom || !params.createdTo || Date.parse(params.createdFrom) < Date.parse(params.createdTo);
@@ -49,14 +50,11 @@ export function TaskList({ user }: { user: GetSession200 }) {
     }
     setSearch(updated, { replace: true });
   }
-  const tasks = useQuery({ queryKey: [...keys.tasks, 'list', params], queryFn: ({ signal }) => data(listTasks(params, { signal })), enabled: valid });
+  const tasks = useQuery({ queryKey: [...keys.tasks, 'list', params], queryFn: ({ signal }) => data(listTasks(params, { signal })), enabled: valid, placeholderData: keepPreviousData });
   const mobile = useMediaQuery('(max-width: 760px)');
   const [filtersOpen, setFiltersOpen] = useState(!mobile || Boolean(status || params.createdFrom || params.createdTo));
-  function changePage(next: number) {
-    const updated = new URLSearchParams(search); updated.set('page', String(next)); setSearch(updated);
-  }
   return <>
-    <PageHeader title={user.role === 'OPERATOR' ? 'Все задания' : 'Мои задания'}
+    <div className="list-tools base-page-stack"><PageHeader title={user.role === 'OPERATOR' ? 'Все задания' : 'Мои задания'}
       context="Приём задания, доставка и результат исполнения показаны отдельно."
       actions={user.role === 'INITIATOR' && <Button asChild variant="default"><Link to="/tasks/new">Создать задание</Link></Button>} />
     <Disclosure className="filter-panel" open={filtersOpen} onToggle={event => setFiltersOpen(event.currentTarget.open)} summary={<>Фильтры <span className="muted">{status || params.createdFrom || params.createdTo ? 'Заданы условия' : 'Результат и период'}</span></>}>
@@ -70,28 +68,31 @@ export function TaskList({ user }: { user: GetSession200 }) {
         onChange={event => changeFilters({ createdTo: event.target.value ? event.target.value + ':00Z' : undefined })} />}</FormField>
       <Button type="button" onClick={() => setSearch({}, { replace: true })}>Сбросить</Button>
     </div></Disclosure>
+    <div className="list-heading"><span>{tasks.isFetching ? 'Обновляем…' : 'Сохранённые задания'}</span>
+      <Button type="button" onClick={() => tasks.refetch()} disabled={tasks.isFetching || !valid}>Обновить</Button></div></div>
+    <section className="paged-list base-page-stack" aria-busy={tasks.isFetching}>
+    <div className="paged-viewport" ref={viewportRef}>
     {!valid ? <Notice role="alert" tone="danger">{validParameters ? 'Начало периода должно быть раньше конца.' : 'Некорректные параметры страницы. Сбросьте фильтры.'}</Notice> : tasks.isPending ? <Loading /> :
       tasks.isError ? <><ErrorMessage error={tasks.error} /><Button onClick={() => tasks.refetch()}>Повторить</Button></> :
-      <><div className="list-heading"><span>{tasks.isFetching ? 'Обновляем…' : 'Сохранённые задания'}</span>
-        <Button type="button" onClick={() => tasks.refetch()} disabled={tasks.isFetching}>Обновить</Button></div>
-        {tasks.data.items.length === 0 ? <Card><EmptyState headingLevel={2}
+        tasks.data.items.length === 0 ? <Card><EmptyState headingLevel={2}
           message={status || params.createdFrom || params.createdTo ? 'Ничего не найдено' : 'Заданий пока нет'}
           description={status || params.createdFrom || params.createdTo ? 'Измените условия или сбросьте фильтры, чтобы увидеть задания.' : 'Создайте первое задание. Здесь появятся доставка и результат исполнения.'}
           action={(status || params.createdFrom || params.createdTo) && <Button onClick={() => setSearch({})}>Сбросить фильтры</Button>} /></Card> : mobile ?
-          <ul className="task-cards">{tasks.data.items.map(task => <Card asChild key={task.taskId}><li className="task-card"><CardContent className="base-page-stack">
+          <ul className="task-cards" data-page-items>{tasks.data.items.slice(0, size).map(task => <Card asChild key={task.taskId} data-page-item><li className="task-card"><CardContent className="base-page-stack">
             <CardTitle asChild><h2><Link to={'/tasks/' + task.taskId}>{task.title}</Link></h2></CardTitle>
             <div className="task-card-status"><BusinessBadge status={task.businessStatus} /><span>{deliveryLabels[task.deliveryStatus]}</span></div>
             <dl><dt>Заявка</dt><dd>{task.request.reference}</dd><dt>Количество</dt><dd>{task.request.quantity}</dd>
               <dt>Создано</dt><dd>{timestamp(task.createdAt)}</dd></dl>
           </CardContent></li></Card>)}</ul> :
-          <Card><Table className="task-table"><caption className="sr-only">Реестр заданий</caption>
-            <thead><tr><th scope="col">Название / заявка</th><th scope="col">Доставка</th><th scope="col">Результат</th><th scope="col">Создано (UTC)</th></tr></thead>
-            <tbody>{tasks.data.items.map(task => <tr key={task.taskId}><td><Link to={'/tasks/' + task.taskId}>{task.title}</Link>
+          <Card><Table className="task-table" data-page-items><caption className="sr-only">Реестр заданий</caption>
+            <thead data-page-heading><tr><th scope="col">Название / заявка</th><th scope="col">Доставка</th><th scope="col">Результат</th><th scope="col">Создано (UTC)</th></tr></thead>
+            <tbody>{tasks.data.items.slice(0, size).map(task => <tr key={task.taskId} data-page-item><td><Link to={'/tasks/' + task.taskId}>{task.title}</Link>
               <small>{task.request.reference} · {task.request.quantity} ед.</small></td><td>{deliveryLabels[task.deliveryStatus]}</td>
               <td><BusinessBadge status={task.businessStatus} /></td><td>{timestamp(task.createdAt)}</td></tr>)}</tbody>
           </Table></Card>}
-        <Pagination page={page} totalItems={tasks.data.totalItems} totalPages={tasks.data.totalPages} pending={tasks.isFetching} onChange={changePage} />
-      </>}
+    </div>
+    <Pagination page={validPage ? page : 0} totalItems={tasks.data?.totalItems ?? 0} totalPages={tasks.data?.totalPages ?? 0} pending={tasks.isFetching || !valid} onChange={changePage} />
+    </section>
   </>;
 }
 
@@ -182,19 +183,21 @@ function RenameForm({ task, onClose }: { task: Task; onClose: () => void }) {
 }
 
 function History({ id, canReview, refreshInterval }: { id: string; canReview: boolean; refreshInterval: number | false }) {
-  const [page, setPage] = useState(0);
-  const history = useQuery({ queryKey: keys.history(id, page),
-    queryFn: ({ signal }) => data(listTaskHistory(id, { page }, { signal })), refetchInterval: refreshInterval });
-  return <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>История</h2></CardTitle>
-    {history.isPending ? <Loading /> : history.isError ? <><ErrorMessage error={history.error} />
+  const { page, size, valid, viewportRef, changePage } = usePagination();
+  const history = useQuery({ queryKey: keys.history(id, page, size), enabled: valid,
+    queryFn: ({ signal }) => data(listTaskHistory(id, { page, size }, { signal })), refetchInterval: refreshInterval, placeholderData: keepPreviousData });
+  return <Card asChild><section className="history-panel"><CardContent className="paged-list base-page-stack" aria-busy={history.isFetching}><CardTitle asChild><h2>История</h2></CardTitle>
+    <div className="paged-viewport" ref={viewportRef}>
+    {!valid ? <Notice role="alert" tone="danger">Некорректные параметры страницы.</Notice> : history.isPending ? <Loading /> : history.isError ? <><ErrorMessage error={history.error} />
       <Button onClick={() => history.refetch()}>Повторить</Button></> : <>
-      <Timeline>{history.data.items.map(event => <TimelineItem key={event.eventId}><TimelineMarker /><TimelineContent>
+      <Timeline data-page-items>{history.data.items.slice(0, size).map(event => <TimelineItem key={event.eventId} data-page-item data-event-id={event.eventId}><TimelineMarker /><TimelineContent>
         <p>{event.summary}</p><small><time dateTime={event.occurredAt}>{timestamp(event.occurredAt)}</time> ·
           {event.actor === 'SYSTEM' ? ' Система' : ` Пользователь ${event.actorUserId}`}</small>
         {canReview && event.reconciliationId && <Link to={'/tasks/' + id + '/reconciliations/' + event.reconciliationId}>Открыть сохранённую сверку</Link>}
         {canReview && event.issueId && <Link to={'/issues/' + event.issueId}>Открыть разбор</Link>}
       </TimelineContent></TimelineItem>)}</Timeline>
-      <Pagination page={page} totalItems={history.data.totalItems} totalPages={history.data.totalPages} pending={history.isFetching} onChange={setPage} />
     </>}
+    </div>
+    <Pagination page={valid ? page : 0} totalItems={history.data?.totalItems ?? 0} totalPages={history.data?.totalPages ?? 0} pending={history.isFetching || !valid} onChange={changePage} />
   </CardContent></section></Card>;
 }

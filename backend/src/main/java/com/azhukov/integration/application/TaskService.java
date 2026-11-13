@@ -32,15 +32,15 @@ public class TaskService {
     public Task get(Actor user, UUID id) { return tasks.get(id, user, false); }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public Page<Task> list(Actor user, int page, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
-        checkPage(page);
+    public Page<Task> list(Actor user, int page, int size, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
+        Page.requireValid(page,size);
         if ((from != null && !from.getOffset().equals(ZoneOffset.UTC)) ||
             (to != null && !to.getOffset().equals(ZoneOffset.UTC)) ||
             (from != null && to != null && !to.isAfter(from)))
             throw RuleViolation.invalid("Укажите корректный период в UTC: начало включено, конец исключён");
-        var rows = tasks.list(user, page, status, from, to);
+        var rows = tasks.list(user, page, size, status, from, to);
         long total = tasks.countTasks(user, status, from, to);
-        return new Page<>(rows,page,total);
+        return new Page<>(rows,page,size,total);
     }
 
     @Transactional
@@ -71,20 +71,16 @@ public class TaskService {
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public Page<HistoryEntry> history(Actor user, UUID id, int page) {
-        checkPage(page);
+    public Page<HistoryEntry> history(Actor user, UUID id, int page, int size) {
+        Page.requireValid(page,size);
         tasks.get(id, user, false);
-        var rows = tasks.history(id, page);
+        var rows = tasks.history(id, page, size);
         long total = tasks.countHistory(id);
-        return new Page<>(rows,page,total);
+        return new Page<>(rows,page,size,total);
     }
 
     private static void requireInitiator(Actor user) {
         if (user.isOperator()) throw new RuleViolation(RuleViolation.Code.ACCESS_DENIED, "Действие доступно инициатору");
-    }
-
-    private static void checkPage(int page) {
-        if (page < 0) throw RuleViolation.invalid("Номер страницы не может быть отрицательным");
     }
 
     private record RenameCommand(UUID taskId, RenameTask input) {}

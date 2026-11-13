@@ -102,9 +102,9 @@ public class ReviewRepository implements ReviewStore {
             : jdbc.queryForObject("SELECT count(*) FROM exchange_issues WHERE status = ?", Long.class, status.name());
     }
 
-    public List<StoredIssue> list(int page,Issue.Status status) {
-        return jdbc.query(ISSUE_SELECT + (status == null ? "" : " WHERE i.status = ?") + " ORDER BY i.opened_at DESC,i.id DESC LIMIT 20 OFFSET ?",
-            this::mapIssue,status == null ? new Object[]{(long)page*20} : new Object[]{status.name(),(long)page*20});
+    public List<StoredIssue> list(int page,int size,Issue.Status status) {
+        return jdbc.query(ISSUE_SELECT + (status == null ? "" : " WHERE i.status = ?") + " ORDER BY i.opened_at DESC,i.id DESC LIMIT ? OFFSET ?",
+            this::mapIssue,status == null ? new Object[]{size,(long)page*size} : new Object[]{status.name(),size,(long)page*size});
     }
 
     public void assign(UUID id,UUID operator) {

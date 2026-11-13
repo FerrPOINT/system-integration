@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createTask, getTaskReconciliation, listTasks, logIn, resolveExchangeIssue } from '../build/generated/openapi/client.ts';
+import { createTask, getTaskReconciliation, listTasks, listTaskHistory, listExchangeIssues, logIn, resolveExchangeIssue } from '../build/generated/openapi/client.ts';
 
 test('login encodes the form and sends the CSRF header', async (t) => {
   const fetch = t.mock.method(globalThis, 'fetch', async (url, init) => {
@@ -147,4 +147,20 @@ test('createTask exposes a temporary storage failure without treating it as an a
     { 'X-CSRF-TOKEN': 'token', 'Idempotency-Key': '40ad5299-2e09-4d7f-9a14-f02ca60f55ef' });
   assert.equal(reply.status, 503);
   assert.deepEqual(reply.data, problem);
+});
+
+
+test('all list clients send the requested page size through the generated contract', async t => {
+  const paths=[];
+  t.mock.method(globalThis,'fetch',async url => {
+    const request=new URL(url,'http://localhost');
+    assert.equal(request.searchParams.get('page'),'2');
+    assert.equal(request.searchParams.get('size'),'7');
+    paths.push(request.pathname);
+    return Response.json({items:[],page:2,hasNext:false,totalItems:0,totalPages:0});
+  });
+  await listTasks({page:2,size:7});
+  await listTaskHistory('40ad5299-2e09-4d7f-9a14-f02ca60f55ef',{page:2,size:7});
+  await listExchangeIssues({page:2,size:7,status:'OPEN'});
+  assert.deepEqual(paths,['/api/tasks','/api/tasks/40ad5299-2e09-4d7f-9a14-f02ca60f55ef/history','/api/exchange/issues']);
 });

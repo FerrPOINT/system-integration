@@ -34,7 +34,7 @@ export const keys = {
   session: ['session'] as const,
   tasks: ['tasks'] as const,
   task: (id: string) => ['tasks', id] as const,
-  history: (id: string, page: number) => ['tasks', id, 'history', page] as const,
+  history: (id: string, page: number, size: number) => ['tasks', id, 'history', page, size] as const,
   issues: ['issues'] as const,
   issue: (id: string) => ['issues', id] as const,
   reconciliation: (task: string, id: string) => ['reconciliations', task, id] as const,

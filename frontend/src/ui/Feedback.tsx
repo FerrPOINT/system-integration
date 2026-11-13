@@ -11,6 +11,6 @@ export function Pagination({ page, totalPages, totalItems, pending, onChange }: 
   const summary = totalPages === 0 ? 'Нет записей'
     : page < totalPages ? 'Страница ' + (page + 1) + ' из ' + totalPages + ' · Всего записей: ' + totalItems
     : 'Страница ' + (page + 1) + ' не найдена · Всего страниц: ' + totalPages;
-  return <PageNavigation page={page + 1} pageCount={totalPages} compact={compact} pending={pending}
-    onPageChange={next => onChange(next - 1)} summary={summary} />;
+  return <div className="pagination-footer"><PageNavigation page={page + 1} pageCount={totalPages} compact={compact} pending={pending}
+    onPageChange={next => onChange(next - 1)} summary={summary} /></div>;
 }

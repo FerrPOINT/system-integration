@@ -60,7 +60,7 @@ function Shell({ user, appearance }: { user: GetSession200; appearance: ReactNod
     mutationFn: async () => { await data(logOut(await csrf())); await csrf(); },
     onSuccess: clearSession,
   });
-  return <>
+  return <div className="app-shell">
     <a className="skip-link" href="#main">К содержимому</a>
     <header className="app-header">
       <Link to="/tasks" className="brand-link"><Brand /></Link>
@@ -82,5 +82,5 @@ function Shell({ user, appearance }: { user: GetSession200; appearance: ReactNod
         <Route path="*" element={<section><PageHeader title="Страница не найдена" actions={<Button asChild><Link to="/tasks">К заданиям</Link></Button>} /></section>} />
       </Routes>
     </main>
-  </>;
+  </div>;
 }
