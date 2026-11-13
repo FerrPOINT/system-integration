@@ -16,6 +16,16 @@ class EmulatorWorkerTest {
         verifyNoMoreInteractions(operations);
     }
     @Test
+    void aNonDivisibleBatchUsesOnlyTheRemainingCycleCapacity() {
+        var operations=mock(OperationService.class);
+        when(operations.publish(anyInt())).thenAnswer(call -> call.getArgument(0));
+        new EmulatorWorker(operations,30).publish();
+        var ordered=inOrder(operations);
+        ordered.verify(operations,times(3)).publish(30);
+        ordered.verify(operations).publish(10);
+        verifyNoMoreInteractions(operations);
+    }
+    @Test
     void anEmptyBatchStopsAndUnsupportedConfigurationFailsExplicitly() {
         var operations=mock(OperationService.class);
         new EmulatorWorker(operations,50).publish();

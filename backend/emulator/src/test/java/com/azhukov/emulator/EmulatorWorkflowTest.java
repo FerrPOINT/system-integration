@@ -260,7 +260,9 @@ class EmulatorWorkflowTest {
         UUID duplicateId = UUID.randomUUID(), lateId = UUID.randomUUID();
         service.accept(duplicateId,duplicate); service.accept(lateId,late);
         while (service.executeNext()) { }
-        while (service.publish(1)>0) { }
+        assertEquals(4,service.publish(25),"Both duplicate terminal copies belong to the initial batch");
+        assertEquals(1,service.publish(25),"The newly eligible late RUNNING belongs to the next batch");
+        assertEquals(0,service.publish(25));
         var events = operations.events(0,100);
         assertEquals(5,events.size());
         var duplicates = events.stream().filter(e -> e.result().operationId().equals(duplicateId) && e.result().version() == 2).toList();
