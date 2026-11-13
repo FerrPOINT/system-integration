@@ -1,7 +1,13 @@
 package com.azhukov.integration.tasks;
 
-import com.azhukov.integration.contract.ExchangeReply;
-import com.azhukov.integration.exchange.ExchangeClient;
+import static com.azhukov.integration.support.ExchangeTestData.*;
+
+import com.azhukov.integration.application.ExchangeTasks;
+
+import com.azhukov.integration.domain.exchange.DeliveryAttempt;
+
+import com.azhukov.integration.infrastructure.http.ExchangeReply;
+import com.azhukov.integration.infrastructure.http.ExchangeClient;
 import com.azhukov.integration.support.PostgresTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,7 +68,7 @@ class OperationsWorkflowTest extends PostgresTest {
             created(initiator,UUID.randomUUID());
             var claim=exchange.claim();
             assertNotNull(claim);
-            exchange.finish(claim,new ExchangeReply(400,null,false));
+            finish(exchange,claim,new ExchangeReply(400,null,false));
         }
         jdbc.update("""
             INSERT INTO exchange_issues(id,scope,fingerprint,kind,summary,evidence)
@@ -155,7 +161,7 @@ class OperationsWorkflowTest extends PostgresTest {
         assertEquals(body(decision),body(replay)); assertEquals(history,count("task_history"));
         assertEquals("SUCCEEDED",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id = ?",String.class,scenario.task()));
         var event=json.createObjectNode().put("cursor",1).set("result",external(scenario.claim(),true,25).body().get("result"));
-        exchange.consume(0,json.createArrayNode().add(event));
+        consume(exchange,0,json.createArrayNode().add(event));
         assertEquals(history,count("task_history"));
         var saved=mvc.perform(get("/api/tasks/"+scenario.task()+"/reconciliations/"+scenario.reconciliation()).session(scenario.op().session())).andReturn();
         status(200,saved); assertEquals("PENDING",body(saved).at("/local/businessStatus").asString());
@@ -167,7 +173,7 @@ class OperationsWorkflowTest extends PostgresTest {
     void staleComparisonCannotAuthorizeADecisionButFreshMatchCanCloseIt() throws Exception {
         var scenario=difference();
         var result=external(scenario.claim(),true,25).body().get("result");
-        exchange.consume(0,json.createArrayNode().add(json.createObjectNode().put("cursor",1).set("result",result)));
+        consume(exchange,0,json.createArrayNode().add(json.createObjectNode().put("cursor",1).set("result",result)));
         var oldDecision=command(scenario.op(),"resolve",scenario.issue(),UUID.randomUUID(),Map.of(
             "expectedIssueRevision",scenario.revision(),"reconciliationId",scenario.reconciliation(),"action","ACKNOWLEDGE_DIFFERENCE","reason","Сверено"));
         status(409,oldDecision); assertEquals("SNAPSHOT_STALE",body(oldDecision).get("code").asString());
@@ -185,7 +191,7 @@ class OperationsWorkflowTest extends PostgresTest {
     void protocolRetryRequiresFreshEvidenceAndPreservesInputAndCounter() throws Exception {
         UUID task=created(login("initiator.one"),UUID.randomUUID());
         var original=exchange.claim();
-        exchange.finish(original,new ExchangeReply(400,null,false));
+        finish(exchange,original,new ExchangeReply(400,null,false));
         var op=login("operator");
         UUID issue=jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id = ?",UUID.class,task);
         when(client.get(original.operationId())).thenReturn(missing());
@@ -200,7 +206,7 @@ class OperationsWorkflowTest extends PostgresTest {
         var claim=exchange.claim();
         assertEquals("GET",claim.step()); assertEquals(2,claim.number());
         assertEquals(original.operationId(),claim.operationId()); assertEquals(original.request(),claim.request());
-        exchange.finish(claim,external(claim,false,25));
+        finish(exchange,claim,external(claim,false,25));
         assertEquals("ACKNOWLEDGED",jdbc.queryForObject("SELECT delivery_status FROM tasks WHERE id = ?",String.class,task));
         assertEquals("RESOLVED",body(issue(op,issue)).get("status").asString());
     }
@@ -208,7 +214,7 @@ class OperationsWorkflowTest extends PostgresTest {
     @Test
     void differentExternalRequestCannotAuthorizeRetryOrApplyAndStopPreservesBusinessState() throws Exception {
         UUID task=created(login("initiator.one"),UUID.randomUUID());
-        var claim=exchange.claim(); exchange.finish(claim,new ExchangeReply(409,null,false));
+        var claim=exchange.claim(); finish(exchange,claim,new ExchangeReply(409,null,false));
         var op=login("operator");
         when(client.get(claim.operationId())).thenReturn(external(claim,true,26));
         var reconciliation=reconcile(op,task,UUID.randomUUID()); status(200,reconciliation);
@@ -230,10 +236,10 @@ class OperationsWorkflowTest extends PostgresTest {
     @Test
     void delayedRetryAdvancesTheExistingQueueAndRejectsConcurrentStaleVersion() throws Exception {
         UUID task=created(login("initiator.one"),UUID.randomUUID());
-        ExchangeTasks.Claim claim=null;
+        DeliveryAttempt claim=null;
         for (int n=1;n<=4;n++) {
             claim=exchange.claim(); assertEquals(n,claim.number());
-            exchange.finish(claim,new ExchangeReply(0,null,true));
+            finish(exchange,claim,new ExchangeReply(0,null,true));
             if (n<4) jdbc.update("UPDATE delivery_queue SET due_at = clock_timestamp() - interval '1 second'");
         }
         var op=login("operator");
@@ -332,7 +338,7 @@ class OperationsWorkflowTest extends PostgresTest {
     void concurrentComparisonReplaysOneSnapshotWhileAnotherActorHasAnIndependentCommand() throws Exception {
         UUID task=created(login("initiator.one"),UUID.randomUUID());
         var claim=exchange.claim();
-        exchange.finish(claim,external(claim,false,25));
+        finish(exchange,claim,external(claim,false,25));
         when(client.get(claim.operationId())).thenReturn(external(claim,true,25));
         var op=login("operator"); UUID key=UUID.randomUUID();
         java.util.List<MvcResult> results;
@@ -356,12 +362,12 @@ class OperationsWorkflowTest extends PostgresTest {
         status(200,original);assertEquals(body(results.getFirst()),body(original));
     }
 
-    private record Scenario(UUID task,ExchangeTasks.Claim claim,Client op,UUID issue,long revision,String reconciliation) {}
+    private record Scenario(UUID task,DeliveryAttempt claim,Client op,UUID issue,long revision,String reconciliation) {}
     private Scenario difference() throws Exception {
         UUID task=created(login("initiator.one"),UUID.randomUUID());
         var claim=exchange.claim();
         var reply=external(claim,false,25);
-        exchange.finish(claim,reply);
+        finish(exchange,claim,reply);
         when(client.get(claim.operationId())).thenReturn(external(claim,true,25));
         var op=login("operator"); var saved=reconcile(op,task,UUID.randomUUID()); status(200,saved);
         assertEquals("DIFFERENCE",body(saved).get("outcome").asString());
@@ -369,7 +375,7 @@ class OperationsWorkflowTest extends PostgresTest {
         long revision=body(issue(op,issue)).get("issueRevision").asLong();
         return new Scenario(task,claim,op,issue,revision,body(saved).get("reconciliationId").asString());
     }
-    private ExchangeReply external(ExchangeTasks.Claim claim,boolean completed,int quantity) {
+    private ExchangeReply external(DeliveryAttempt claim,boolean completed,int quantity) {
         var request=json.valueToTree(new com.azhukov.integration.contract.external.model.OperationInput(claim.request().reference(),quantity));
         var body=json.createObjectNode().put("operationId",claim.operationId().toString()).set("request",request)
             .put("acceptedAt","2026-11-12T00:00:00Z");

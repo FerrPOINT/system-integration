@@ -1,7 +1,11 @@
 package com.azhukov.integration.exchange;
 
+import com.azhukov.integration.application.ExchangeCoordinator;
+
+import com.azhukov.integration.infrastructure.http.ExchangeClient;
+
 import com.azhukov.integration.support.PostgresTest;
-import com.azhukov.integration.tasks.ExchangeTasks;
+import com.azhukov.integration.application.ExchangeTasks;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,7 +28,7 @@ class ResultFeedTest extends PostgresTest {
         var page = new AtomicReference<>("[{\"cursor\":8},{\"cursor\":7}]");
         var server = source(requests, page, new AtomicInteger(200));
         try (var client = new ExchangeClient(json, origin(server))) {
-            try (var worker = new ExchangeWorker(exchange, client)) {
+            try (var worker = new ExchangeCoordinator(exchange, client)) {
                 worker.receive();
                 worker.receive();
                 assertEquals(1, requests.get(), "A bad cursor must pause the consumer");
@@ -34,7 +38,7 @@ class ResultFeedTest extends PostgresTest {
             }
             // A valid cursor with an invalid result is diagnosed and consumed, rather than poisoning the feed.
             page.set("[{\"cursor\":8,\"result\":null}]");
-            try (var restarted = new ExchangeWorker(exchange, client)) {
+            try (var restarted = new ExchangeCoordinator(exchange, client)) {
                 restarted.receive();
                 assertEquals(2, requests.get());
                 assertEquals(8, exchange.cursor());
@@ -48,7 +52,7 @@ class ResultFeedTest extends PostgresTest {
     void temporaryFeedFailureDoesNotAdvanceOrSpin() throws Exception {
         var requests = new AtomicInteger();
         var server = source(requests, new AtomicReference<>("{}"), new AtomicInteger(503));
-        try (var client = new ExchangeClient(json, origin(server)); var worker = new ExchangeWorker(exchange, client)) {
+        try (var client = new ExchangeClient(json, origin(server)); var worker = new ExchangeCoordinator(exchange, client)) {
             worker.receive();
             worker.receive();
             assertEquals(1, requests.get());

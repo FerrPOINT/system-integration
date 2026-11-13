@@ -1,6 +1,10 @@
 package com.azhukov.integration.infrastructure.http;
 
 import com.azhukov.integration.domain.exchange.OperationIdentity;
+import com.azhukov.integration.domain.exchange.DeliveryAttempt;
+import com.azhukov.integration.application.port.ExternalExchange.*;
+import java.util.ArrayList;
+import java.util.List;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.exchange.OperationSnapshot;
 import com.azhukov.integration.domain.task.TaskInput;
@@ -50,6 +54,60 @@ public final class ExchangeProtocol {
         return status==404 && body!=null && body.isObject() && body.path("title").isString() &&
             body.path("status").isIntegralNumber() && body.path("status").canConvertToInt() && body.path("status").intValue()==404 &&
             body.path("code").isString() && body.path("code").asString().equals("OPERATION_NOT_FOUND");
+    }
+
+    public DeliveryReply delivery(DeliveryAttempt attempt,ExchangeReply reply) {
+        String failure=null;
+        if ((attempt.step().equals("PUT") && (reply.status()==200 || reply.status()==202)) ||
+            (attempt.step().equals("GET") && reply.status()==200)) {
+            try {
+                var expected=new OperationIdentity(attempt.operationId(),attempt.request());
+                if (attempt.step().equals("PUT")) acknowledgement(reply.body(),expected);
+                else state(reply.body(),expected);
+                return new DeliveryReply(DeliveryAttempt.Outcome.ACKNOWLEDGED,reply.status(),reply.connectionFailed(),null,reply.body());
+            } catch (IllegalArgumentException malformed) {
+                failure="Подтверждение не соответствует контракту или исходному запросу";
+            }
+        }
+        boolean missing=attempt.step().equals("GET") && missingOperation(reply.status(),reply.body());
+        boolean temporary=reply.status()==0 || reply.status()>=500;
+        if (failure==null && !temporary && !missing) failure="Постоянная ошибка внешнего протокола, HTTP "+reply.status();
+        var outcome=failure!=null ? DeliveryAttempt.Outcome.PROTOCOL_ERROR : missing ? DeliveryAttempt.Outcome.NOT_FOUND :
+            reply.connectionFailed() ? DeliveryAttempt.Outcome.CONNECT_FAILED : DeliveryAttempt.Outcome.TEMPORARY_FAILURE;
+        return new DeliveryReply(outcome,reply.status(),reply.connectionFailed(),failure,reply.body());
+    }
+
+    public FeedReply feed(ExchangeReply reply,long after) {
+        if (reply.status()==0 || reply.status()>=500) return new FeedReply(FeedStatus.UNAVAILABLE,List.of(),reply.body());
+        if (reply.status()!=200 || !validPage(reply.body(),after)) return new FeedReply(FeedStatus.INVALID_PAGE,List.of(),reply.body());
+        var events=new ArrayList<IncomingEvent>();
+        for (var event:reply.body()) {
+            var raw=event.get("result");
+            OperationResult result=null;
+            UUID operationId=null;
+            try { result=result(raw); operationId=result.operationId(); }
+            catch (IllegalArgumentException malformed) {
+                try { operationId=UUID.fromString(raw.path("operationId").asString()); }
+                catch (RuntimeException unknown) { /* Missing/invalid identity is a feed-level issue. */ }
+            }
+            events.add(new IncomingEvent(event.get("cursor").longValue(),operationId,result,raw));
+        }
+        return new FeedReply(FeedStatus.READY,events,reply.body());
+    }
+
+    public static boolean validPage(JsonNode page,long after) {
+        if (page==null || !page.isArray() || page.size()>100) return false;
+        long previous=after;
+        for (var event:page) {
+            if (!event.isObject()) return false;
+            for (var field:event.properties()) if (!field.getKey().equals("cursor") && !field.getKey().equals("result")) return false;
+            var cursor=event.get("cursor");
+            if (cursor==null || !cursor.isIntegralNumber() || !cursor.canConvertToLong()) return false;
+            long value=cursor.longValue();
+            if (value<=previous || value>9007199254740991L) return false;
+            previous=value;
+        }
+        return true;
     }
 
     private OperationIdentity identity(JsonNode body) {

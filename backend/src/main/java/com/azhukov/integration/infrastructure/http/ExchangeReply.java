@@ -1,4 +1,4 @@
-package com.azhukov.integration.contract;
+package com.azhukov.integration.infrastructure.http;
 
 import tools.jackson.databind.JsonNode;
 

@@ -1,13 +1,10 @@
-package com.azhukov.integration.tasks;
+package com.azhukov.integration.application;
 
-import com.azhukov.integration.application.Actor;
-import com.azhukov.integration.application.Page;
-import com.azhukov.integration.application.IssueService;
 import com.azhukov.integration.application.port.TaskStore;
 import com.azhukov.integration.application.port.ReviewStore;
 import com.azhukov.integration.application.port.CommandReceiptStore;
 import com.azhukov.integration.application.port.CommandReceiptStore.Command;
-import com.azhukov.integration.application.port.OperationLookup.Lookup;
+import com.azhukov.integration.application.port.ExternalExchange.Lookup;
 import com.azhukov.integration.application.review.IssueCommands;
 import com.azhukov.integration.domain.RuleViolation;
 import com.azhukov.integration.domain.exchange.ExchangeState;
@@ -29,14 +26,14 @@ import java.util.UUID;
 import static com.azhukov.integration.domain.review.Issue.Action.*;
 
 @Service
-public class OperationsTransactions {
+public class ReviewService {
     private final TaskStore tasks;
     private final ReviewStore issues;
     private final IssueService issueChanges;
     private final ExchangeTasks exchange;
     private final CommandReceiptStore commands;
 
-    public OperationsTransactions(TaskStore tasks,ReviewStore issues,IssueService issueChanges,
+    public ReviewService(TaskStore tasks,ReviewStore issues,IssueService issueChanges,
                                   ExchangeTasks exchange,CommandReceiptStore commands) {
         this.tasks=tasks; this.issues=issues; this.issueChanges=issueChanges; this.exchange=exchange; this.commands=commands;
     }

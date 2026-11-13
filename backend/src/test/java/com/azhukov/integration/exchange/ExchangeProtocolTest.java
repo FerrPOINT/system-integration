@@ -6,6 +6,9 @@ import com.azhukov.integration.domain.task.BusinessStatus;
 import com.azhukov.integration.domain.exchange.OperationIdentity;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import org.junit.jupiter.api.Test;
+import com.azhukov.integration.domain.exchange.DeliveryAttempt;
+import com.azhukov.integration.application.port.ExternalExchange;
+import com.azhukov.integration.infrastructure.http.ExchangeReply;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.UUID;
@@ -61,10 +64,10 @@ class ExchangeProtocolTest {
 
     @Test
     void cursorValidationIsStrictWithoutRejectingASnapshotWithBadContent() {
-        assertTrue(ExchangeWorker.validPage(json.readTree("[{\"cursor\":11,\"result\":null}]"),10));
+        assertTrue(ExchangeProtocol.validPage(json.readTree("[{\"cursor\":11,\"result\":null}]"),10));
         for (String page : new String[]{"{}","[{\"cursor\":10}]","[{\"cursor\":11},{\"cursor\":11}]",
             "[{\"cursor\":11.0}]","[{\"cursor\":9007199254740992}]"}) {
-            assertFalse(ExchangeWorker.validPage(json.readTree(page),10));
+            assertFalse(ExchangeProtocol.validPage(json.readTree(page),10));
         }
     }
 
@@ -102,6 +105,61 @@ class ExchangeProtocolTest {
         assertThrows(IllegalArgumentException.class,() -> protocol.state(base.deepCopy().put("executions",1).set("result",running)));
         assertThrows(IllegalArgumentException.class,() -> protocol.state(base.deepCopy().put("executions",2).set("result",json.readTree(result))));
         assertThrows(IllegalArgumentException.class,() -> protocol.state(base.deepCopy().put("executions",0).put("result","")));
+    }
+
+    @Test
+    void deliveryReplySeparatesValidConfirmationMissingOperationAndProtocolFailures() {
+        var ack=(tools.jackson.databind.node.ObjectNode)json.readTree("""
+            {"operationId":"00000000-0000-4000-8000-000000000001",
+             "request":{"reference":"REQ-000001","quantity":25},"acceptedAt":"2026-11-11T00:00:00Z"}
+            """);
+        var state=ack.deepCopy().put("executions",0).putNull("result");
+        var missing=json.readTree("""
+            {"title":"Отсутствует","status":404,"code":"OPERATION_NOT_FOUND"}
+            """);
+        record Case(String step,int status,tools.jackson.databind.JsonNode body,boolean failed,DeliveryAttempt.Outcome expected) {}
+        for (var probe:java.util.List.of(
+            new Case("PUT",202,ack,false,DeliveryAttempt.Outcome.ACKNOWLEDGED),
+            new Case("PUT",200,ack,false,DeliveryAttempt.Outcome.ACKNOWLEDGED),
+            new Case("GET",200,state,false,DeliveryAttempt.Outcome.ACKNOWLEDGED),
+            new Case("GET",202,state,false,DeliveryAttempt.Outcome.PROTOCOL_ERROR),
+            new Case("PUT",202,state,false,DeliveryAttempt.Outcome.PROTOCOL_ERROR),
+            new Case("GET",200,ack,false,DeliveryAttempt.Outcome.PROTOCOL_ERROR),
+            new Case("PUT",202,ack.deepCopy().put("operationId",UUID.randomUUID().toString()),false,DeliveryAttempt.Outcome.PROTOCOL_ERROR),
+            new Case("GET",404,missing,false,DeliveryAttempt.Outcome.NOT_FOUND),
+            new Case("PUT",404,missing,false,DeliveryAttempt.Outcome.PROTOCOL_ERROR),
+            new Case("GET",404,null,false,DeliveryAttempt.Outcome.PROTOCOL_ERROR),
+            new Case("PUT",0,null,true,DeliveryAttempt.Outcome.CONNECT_FAILED),
+            new Case("PUT",0,null,false,DeliveryAttempt.Outcome.TEMPORARY_FAILURE),
+            new Case("PUT",503,null,false,DeliveryAttempt.Outcome.TEMPORARY_FAILURE))) {
+            var attempt=new DeliveryAttempt(identity.id(),UUID.randomUUID(),probe.step(),1,identity.request());
+            var decoded=protocol.delivery(attempt,new ExchangeReply(probe.status(),probe.body(),probe.failed()));
+            assertEquals(probe.expected(),decoded.outcome(),probe.toString());
+            assertEquals(probe.status(),decoded.httpStatus());
+            assertEquals(probe.failed(),decoded.connectionFailed());
+            assertEquals(probe.expected()==DeliveryAttempt.Outcome.PROTOCOL_ERROR,decoded.protocolFailure()!=null);
+        }
+    }
+
+    @Test
+    void validFeedEnvelopeRetainsInvalidEventsForDiagnosisAndPreservesOrder() {
+        var valid=(tools.jackson.databind.node.ObjectNode)json.readTree(result);
+        var malformed=valid.deepCopy().put("operationId","0-0-4000-8000-1");
+        var page=json.createArrayNode()
+            .add(json.createObjectNode().put("cursor",11).set("result",valid))
+            .add(json.createObjectNode().put("cursor",12).set("result",malformed))
+            .add(json.createObjectNode().put("cursor",13));
+        var decoded=protocol.feed(new ExchangeReply(200,page,false),10);
+        assertEquals(ExternalExchange.FeedStatus.READY,decoded.status());
+        assertEquals(java.util.List.of(11L,12L,13L),decoded.events().stream().map(ExternalExchange.IncomingEvent::cursor).toList());
+        assertNotNull(decoded.events().get(0).result());
+        assertNull(decoded.events().get(1).result());
+        assertEquals(identity.id(),decoded.events().get(1).operationId(),"Diagnostic identity keeps the former lenient extraction");
+        assertEquals(malformed,decoded.events().get(1).evidence());
+        assertNull(decoded.events().get(2).operationId());
+        assertNull(decoded.events().get(2).result());
+        assertEquals(ExternalExchange.FeedStatus.INVALID_PAGE,protocol.feed(new ExchangeReply(200,page,false),11).status());
+        assertEquals(ExternalExchange.FeedStatus.UNAVAILABLE,protocol.feed(new ExchangeReply(503,null,false),10).status());
     }
 
     @Test

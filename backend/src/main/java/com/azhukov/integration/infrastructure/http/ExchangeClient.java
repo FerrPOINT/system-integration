@@ -1,9 +1,8 @@
-package com.azhukov.integration.exchange;
+package com.azhukov.integration.infrastructure.http;
 
-import com.azhukov.integration.contract.ExchangeReply;
-import com.azhukov.integration.application.port.OperationLookup;
+import com.azhukov.integration.application.port.ExternalExchange;
+import com.azhukov.integration.domain.exchange.DeliveryAttempt;
 import com.azhukov.integration.domain.review.Reconciliation.Availability;
-import com.azhukov.integration.infrastructure.http.ExchangeProtocol;
 import com.azhukov.integration.domain.task.TaskInput;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -24,7 +23,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 @Component
-public class ExchangeClient implements OperationLookup, AutoCloseable {
+public class ExchangeClient implements ExternalExchange, AutoCloseable {
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1))
         .version(HttpClient.Version.HTTP_1_1).build();
     private final URI base;
@@ -42,7 +41,17 @@ public class ExchangeClient implements OperationLookup, AutoCloseable {
     }
 
     public ExchangeReply get(UUID id) { return send(HttpRequest.newBuilder(base.resolve("/operations/" + id)).GET()); }
-    public ExchangeReply events(long after) { return send(HttpRequest.newBuilder(base.resolve("/result-events?after=" + after + "&limit=100")).GET()); }
+    @Override
+    public FeedReply events(long after) {
+        var reply=send(HttpRequest.newBuilder(base.resolve("/result-events?after="+after+"&limit=100")).GET());
+        return new ExchangeProtocol().feed(reply,after);
+    }
+
+    @Override
+    public DeliveryReply deliver(DeliveryAttempt attempt) {
+        var reply=attempt.step().equals("PUT") ? put(attempt.operationId(),attempt.request()) : get(attempt.operationId());
+        return new ExchangeProtocol().delivery(attempt,reply);
+    }
 
     @Override
     public Lookup lookup(UUID id) {

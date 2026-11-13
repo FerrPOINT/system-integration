@@ -2,10 +2,10 @@ package com.azhukov.integration.web;
 
 import com.azhukov.integration.auth.AppUser;
 import com.azhukov.integration.application.review.IssueCommands;
-import com.azhukov.integration.exchange.ReconciliationService;
+import com.azhukov.integration.application.ReconciliationService;
 import com.azhukov.integration.contract.internal.api.OperationsApi;
 import com.azhukov.integration.contract.internal.model.*;
-import com.azhukov.integration.tasks.OperationsTransactions;
+import com.azhukov.integration.application.ReviewService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -13,9 +13,9 @@ import java.util.UUID;
 
 @RestController
 public class OperationsController implements OperationsApi {
-    private final OperationsTransactions operations;
+    private final ReviewService operations;
     private final ReconciliationService reconciliation;
-    public OperationsController(OperationsTransactions operations,ReconciliationService reconciliation) {
+    public OperationsController(ReviewService operations,ReconciliationService reconciliation) {
         this.operations=operations; this.reconciliation=reconciliation;
     }
     @Override public ResponseEntity<Issue> getExchangeIssue(UUID id) { return ResponseEntity.ok(ReviewViews.issue(operations.get(AppUser.current().actor(),id))); }

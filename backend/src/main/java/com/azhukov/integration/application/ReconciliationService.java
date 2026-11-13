@@ -1,19 +1,17 @@
-package com.azhukov.integration.exchange;
+package com.azhukov.integration.application;
 
-import com.azhukov.integration.application.Actor;
 import com.azhukov.integration.domain.review.Reconciliation;
-import com.azhukov.integration.application.port.OperationLookup;
-import com.azhukov.integration.tasks.OperationsTransactions;
+import com.azhukov.integration.application.port.ExternalExchange;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
 
 @Service
 public class ReconciliationService {
-    private final OperationsTransactions operations;
-    private final OperationLookup client;
+    private final ReviewService operations;
+    private final ExternalExchange client;
 
-    public ReconciliationService(OperationsTransactions operations,OperationLookup client) {
+    public ReconciliationService(ReviewService operations,ExternalExchange client) {
         this.operations=operations; this.client=client;
     }
 

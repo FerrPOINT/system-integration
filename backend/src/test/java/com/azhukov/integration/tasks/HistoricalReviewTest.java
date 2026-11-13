@@ -1,8 +1,12 @@
 package com.azhukov.integration.tasks;
 
-import com.azhukov.integration.application.port.OperationLookup.Lookup;
+import static com.azhukov.integration.support.ExchangeTestData.*;
+
+import com.azhukov.integration.application.ExchangeTasks;
+
+import com.azhukov.integration.application.port.ExternalExchange.Lookup;
 import com.azhukov.integration.domain.review.Reconciliation.Availability;
-import com.azhukov.integration.exchange.ExchangeClient;
+import com.azhukov.integration.infrastructure.http.ExchangeClient;
 import com.azhukov.integration.support.PostgresTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,7 +29,7 @@ class HistoricalReviewTest extends PostgresTest {
     void historicalIssueReceiptKeepsItsOldOwnerAndDoesNotRewriteCurrentIssue() throws Exception {
         var task=created(login("initiator.one"),UUID.randomUUID());
         var claim=exchange.claim();
-        exchange.finish(claim,new com.azhukov.integration.contract.ExchangeReply(400,null,false));
+        finish(exchange,claim,new com.azhukov.integration.infrastructure.http.ExchangeReply(400,null,false));
         UUID issue=jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id=?",UUID.class,task);
         UUID key=UUID.randomUUID();
         String historical="""

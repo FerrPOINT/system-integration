@@ -1,20 +1,19 @@
-package com.azhukov.integration.tasks;
+package com.azhukov.integration.application;
 
 import com.azhukov.integration.application.port.TaskStore;
 import com.azhukov.integration.domain.exchange.ExchangeState;
 import com.azhukov.integration.domain.task.HistoryType;
-import com.azhukov.integration.contract.ExchangeReply;
-import com.azhukov.integration.domain.task.TaskInput;
-import com.azhukov.integration.domain.exchange.OperationIdentity;
+import com.azhukov.integration.application.port.ExternalExchange.DeliveryReply;
+import com.azhukov.integration.application.port.ExternalExchange.IncomingEvent;
+import com.azhukov.integration.domain.exchange.DeliveryAttempt;
+import java.util.List;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.DeliveryStatus;
-import com.azhukov.integration.application.IssueService;
 import com.azhukov.integration.domain.review.Issue;
-import com.azhukov.integration.infrastructure.http.ExchangeProtocol;
 import com.azhukov.integration.domain.RuleViolation;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.JsonNode;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.util.Map;
 import java.util.UUID;
@@ -23,17 +22,13 @@ import java.util.UUID;
 public class ExchangeTasks {
     private final TaskStore tasks;
     private final IssueService issues;
-    private final ExchangeProtocol protocol;
 
     public ExchangeTasks(TaskStore tasks, IssueService issues) {
         this.tasks = tasks; this.issues = issues;
-        this.protocol = new ExchangeProtocol();
     }
 
-    public record Claim(UUID operationId, UUID attemptId, String step, int number, TaskInput request) {}
-
     @Transactional
-    public Claim claim() {
+    public DeliveryAttempt claim() {
         // All writers lock the task before its queue/issue rows to keep a single lock order.
         var due = tasks.lockDueOperation();
         if (due == null) return null;
@@ -41,7 +36,7 @@ public class ExchangeTasks {
         var queue = tasks.lockQueue(state.task().operationId());
         if (queue.claim() != null) {
             tasks.finishAttempt(queue.claim(),"INTERRUPTED");
-            tasks.scheduleAfterInterruptedClaim(state.task().operationId(),queue.until(),delay(queue.attempts()));
+            tasks.scheduleAfterInterruptedClaim(state.task().operationId(),queue.until(),DeliveryAttempt.delay(queue.attempts()));
             state = delivery(state, DeliveryStatus.UNKNOWN);
             issues.temporary(state, queue.attempts() >= 4);
             tasks.history(state.task(), null, HistoryType.DELIVERY_UNCERTAIN,
@@ -53,11 +48,11 @@ public class ExchangeTasks {
         tasks.startAttempt(state.task().operationId(),claim,queue.step(),number);
         tasks.history(state.task(), null, HistoryType.DELIVERY_ATTEMPT,
             "Попытка " + number + ": " + queue.step(), Map.of("attemptId",claim));
-        return new Claim(state.task().operationId(), claim, queue.step(), number, input(state));
+        return new DeliveryAttempt(state.task().operationId(), claim, queue.step(), number, state.task().request());
     }
 
     @Transactional
-    public void finish(Claim claim, ExchangeReply reply) {
+    public void finish(DeliveryAttempt claim, DeliveryReply reply) {
         var state = tasks.exchange(claim.operationId(), true);
         boolean owned = tasks.ownsClaim(claim.operationId(),claim.attemptId());
         if (!owned) {
@@ -66,69 +61,54 @@ public class ExchangeTasks {
                 "Поздний исход попытки не изменил состояние",Map.of("attemptId",claim.attemptId()));
             return;
         }
-        boolean confirmed = false;
-        String invalid = null;
-        if ((claim.step().equals("PUT") && (reply.status() == 200 || reply.status() == 202)) ||
-            (claim.step().equals("GET") && reply.status() == 200)) {
-            try {
-                var expected = new OperationIdentity(claim.operationId(), claim.request());
-                if (claim.step().equals("PUT")) protocol.acknowledgement(reply.body(), expected);
-                else protocol.state(reply.body(), expected);
-                confirmed = true;
-            } catch (RuntimeException malformed) { invalid = "Подтверждение не соответствует контракту или исходному запросу"; }
-        }
-        if (confirmed) {
+        var decision=claim.decide(reply.outcome());
+        if (decision.status()==DeliveryStatus.ACKNOWLEDGED) {
             acknowledge(state);
-            finishAttempt(claim, "ACKNOWLEDGED");
+            finishAttempt(claim,"ACKNOWLEDGED");
             return;
         }
-        boolean missing = claim.step().equals("GET") && ExchangeProtocol.missingOperation(reply.status(),reply.body());
-        boolean temporary = reply.status() == 0 || reply.status() >= 500;
-        if (invalid == null && !temporary && !missing) invalid = "Постоянная ошибка внешнего протокола, HTTP " + reply.status();
-        if (invalid != null) {
-            issues.protocol(state, invalid, reply.body());
-            state = delivery(state, DeliveryStatus.NEEDS_REVIEW);
+        if (decision.status()==DeliveryStatus.NEEDS_REVIEW) {
+            issues.protocol(state,reply.protocolFailure(),reply.evidence());
+            state=delivery(state,DeliveryStatus.NEEDS_REVIEW);
             tasks.pauseQueue(claim.operationId());
-            finishAttempt(claim, "PROTOCOL_ERROR");
+            finishAttempt(claim,"PROTOCOL_ERROR");
             return;
         }
-        boolean repeatPut = missing || (claim.step().equals("PUT") && reply.connectionFailed());
-        state = delivery(state, repeatPut ? DeliveryStatus.RETRY_WAIT : DeliveryStatus.UNKNOWN);
-        tasks.scheduleRetry(claim.operationId(),repeatPut ? "PUT" : "GET",delay(claim.number()));
-        if (!repeatPut || claim.number() >= 4) issues.temporary(state, claim.number() >= 4);
-        if (!repeatPut) tasks.history(state.task(), null, HistoryType.DELIVERY_UNCERTAIN,
-            "Исход доставки неизвестен; запланирован уточняющий GET", Map.of("attemptId",claim.attemptId()));
-        finishAttempt(claim, missing ? "NOT_FOUND" : reply.connectionFailed() ? "CONNECT_FAILED" : "TEMPORARY_FAILURE");
+        state=delivery(state,decision.status());
+        tasks.scheduleRetry(claim.operationId(),decision.nextStep(),decision.delaySeconds());
+        if (decision.temporaryIssue()) issues.temporary(state,claim.number()>=4);
+        if (decision.uncertainHistory()) tasks.history(state.task(),null,HistoryType.DELIVERY_UNCERTAIN,
+            "Исход доставки неизвестен; запланирован уточняющий GET",Map.of("attemptId",claim.attemptId()));
+        finishAttempt(claim,reply.outcome().name());
     }
 
     @Transactional(readOnly = true)
     public long cursor() { return tasks.cursor(false); }
 
     @Transactional
-    public boolean consume(long expected, JsonNode page) {
+    public boolean consume(long expected, List<IncomingEvent> page) {
         long current = tasks.cursor(true);
         if (current != expected) return false;
         for (var event : page) {
-            long cursor = event.get("cursor").longValue();
-            receive(event.get("result"), cursor);
-            current = cursor;
+            receive(event);
+            current = event.cursor();
         }
         tasks.advanceCursor(current);
         return true;
     }
 
     @Transactional
-    public void badPage(JsonNode page) {
+    public void badPage(Object page) {
         issues.open(null, null, Issue.Kind.RESULT_CONFLICT, "Некорректная структура страницы или позиция ленты", page, null, null);
     }
 
-    private void receive(JsonNode raw, long cursor) {
-        OperationResult received;
-        try { received = protocol.result(raw); }
-        catch (RuntimeException malformed) {
-            UUID id = operationId(raw);
-            var state = find(id);
-            issues.open(state, id, Issue.Kind.RESULT_CONFLICT, "Входящий снимок не соответствует контракту", raw, null, cursor);
+    private void receive(IncomingEvent event) {
+        var received=event.result();
+        long cursor=event.cursor();
+        if (received==null) {
+            var state=find(event.operationId());
+            issues.open(state,event.operationId(),Issue.Kind.RESULT_CONFLICT,
+                "Входящий снимок не соответствует контракту",event.evidence(),null,cursor);
             return;
         }
         var state = find(received.operationId());
@@ -151,6 +131,7 @@ public class ExchangeTasks {
         }
     }
 
+    @Transactional(propagation=Propagation.MANDATORY)
     public void apply(ExchangeState state, OperationResult result, UUID actor) {
         tasks.applyResult(result);
         tasks.removeQueue(result.operationId());
@@ -159,7 +140,7 @@ public class ExchangeTasks {
             "Принят внешний результат: " + result.status().name(), Map.of("resultVersion",result.version()));
     }
 
-    public void acknowledge(ExchangeState state) {
+    private void acknowledge(ExchangeState state) {
         state = delivery(state, DeliveryStatus.ACKNOWLEDGED);
         tasks.removeQueue(state.task().operationId());
         issues.confirm(state);
@@ -172,7 +153,7 @@ public class ExchangeTasks {
         catch (RuleViolation notFound) { if (notFound.code() == RuleViolation.Code.NOT_FOUND) return null; throw notFound; }
     }
 
-    private void finishAttempt(Claim claim, String outcome) {
+    private void finishAttempt(DeliveryAttempt claim, String outcome) {
         tasks.finishAttempt(claim.attemptId(),outcome);
     }
 
@@ -181,16 +162,4 @@ public class ExchangeTasks {
         return state.withDeliveryStatus(status);
     }
 
-    public static int delay(int attempts) { return switch(attempts) { case 1 -> 2; case 2 -> 5; case 3 -> 15; default -> 60; }; }
-    public static TaskInput input(ExchangeState state) {
-        return state.task().request();
-    }
-    public static OperationIdentity identity(ExchangeState state) {
-        return state.identity();
-    }
-
-    private UUID operationId(JsonNode raw) {
-        try { return UUID.fromString(raw.path("operationId").asString()); }
-        catch (RuntimeException invalid) { return null; }
-    }
 }

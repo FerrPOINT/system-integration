@@ -667,10 +667,10 @@ Task — предметная сущность с неизменяемым ис�
 | TaskRepository / ExchangeTask | JDBC-адаптер хранения, внутренние модели задания/чтения; generated Task и двойной разбор accepted_result исключены. |
 | TaskService | Прикладные создание/чтение/переименование; правила состояния в domain, HTTP-маппинг в web. |
 | ExchangeTasks | Прикладные захват/фиксация попытки/применение страницы; чистые переходы в domain, SQL в адаптере. |
-| ReviewContext / IssueService / ReviewRepository / OperationsTransactions | Единая domain-политика действий; прикладные операции и история через ReviewStore, отдельный JDBC-адаптер. OperationsTransactions переносится в application после отделения доставки. |
+| ReviewContext / IssueService / ReviewRepository / OperationsTransactions | Единая domain-политика действий; прикладные операции и история через ReviewStore, отдельный JDBC-адаптер. ReviewService находится в application. |
 | CommandReceipts | Порт и JDBC-кодек квитанций с прежним каноническим входом и сохранённым ответом. |
 | ExchangeClient / ExchangeProtocol | Внешний HTTP-адаптер, строгая проверка контракта и преобразование во внутреннюю модель. |
-| ReconciliationService / workers | Координатор без общей сетевой транзакции; отдельные прикладные транзакции, тонкие scheduling-адаптеры. |
+| ReconciliationService / ExchangeCoordinator / ExchangeScheduler | Прикладная координация через ExternalExchange без общей сетевой транзакции; тонкий scheduling-адаптер, ограниченный executor с четырьмя отправителями. |
 | OperationService / OperationRepository эмулятора | Предметные правила, прикладные транзакции и JDBC-адаптер вместо смешанного сервиса. |
 | ApiProblem и generated DTO в бизнес-коде | Небольшая система смысловых ошибок/результатов; web отображает их в существующий HTTP-контракт. |
 

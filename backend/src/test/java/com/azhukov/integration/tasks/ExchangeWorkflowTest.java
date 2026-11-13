@@ -1,7 +1,13 @@
 package com.azhukov.integration.tasks;
 
+import static com.azhukov.integration.support.ExchangeTestData.*;
+
+import com.azhukov.integration.application.ExchangeTasks;
+
+import com.azhukov.integration.domain.exchange.DeliveryAttempt;
+
 import com.azhukov.integration.infrastructure.jdbc.TaskRepository;
-import com.azhukov.integration.contract.ExchangeReply;
+import com.azhukov.integration.infrastructure.http.ExchangeReply;
 import com.azhukov.integration.support.PostgresTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,14 +48,14 @@ class ExchangeWorkflowTest extends PostgresTest {
         UUID id = created(owner,UUID.randomUUID());
         var claim = exchange.claim();
         assertEquals("PUT",claim.step());
-        exchange.finish(claim,new ExchangeReply(503,null,false));
+        finish(exchange,claim,new ExchangeReply(503,null,false));
         assertEquals("UNKNOWN",delivery(id));
         assertEquals(1,count("exchange_issues"));
         dueNow();
         var check = exchange.claim();
         assertEquals("GET",check.step());
         assertEquals(2,check.number());
-        exchange.finish(check,new ExchangeReply(404,json.readTree("{\"title\":\"Отсутствует\",\"status\":404,\"code\":\"OPERATION_NOT_FOUND\"}"),false));
+        finish(exchange,check,new ExchangeReply(404,json.readTree("{\"title\":\"Отсутствует\",\"status\":404,\"code\":\"OPERATION_NOT_FOUND\"}"),false));
         assertEquals("RETRY_WAIT",delivery(id));
         dueNow();
         var repeat = exchange.claim();
@@ -70,8 +76,8 @@ class ExchangeWorkflowTest extends PostgresTest {
             assertEquals(n,attempt.number());
             assertEquals(operation,attempt.operationId());
             assertEquals(n==1 ? "PUT" : "GET",attempt.step());
-            exchange.finish(attempt,new ExchangeReply(503,null,false));
-            int delay=ExchangeTasks.delay(n);
+            finish(exchange,attempt,new ExchangeReply(503,null,false));
+            int delay=DeliveryAttempt.delay(n);
             double remaining=jdbc.queryForObject(
                 "SELECT extract(epoch FROM due_at-clock_timestamp()) FROM delivery_queue WHERE operation_id = ?",
                 Double.class,operation);
@@ -83,11 +89,11 @@ class ExchangeWorkflowTest extends PostgresTest {
         dueNow();
         var check=exchange.claim();
         var state=ack(check).put("executions",0).putNull("result");
-        exchange.finish(check,new ExchangeReply(200,state,false));
+        finish(exchange,check,new ExchangeReply(200,state,false));
         assertEquals("ACKNOWLEDGED",delivery(id));
         assertEquals(0,count("delivery_queue"));
         assertEquals("RESOLVED",jdbc.queryForObject("SELECT status FROM exchange_issues",String.class));
-        exchange.consume(0,page(1,result(check,2,"SUCCEEDED")));
+        consume(exchange,0,page(1,result(check,2,"SUCCEEDED")));
         assertEquals("SUCCEEDED",business(id));
         assertEquals(9,count("delivery_attempts"));
     }
@@ -100,7 +106,7 @@ class ExchangeWorkflowTest extends PostgresTest {
         assertNull(exchange.claim());
         assertEquals("UNKNOWN",delivery(id));
         assertEquals("INTERRUPTED",jdbc.queryForObject("SELECT outcome FROM delivery_attempts WHERE id = ?",String.class,old.attemptId()));
-        exchange.finish(old,new ExchangeReply(202,ack(old),false));
+        finish(exchange,old,new ExchangeReply(202,ack(old),false));
         assertEquals("UNKNOWN",delivery(id));
         dueNow();
         var next = exchange.claim();
@@ -112,10 +118,10 @@ class ExchangeWorkflowTest extends PostgresTest {
     void earlyResultConfirmsDeliveryAndLateHttpFailureCannotRollItBack() throws Exception {
         UUID id = created(login("initiator.one"),UUID.randomUUID());
         var claim = exchange.claim();
-        assertTrue(exchange.consume(0,page(1,result(claim,2,"SUCCEEDED"))));
+        assertTrue(consume(exchange,0,page(1,result(claim,2,"SUCCEEDED"))));
         assertEquals("ACKNOWLEDGED",delivery(id));
         assertEquals("SUCCEEDED",business(id));
-        exchange.finish(claim,new ExchangeReply(503,null,false));
+        finish(exchange,claim,new ExchangeReply(503,null,false));
         assertEquals("ACKNOWLEDGED",delivery(id));
         assertEquals(0,count("delivery_queue"));
         assertEquals(0,count("exchange_issues"));
@@ -128,17 +134,17 @@ class ExchangeWorkflowTest extends PostgresTest {
         UUID id = created(login("initiator.one"),UUID.randomUUID());
         var claim = exchange.claim();
         var finalResult = result(claim,2,"SUCCEEDED");
-        exchange.consume(0,page(1,finalResult));
+        consume(exchange,0,page(1,finalResult));
         long history = count("task_history");
-        exchange.consume(1,page(2,finalResult));
+        consume(exchange,1,page(2,finalResult));
         assertEquals(history,count("task_history"));
-        exchange.consume(2,page(3,result(claim,1,"RUNNING")));
+        consume(exchange,2,page(3,result(claim,1,"RUNNING")));
         assertEquals("SUCCEEDED",business(id));
         var conflict = result(claim,2,"REJECTED");
-        exchange.consume(3,page(4,conflict));
+        consume(exchange,3,page(4,conflict));
         assertEquals(1,count("exchange_issues"));
         jdbc.update("UPDATE exchange_issues SET status = 'RESOLVED'");
-        exchange.consume(4,page(5,conflict));
+        consume(exchange,4,page(5,conflict));
         assertEquals(1,count("exchange_issues"));
         assertEquals("SUCCEEDED",business(id));
         assertEquals(5,exchange.cursor());
@@ -150,11 +156,11 @@ class ExchangeWorkflowTest extends PostgresTest {
         var claim = exchange.claim();
         var wrong = result(claim,2,"SUCCEEDED").deepCopy();
         ((tools.jackson.databind.node.ObjectNode)wrong.get("request")).put("quantity",26);
-        exchange.consume(0,page(1,wrong));
+        consume(exchange,0,page(1,wrong));
         assertEquals("QUEUED",delivery(id));
         assertEquals("PENDING",business(id));
         assertEquals(1,count("exchange_issues"));
-        exchange.finish(claim,new ExchangeReply(409,json.readTree("{\"code\":\"OPERATION_CONFLICT\"}"),false));
+        finish(exchange,claim,new ExchangeReply(409,json.readTree("{\"code\":\"OPERATION_CONFLICT\"}"),false));
         assertEquals("NEEDS_REVIEW",delivery(id));
     }
 
@@ -162,13 +168,13 @@ class ExchangeWorkflowTest extends PostgresTest {
     void pausedAndStoppedObserveBothRunningAndFinalWithoutApplying() throws Exception {
         UUID id = created(login("initiator.one"),UUID.randomUUID());
         var claim = exchange.claim();
-        exchange.finish(claim,new ExchangeReply(400,null,false));
+        finish(exchange,claim,new ExchangeReply(400,null,false));
         for (int version : new int[]{1,2}) {
             var incoming = result(claim,version,version == 1 ? "RUNNING" : "SUCCEEDED");
             long after = exchange.cursor();
-            exchange.consume(after,page(after + 1,incoming));
+            consume(exchange,after,page(after + 1,incoming));
             long issues = count("exchange_issues");
-            exchange.consume(after + 1,page(after + 2,incoming));
+            consume(exchange,after + 1,page(after + 2,incoming));
             assertEquals(issues,count("exchange_issues"));
         }
         assertEquals("NEEDS_REVIEW",delivery(id));
@@ -178,9 +184,9 @@ class ExchangeWorkflowTest extends PostgresTest {
         for (int version : new int[]{1,2}) {
             var incoming = result(claim,version,version == 1 ? "RUNNING" : "SUCCEEDED");
             long after = exchange.cursor();
-            exchange.consume(after,page(after + 1,incoming));
+            consume(exchange,after,page(after + 1,incoming));
             int issues = count("exchange_issues");
-            exchange.consume(after + 1,page(after + 2,incoming));
+            consume(exchange,after + 1,page(after + 2,incoming));
             assertEquals(issues,count("exchange_issues"));
         }
         assertEquals("STOPPED",delivery(id));
@@ -193,13 +199,13 @@ class ExchangeWorkflowTest extends PostgresTest {
         var claim = exchange.claim();
         var transaction = new TransactionTemplate(transactions);
         transaction.executeWithoutResult(status -> {
-            exchange.consume(0,page(1,result(claim,2,"SUCCEEDED")));
+            consume(exchange,0,page(1,result(claim,2,"SUCCEEDED")));
             status.setRollbackOnly();
         });
         assertEquals(0,exchange.cursor());
         assertEquals("PENDING",business(id));
-        assertTrue(exchange.consume(0,page(1,result(claim,2,"SUCCEEDED"))));
-        assertFalse(exchange.consume(0,page(1,result(claim,2,"REJECTED"))));
+        assertTrue(consume(exchange,0,page(1,result(claim,2,"SUCCEEDED"))));
+        assertFalse(consume(exchange,0,page(1,result(claim,2,"REJECTED"))));
         assertEquals("SUCCEEDED",business(id));
     }
 
@@ -226,14 +232,14 @@ class ExchangeWorkflowTest extends PostgresTest {
     private tools.jackson.databind.JsonNode page(long cursor, tools.jackson.databind.JsonNode result) {
         return json.createArrayNode().add(json.createObjectNode().put("cursor",cursor).set("result",result));
     }
-    private tools.jackson.databind.JsonNode result(ExchangeTasks.Claim claim,int version,String status) {
+    private tools.jackson.databind.JsonNode result(DeliveryAttempt claim,int version,String status) {
         var result = json.createObjectNode().put("operationId",claim.operationId().toString())
             .set("request",json.valueToTree(claim.request())).put("version",version).put("status",status);
         if (version == 2) result.put("completedAt","2026-11-12T00:00:00Z");
         if (status.equals("REJECTED")) result.put("rejectionCode","QUANTITY_LIMIT_EXCEEDED");
         return result;
     }
-    private tools.jackson.databind.node.ObjectNode ack(ExchangeTasks.Claim claim) {
+    private tools.jackson.databind.node.ObjectNode ack(DeliveryAttempt claim) {
         return json.createObjectNode().put("operationId",claim.operationId().toString())
             .set("request",json.valueToTree(claim.request())).put("acceptedAt","2026-11-12T00:00:00Z");
     }

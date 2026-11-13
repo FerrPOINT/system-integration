@@ -1,6 +1,10 @@
 package com.azhukov.integration.tasks;
 
-import com.azhukov.integration.contract.ExchangeReply;
+import static com.azhukov.integration.support.ExchangeTestData.*;
+
+import com.azhukov.integration.application.ExchangeTasks;
+
+import com.azhukov.integration.infrastructure.http.ExchangeReply;
 import com.azhukov.integration.support.PostgresTest;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.junit.jupiter.api.Test;
@@ -48,13 +52,13 @@ class SqlWorkflowProfileTest extends PostgresTest {
         var identity = Map.of("operationId",claim.operationId(),"request",claim.request());
         var acknowledgement = new java.util.LinkedHashMap<String,Object>(identity);
         acknowledgement.put("acceptedAt","2026-01-01T00:00:00Z");
-        step("ack",() -> { exchange.finish(claim,new ExchangeReply(202,json.valueToTree(acknowledgement),false)); return null; });
+        step("ack",() -> { finish(exchange,claim,new ExchangeReply(202,json.valueToTree(acknowledgement),false)); return null; });
         var running = new java.util.LinkedHashMap<String,Object>(identity);
         running.put("version",1); running.put("status","RUNNING");
         var terminal = new java.util.LinkedHashMap<String,Object>(identity);
         terminal.put("version",2); terminal.put("status","SUCCEEDED"); terminal.put("completedAt","2026-01-01T00:00:01Z");
         var page = json.valueToTree(List.of(Map.of("cursor",1,"result",running),Map.of("cursor",2,"result",terminal)));
-        assertTrue(step("consume-two-results",() -> exchange.consume(0,page)));
+        assertTrue(step("consume-two-results",() -> consume(exchange,0,page)));
         status(200,step("history",() -> mvc.perform(get("/api/tasks/"+task+"/history").session(owner.session())).andReturn()));
         var finalCard = step("final-card",() -> mvc.perform(get("/api/tasks/"+task).session(owner.session())).andReturn());
         status(200,finalCard);
