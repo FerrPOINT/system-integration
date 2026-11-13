@@ -14,7 +14,7 @@ import { Select } from '../../ui/select';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
-import { Dialog } from '../../ui/dialog';
+import { Dialog, DiscardDialog } from '../../ui/dialog';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useBeforeUnload, useBlocker, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { createTask, getTask, listTaskHistory, listTasks, renameTask } from '../../../build/generated/openapi/client';
@@ -153,13 +153,9 @@ export function NewTask() {
         </div>
       </form>
     </Dialog>
-    <Dialog open={blocker.state === 'blocked' && !create.isPending} title="Закрыть форму?"
-      description="Введённые данные будут потеряны." onClose={() => blocker.state === 'blocked' && blocker.reset()}>
-      <div className="base-dialog-footer">
-        <Button onClick={() => blocker.state === 'blocked' && blocker.reset()}>Продолжить заполнение</Button>
-        <Button variant="default" onClick={() => blocker.state === 'blocked' && blocker.proceed()}>Не сохранять</Button>
-      </div>
-    </Dialog>
+    <DiscardDialog open={blocker.state === 'blocked' && !create.isPending}
+      onCancel={() => blocker.state === 'blocked' && blocker.reset()}
+      onDiscard={() => blocker.state === 'blocked' && blocker.proceed()} />
   </>;
 }
 

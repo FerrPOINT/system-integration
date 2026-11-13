@@ -28,7 +28,7 @@ test('UI-16: dirty form survives close, Escape and browser Back until discard is
   const dialog=page.getByRole('dialog', { name: 'Новое задание', exact: true });
   await dialog.getByLabel('Название *', { exact: true }).fill('Несохранённое задание');
   await dialog.getByRole('button', { name: 'Закрыть', exact: true }).click();
-  const confirm=page.getByRole('dialog', { name: 'Закрыть форму?', exact: true });
+  const confirm=page.getByRole('alertdialog', { name: 'Закрыть форму?', exact: true });
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
   await expect(dialog.getByLabel('Название *', { exact: true })).toHaveValue('Несохранённое задание');

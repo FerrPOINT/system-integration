@@ -1,3 +1,4 @@
+import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import type { ReactNode, RefObject } from 'react';
@@ -24,4 +25,24 @@ export function Dialog({ open, title, description, onClose, pending = false, ret
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   </DialogPrimitive.Root>;
+}
+
+export function DiscardDialog({ open, onCancel, onDiscard }: {
+  open: boolean; onCancel: () => void; onDiscard: () => void;
+}) {
+  return <AlertDialogPrimitive.Root open={open} onOpenChange={next => { if (!next) onCancel(); }}>
+    <AlertDialogPrimitive.Portal>
+      <AlertDialogPrimitive.Overlay className="base-dialog-overlay" />
+      <AlertDialogPrimitive.Content className="base-dialog-content">
+        <div className="base-dialog-header">
+          <AlertDialogPrimitive.Title className="base-dialog-title">Закрыть форму?</AlertDialogPrimitive.Title>
+          <AlertDialogPrimitive.Description className="base-dialog-description">Введённые данные будут потеряны.</AlertDialogPrimitive.Description>
+        </div>
+        <div className="base-dialog-footer">
+          <AlertDialogPrimitive.Cancel asChild><Button>Продолжить заполнение</Button></AlertDialogPrimitive.Cancel>
+          <Button variant="default" onClick={onDiscard}>Не сохранять</Button>
+        </div>
+      </AlertDialogPrimitive.Content>
+    </AlertDialogPrimitive.Portal>
+  </AlertDialogPrimitive.Root>;
 }

@@ -118,6 +118,7 @@ test('UI-11: changing account outside the SPA clears the previous private card',
   await page.getByLabel('Название *', { exact: true }).fill(title);
   await page.getByLabel('Номер заявки').fill('REQ-880003');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
 
   async function signInOutsideSpa(username: string) {
