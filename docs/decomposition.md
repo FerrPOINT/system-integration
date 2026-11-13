@@ -284,8 +284,10 @@ SUCCESS_NO_INFO, итог подтверждается атомарностью 
 
 ### Полнота EXPLAIN
 
-В текущем source — 71 точка обращения JDBC в TaskRepository, ExchangeIssues,
-CommandReceipts, SecurityConfiguration, DemoUsers и OperationRepository.
+Первичный source SI-09 содержал 71 точку JDBC; после выделения ReviewRepository
+и объединения одинакового чтения временной проблемы осталось 70.
+Владельцы: TaskRepository, ReviewRepository, CommandReceipts,
+SecurityConfiguration, DemoUsers и OperationRepository.
 Это точки вызова, не обещание ровно 71 уникального SQL: динамические условия
 и повторное использование учитываются отдельно. Реестр с файлом/методом,
 SQL-вариантом, данными и планом формируется в игнорируемых tests/results/.

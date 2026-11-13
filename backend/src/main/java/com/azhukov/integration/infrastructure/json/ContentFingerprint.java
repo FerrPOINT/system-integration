@@ -1,4 +1,4 @@
-package com.azhukov.integration.tasks;
+package com.azhukov.integration.infrastructure.json;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -10,15 +10,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-final class ContentFingerprint {
+public final class ContentFingerprint {
     private ContentFingerprint() {}
 
-    static String of(ObjectMapper json, Object content) {
+    public static String of(ObjectMapper json, Object content) {
         Object plain = json.convertValue(content, Object.class);
         return text(json.writeValueAsString(normalize(plain)));
     }
 
-    static String text(String value) {
+    public static String text(String value) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException error) { throw new IllegalStateException(error); }

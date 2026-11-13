@@ -1,9 +1,11 @@
-package com.azhukov.integration.tasks;
+package com.azhukov.integration.infrastructure.jdbc;
+
+import com.azhukov.integration.infrastructure.json.ContentFingerprint;
 
 import com.azhukov.integration.domain.RuleViolation;
 import com.azhukov.integration.application.port.CommandReceiptStore;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -11,7 +13,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.UUID;
 import java.util.function.Supplier;
 
-@Component
+@Repository
 public class CommandReceipts implements CommandReceiptStore {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;

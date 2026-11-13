@@ -4,6 +4,7 @@ import com.azhukov.integration.contract.ExchangeReply;
 import com.azhukov.integration.exchange.ExchangeClient;
 import com.azhukov.integration.support.PostgresTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -27,6 +28,9 @@ class OperationsWorkflowTest extends PostgresTest {
     @Autowired ExchangeTasks exchange;
     @Autowired PlatformTransactionManager transactions;
     @MockitoSpyBean JdbcTemplate observedSql;
+
+    @BeforeEach
+    void classifyRawLookupReplies() { when(client.lookup(any(UUID.class))).thenCallRealMethod(); }
 
     @Test
     void countedIssuePagesRespectTheStatusFilter() throws Exception {

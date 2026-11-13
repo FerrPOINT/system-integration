@@ -8,7 +8,8 @@ import com.azhukov.integration.domain.task.TaskInput;
 import com.azhukov.integration.domain.exchange.OperationIdentity;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.DeliveryStatus;
-import com.azhukov.integration.contract.internal.model.HistoryEvent;
+import com.azhukov.integration.application.IssueService;
+import com.azhukov.integration.domain.review.Issue;
 import com.azhukov.integration.infrastructure.http.ExchangeProtocol;
 import com.azhukov.integration.domain.RuleViolation;
 import org.springframework.stereotype.Service;
@@ -21,10 +22,10 @@ import java.util.UUID;
 @Service
 public class ExchangeTasks {
     private final TaskStore tasks;
-    private final ExchangeIssues issues;
+    private final IssueService issues;
     private final ExchangeProtocol protocol;
 
-    public ExchangeTasks(TaskStore tasks, ExchangeIssues issues) {
+    public ExchangeTasks(TaskStore tasks, IssueService issues) {
         this.tasks = tasks; this.issues = issues;
         this.protocol = new ExchangeProtocol();
     }
@@ -118,7 +119,7 @@ public class ExchangeTasks {
 
     @Transactional
     public void badPage(JsonNode page) {
-        issues.open(null, null, "RESULT_CONFLICT", "Некорректная структура страницы или позиция ленты", page, null, null);
+        issues.open(null, null, Issue.Kind.RESULT_CONFLICT, "Некорректная структура страницы или позиция ленты", page, null, null);
     }
 
     private void receive(JsonNode raw, long cursor) {
@@ -127,24 +128,24 @@ public class ExchangeTasks {
         catch (RuntimeException malformed) {
             UUID id = operationId(raw);
             var state = find(id);
-            issues.open(state, id, "RESULT_CONFLICT", "Входящий снимок не соответствует контракту", raw, null, cursor);
+            issues.open(state, id, Issue.Kind.RESULT_CONFLICT, "Входящий снимок не соответствует контракту", raw, null, cursor);
             return;
         }
         var state = find(received.operationId());
         if (state == null) {
-            issues.open(null, received.operationId(), "RESULT_CONFLICT", "Неизвестная внешняя операция", received, received, cursor);
+            issues.open(null, received.operationId(), Issue.Kind.RESULT_CONFLICT, "Неизвестная внешняя операция", received, received, cursor);
             return;
         }
         switch (state.disposition(received)) {
-            case REQUEST_MISMATCH -> issues.open(state, received.operationId(), "RESULT_CONFLICT",
+            case REQUEST_MISMATCH -> issues.open(state, received.operationId(), Issue.Kind.RESULT_CONFLICT,
                 "Запрос события не совпадает с заданием", received, received, cursor);
             case DUPLICATE -> { }
             case OLDER -> tasks.history(state.task(), null, HistoryType.RESULT_IGNORED,
                 "Запоздалый снимок не изменил результат", Map.of("resultVersion",received.version()));
             case OBSERVE -> issues.observe(state, received);
-            case STOPPED -> issues.open(state, received.operationId(), "RECONCILIATION_DIFFERENCE",
+            case STOPPED -> issues.open(state, received.operationId(), Issue.Kind.RECONCILIATION_DIFFERENCE,
                 "Внешний снимок после остановки отправки требует решения оператора", received, received, cursor);
-            case CONFLICT -> issues.open(state, received.operationId(), "RESULT_CONFLICT",
+            case CONFLICT -> issues.open(state, received.operationId(), Issue.Kind.RESULT_CONFLICT,
                 "Разное содержимое одной версии результата", received, received, cursor);
             case APPLY -> apply(state, received, null);
         }

@@ -4,6 +4,10 @@ import com.azhukov.integration.contract.internal.model.*;
 import com.azhukov.integration.application.task.CreateTask;
 import com.azhukov.integration.application.task.RenameTask;
 import com.azhukov.integration.domain.task.TaskInput;
+import com.azhukov.integration.application.review.IssueCommands;
+import com.azhukov.integration.domain.review.IssueResolution;
+import com.azhukov.integration.infrastructure.json.ContentFingerprint;
+import com.azhukov.integration.infrastructure.json.DocumentJsonConfiguration;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
@@ -18,7 +22,12 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CommandFingerprintTest {
-    private final JsonMapper json = JsonMapper.builder().build();
+    private final JsonMapper json = mapper();
+    private static JsonMapper mapper() {
+        var builder=JsonMapper.builder();
+        new DocumentJsonConfiguration().documents().customize(builder);
+        return builder.build();
+    }
     private final UUID id = UUID.fromString("00000000-0000-4000-8000-000000000001");
     private final UUID snapshot = UUID.fromString("00000000-0000-4000-8000-000000000099");
 
@@ -38,6 +47,10 @@ class CommandFingerprintTest {
         inputs.put("reconcile",id);
         inputs.put("create-application",new CreateTask("Проверка заявки",new TaskInput("REQ-000001",25)));
         inputs.put("rename-application",new RenameCommand(id,new RenameTask("Новое имя",9007199254740990L)));
+        inputs.put("take-application",new Target(id,new IssueCommands.Take(2L)));
+        inputs.put("retry-application",new Target(id,new IssueCommands.Retry(2L,"Повтор",null)));
+        inputs.put("retry-with-snapshot-application",new Target(id,new IssueCommands.Retry(2L,"Повтор",snapshot)));
+        inputs.put("resolve-application",new Target(id,new IssueCommands.Resolve(2L,snapshot,IssueResolution.Action.ACKNOWLEDGE_DIFFERENCE,"Проверено")));
         return inputs.entrySet().stream().map(entry -> DynamicTest.dynamicTest(entry.getKey(),() -> {
             var expected = fixtures.get(entry.getKey().replace("-application",""));
             // Compare the persisted JSON, not Jackson's in-memory IntNode versus LongNode.

@@ -667,7 +667,7 @@ Task — предметная сущность с неизменяемым ис�
 | TaskRepository / ExchangeTask | JDBC-адаптер хранения, внутренние модели задания/чтения; generated Task и двойной разбор accepted_result исключены. |
 | TaskService | Прикладные создание/чтение/переименование; правила состояния в domain, HTTP-маппинг в web. |
 | ExchangeTasks | Прикладные захват/фиксация попытки/применение страницы; чистые переходы в domain, SQL в адаптере. |
-| ExchangeIssues / OperationsTransactions | Прикладные операции review и JDBC-хранение; доступные действия вычисляются одним предметным правилом. |
+| ReviewContext / IssueService / ReviewRepository / OperationsTransactions | Единая domain-политика действий; прикладные операции и история через ReviewStore, отдельный JDBC-адаптер. OperationsTransactions переносится в application после отделения доставки. |
 | CommandReceipts | Порт и JDBC-кодек квитанций с прежним каноническим входом и сохранённым ответом. |
 | ExchangeClient / ExchangeProtocol | Внешний HTTP-адаптер, строгая проверка контракта и преобразование во внутреннюю модель. |
 | ReconciliationService / workers | Координатор без общей сетевой транзакции; отдельные прикладные транзакции, тонкие scheduling-адаптеры. |

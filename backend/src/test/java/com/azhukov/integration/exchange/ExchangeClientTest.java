@@ -97,6 +97,40 @@ class ExchangeClientTest {
         }
     }
 
+    @Test
+    void reconciliationLookupClassifiesHttpRepliesWithoutConcealingProtocolErrors() throws Exception {
+        UUID id=UUID.randomUUID();
+        String snapshot="""
+            {"operationId":"%s","request":{"reference":"REQ-000002","quantity":26},
+             "acceptedAt":"2026-11-12T00:00:00Z","executions":0,"result":null}
+            """.formatted(id);
+        String missing="""
+            {"title":"Отсутствует","status":404,"code":"OPERATION_NOT_FOUND"}
+            """;
+        record Case(int status,String body,String availability,boolean protocolError) {}
+        for (var probe:java.util.List.of(
+            new Case(200,snapshot,"PRESENT",false),new Case(200,"{}","UNAVAILABLE",true),
+            new Case(404,missing,"NOT_FOUND",false),new Case(404,"{}","UNAVAILABLE",true),
+            new Case(400,"{}","UNAVAILABLE",true),new Case(503,"{}","UNAVAILABLE",false),
+            new Case(302,"{}","UNAVAILABLE",false))) {
+            try (var source=source(request -> {
+                byte[] body=probe.body().getBytes(StandardCharsets.UTF_8);
+                request.getResponseHeaders().add("Content-Type","application/json");
+                request.sendResponseHeaders(probe.status(),body.length);
+                try (var output=request.getResponseBody()) { output.write(body); }
+            }); var client=new ExchangeClient(json,source.origin())) {
+                var result=client.lookup(id);
+                assertEquals(probe.availability(),result.availability().name(),probe.toString());
+                assertEquals(probe.protocolError(),result.protocolFailure()!=null,probe.toString());
+                if (result.external()!=null) {
+                    assertEquals(26,result.external().request().quantity(),"Operator must see external differences unchanged");
+                    assertNull(result.external().result());
+                }
+                assertEquals(json.readTree(probe.body()),result.evidence());
+            }
+        }
+    }
+
     private static void reply(HttpExchange request) throws IOException {
         byte[] body = "{\"value\":42}".getBytes(StandardCharsets.UTF_8);
         request.getResponseHeaders().add("Content-Type", "application/json");

@@ -18,40 +18,9 @@ def bind(sql, values):
  chunks=sql.split('?')
  if len(chunks)-1!=len(values):raise ValueError((sql,values))
  return ''.join(a+sql_literal(b) for a,b in zip(chunks,values))+chunks[-1]
-def first_arg(s,start):
- pos=start; depth=0; tokens=[]; chars=[]
- while pos<len(s):
-  if s.startswith('"""',pos):
-   end=s.index('"""',pos+3)
-   raw=textwrap.dedent(s[pos+3:end]).strip()
-   tokens.append(raw); chars.append('SQL_LITERAL');pos=end+3;continue
-  if s[pos]=='"':
-   end=pos+1
-   while end<len(s):
-    if s[end]=='\\':end+=2;continue
-    if s[end]=='"':break
-    end+=1
-   tokens.append(json.loads(s[pos:end+1]));chars.append('SQL_LITERAL');pos=end+1;continue
-  ch=s[pos]
-  if ch==',' and depth==0:break
-  if ch=='(':depth+=1
-  if ch==')':
-   if depth==0:break
-   depth-=1
-  chars.append(ch);pos+=1
- return s[start:pos],tokens
-inventory={}
-for base in ['backend/src/main/java','backend/emulator/src/main/java']:
- for p in sorted(Path(base).rglob('*.java')):
-  s=p.read_text()
-  for index,m in enumerate(re.finditer(r'\bjdbc\.(\w+)\(',s),1):
-   if m.group(1) not in {'queryForObject','query','update'}:
-    raise RuntimeError('Add SQL coverage for '+str(p)+': '+m.group(1))
-   expression,strings=first_arg(s,m.end()); key=f'{p.stem}:{index}'
-   inventory[key]={'id':key,'file':str(p),'line':s.count('\n',0,m.start())+1,'expression':expression,
-                   'sourceSha256':hashlib.sha256(p.read_bytes()).hexdigest(),'strings':strings,
-                   'database':'si_emulator_test' if '/emulator/' in str(p) else 'si_test'}
-assert inventory, 'No JDBC calls found'
+from jdbc_inventory import collect
+
+inventory=collect(['backend/src/main/java','backend/emulator/src/main/java'])
 cases=[]
 def add(key,sql,values=(),variant='default'):
  cases.append({'callSite':key,'variant':variant,'database':inventory[key]['database'],'sql':bind(sql,values),'template':sql,'parameters':list(values)})
@@ -62,41 +31,44 @@ def static(key,params=(),variant='default'):
 
 result=json.dumps({'operationId':O,'request':{'reference':'REQ-100001','quantity':25},'version':2,'status':'SUCCEEDED','completedAt':'2026-01-02T00:00:00Z'})
 params={
-'CommandReceipts:1':['actor:command:key'],'CommandReceipts:2':[U,'CREATE_TASK',K],'CommandReceipts:3':[U,'NEW_COMMAND',K,'probe',201,'{}'],
-'DemoUsers:1':[uid(900004),'sql.probe','not-a-login-secret','INITIATOR'],'SecurityConfiguration:1':['sql.owner.one'],
-'TaskRepository:6':[NT,U,NO,'probe','REQ-110001',25],'TaskRepository:7':[uid(105001)],'TaskRepository:8':[ 'changed',2,T],
-'TaskRepository:9':[uid(600001),T,O,'USER',U,'RENAMED','probe','{}'],'TaskRepository:10':[T],'TaskRepository:11':[T,0],
-'TaskRepository:12':[],'TaskRepository:13':[O],'TaskRepository:14':[C,2,O],'TaskRepository:15':[C,O,2,'PUT'],
-'TaskRepository:16':['ACK',uid(500002)],'TaskRepository:17':[uid(100002),uid(500002)],
-'TaskRepository:18':['2026-01-01T00:00:00Z',5,O],'TaskRepository:19':['GET',5,O],'TaskRepository:20':[O],
-'TaskRepository:21':[O],'TaskRepository:22':['RETRY_WAIT',O,'RETRY_WAIT'],'TaskRepository:23':[result,'SUCCEEDED',O],
-'TaskRepository:25':[100],
-'ExchangeIssues:1':[uid(210001),T,O,O,'new-fingerprint','PROTOCOL_ERROR','probe','{}'],
-'ExchangeIssues:2':[O,'seed'],'ExchangeIssues:3':[T],'ExchangeIssues:4':[I],'ExchangeIssues:5':[T],'ExchangeIssues:6':[T],
-'ExchangeIssues:7':['probe','{}',I],'ExchangeIssues:8':[T],
-'ExchangeIssues:9':[uid(600002),T,O,'{"resultVersion":2}',result,'observation'],
-'ExchangeIssues:11':[],'ExchangeIssues:12':['OPEN'],'ExchangeIssues:14':[uid(900003),I],
-'ExchangeIssues:15':[T],'ExchangeIssues:16':[uid(310001),T,1,'2026-01-01T00:00:00Z',uid(900003),'{}'],
-'ExchangeIssues:17':[R,T],'ExchangeIssues:18':[R,T],'ExchangeIssues:20':[I],'ExchangeIssues:21':[I],
-'ExchangeIssues:22':['{"decision":"STOP","reason":"probe"}',I],
-'OperationRepository:1':[O],'OperationRepository:2':[],'OperationRepository:3':[0,100],
-'OperationRepository:4':[O],'OperationRepository:5':[O,1,1,result,False],
-'OperationRepository:6':[O],'OperationRepository:7':[O],'OperationRepository:8':['REQ-100001'],
-'OperationRepository:9':[NO,'REQ-110001',25],'OperationRepository:10':[uid(100003),'REQ-100002'],
-'OperationRepository:11':[result,'2026-01-02T00:00:00Z',O],'OperationRepository:12':[],
-'OperationRepository:13':[],'OperationRepository:14':[20001,O,1,0],'OperationRepository:15':[20001],
-'OperationRepository:16':['fault:REQ-100001'],'OperationRepository:17':['REQ-100002','DELAY_RESULT'],
-'OperationRepository:18':[O],'OperationRepository:19':['REQ-100001']}
+'CommandReceipts.execute/6:1':['actor:command:key'],'CommandReceipts.execute/6:2':[U,'CREATE_TASK',K],'CommandReceipts.execute/6:3':[U,'NEW_COMMAND',K,'probe',201,'{}'],
+'DemoUsers.run/1:1':[uid(900004),'sql.probe','not-a-login-secret','INITIATOR'],'SecurityConfiguration.userDetailsService/1:1':['sql.owner.one'],
+'TaskRepository.insert/2:1':[NT,U,NO,'probe','REQ-110001',25],'TaskRepository.enqueue/1:1':[uid(105001)],'TaskRepository.rename/3:1':[ 'changed',2,T],
+'TaskRepository.history/5:1':[uid(600001),T,O,'USER',U,'RENAMED','probe','{}'],'TaskRepository.countHistory/1:1':[T],'TaskRepository.history/2:1':[T,0],
+'TaskRepository.lockDueOperation/0:1':[],'TaskRepository.lockQueue/1:1':[O],'TaskRepository.startAttempt/4:1':[C,2,O],'TaskRepository.startAttempt/4:2':[C,O,2,'PUT'],
+'TaskRepository.finishAttempt/2:1':['ACK',uid(500002)],'TaskRepository.ownsClaim/2:1':[uid(100002),uid(500002)],
+'TaskRepository.scheduleAfterInterruptedClaim/3:1':['2026-01-01T00:00:00Z',5,O],'TaskRepository.scheduleRetry/3:1':['GET',5,O],'TaskRepository.pauseQueue/1:1':[O],
+'TaskRepository.removeQueue/1:1':[O],'TaskRepository.delivery/2:1':['RETRY_WAIT',O,'RETRY_WAIT'],'TaskRepository.applyResult/1:1':[result,'SUCCEEDED',O],
+'TaskRepository.advanceCursor/1:1':[100],
+'ReviewRepository.open/6:1':[uid(210001),T,O,O,'new-fingerprint','PROTOCOL_ERROR','probe','{}'],
+'ReviewRepository.open/6:2':[O,'seed'],'ReviewRepository.temporary/1:1':[uid(2)],'ReviewRepository.delay/2:1':['probe',uid(200002)],'ReviewRepository.confirm/1:1':[uid(2)],
+'ReviewRepository.protocol/3:1':['probe','{}',uid(200002)],'ReviewRepository.observe/2:1':[T],
+'ReviewRepository.observe/2:2':[uid(600002),T,O,'{"resultVersion":2}',result,'observation'],
+'ReviewRepository.count/1:1':[],'ReviewRepository.count/1:2':['OPEN'],'ReviewRepository.assign/2:1':[uid(900003),I],
+'ReviewRepository.active/1:1':[T],'ReviewRepository.saveReconciliation/2:1':[uid(310001),T,1,'2026-01-01T00:00:00Z',uid(900003),'{}'],
+'ReviewRepository.saveReconciliation/2:2':[R,T],'ReviewRepository.reconciliation/2:1':[R,T],'ReviewRepository.resumeProtocol/1:1':[I],'ReviewRepository.advanceRevision/1:1':[I],
+'ReviewRepository.resolve/2:1':['{"decision":"STOP","reason":"probe"}',I],
+'OperationRepository.get/1:1':[O],'OperationRepository.lockNext/0:1':[],'OperationRepository.events/2:1':[0,100],
+'OperationRepository.fault/1:1':[O],'OperationRepository.event/3:1':[O,1,1,result,False],
+'OperationRepository.lockOperation/1:1':[O],'OperationRepository.exists/1:1':[O],'OperationRepository.lockFault/1:1':['REQ-100001'],
+'OperationRepository.insert/2:1':[NO,'REQ-110001',25],'OperationRepository.bindFault/2:1':[uid(100003),'REQ-100002'],
+'OperationRepository.complete/1:1':[result,'2026-01-02T00:00:00Z',O],'OperationRepository.publishNext/0:1':[],
+'OperationRepository.publishNext/0:2':[],'OperationRepository.publishNext/0:3':[20001,O,1,0],'OperationRepository.publishNext/0:4':[20001],
+'OperationRepository.lockFaultConfiguration/1:1':['fault:REQ-100001'],'OperationRepository.configure/2:1':['REQ-100002','DELAY_RESULT'],
+'OperationRepository.clear/1:1':[O],'OperationRepository.clear/1:2':['REQ-100001']}
 for key,values in params.items():static(key,values)
+static('TaskRepository.ownsClaim/2:1',[uid(100006),uid(500006)],'active-lease-owned')
+static('ReviewRepository.temporary/1:1',[T],'no-temporary-issue')
+static('ReviewRepository.confirm/1:1',[T],'no-temporary-issue')
 for operator,locked,exists in itertools.product([False,True],repeat=3):
- add('TaskRepository:1','SELECT * FROM tasks WHERE id = ?'+('' if operator else ' AND owner_id = ?')+(' FOR UPDATE' if locked else ''),
+ add('TaskRepository.get/3:1','SELECT * FROM tasks WHERE id = ?'+('' if operator else ' AND owner_id = ?')+(' FOR UPDATE' if locked else ''),
      ([T if exists else uid(999999)] if operator else [T if exists else uid(999999),U]),f'operator={operator},lock={locked},exists={exists}')
 for locked in [False,True]:
- add('TaskRepository:2','SELECT * FROM tasks WHERE operation_id = ?'+(' FOR UPDATE' if locked else ''),[O],f'lock={locked}')
- add('TaskRepository:24','SELECT last_cursor FROM incoming_position WHERE id = 1'+(' FOR UPDATE' if locked else ''),[],f'lock={locked}')
+ add('TaskRepository.exchange/2:1','SELECT * FROM tasks WHERE operation_id = ?'+(' FOR UPDATE' if locked else ''),[O],f'lock={locked}')
+ add('TaskRepository.cursor/1:1','SELECT last_cursor FROM incoming_position WHERE id = 1'+(' FOR UPDATE' if locked else ''),[],f'lock={locked}')
 for n in [1,20,100]:
- add('TaskRepository:3','SELECT * FROM tasks WHERE id IN ('+','.join('?'*n)+')',[uid(i+1) for i in range(n)],f'ids={n}')
- add('ExchangeIssues:19','SELECT snapshot::text,exchange_version FROM reconciliations WHERE id IN ('+','.join('?'*n)+')',[uid(i+300001) for i in range(n)],f'ids={n}')
+ add('TaskRepository.exchangeByTask/1:1','SELECT * FROM tasks WHERE id IN ('+','.join('?'*n)+')',[uid(i+1) for i in range(n)],f'ids={n}')
+ add('ReviewRepository.reconciliations/1:1','SELECT snapshot::text,exchange_version FROM reconciliations WHERE id IN ('+','.join('?'*n)+')',[uid(i+300001) for i in range(n)],f'ids={n}')
 for operator,status,lower,upper in itertools.product([False,True],[None,'PENDING','RUNNING','SUCCEEDED','REJECTED'],[False,True],[False,True]):
  conditions=' WHERE true'; values=[]
  if not operator: conditions+=' AND owner_id = ?';values.append(U)
@@ -105,13 +77,13 @@ for operator,status,lower,upper in itertools.product([False,True],[None,'PENDING
  if upper:conditions+=' AND created_at < ?';values.append('2027-01-01T00:00:00Z')
  variant=f'operator={operator},status={status},from={lower},to={upper}'
  for offset in [0,9000,20000]:
-  add('TaskRepository:4','SELECT * FROM tasks'+conditions+' ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?',values+[offset],variant+f',offset={offset}')
- add('TaskRepository:5','SELECT count(*) FROM tasks'+conditions,values,variant)
-issue_select=re.search(r'ISSUE_SELECT = """(.*?)"""',Path(inventory['ExchangeIssues:10']['file']).read_text(),re.S).group(1)
+  add('TaskRepository.list/5:1','SELECT * FROM tasks'+conditions+' ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?',values+[offset],variant+f',offset={offset}')
+ add('TaskRepository.countTasks/4:1','SELECT count(*) FROM tasks'+conditions,values,variant)
+issue_select=re.search(r'ISSUE_SELECT = """(.*?)"""',Path(inventory['ReviewRepository.get/2:1']['file']).read_text(),re.S).group(1)
 for locked in [False,True]:
- add('ExchangeIssues:10',issue_select+' WHERE i.id = ?'+(' FOR UPDATE OF i' if locked else ''),[I],f'lock={locked}')
+ add('ReviewRepository.get/2:1',issue_select+' WHERE i.id = ?'+(' FOR UPDATE OF i' if locked else ''),[I],f'lock={locked}')
 for status,offset in itertools.product([None,'OPEN','RESOLVED'],[0,900,2000]):
- add('ExchangeIssues:13',issue_select+(' WHERE i.status = ?' if status else '')+' ORDER BY i.opened_at DESC,i.id DESC LIMIT 20 OFFSET ?',
+ add('ReviewRepository.list/2:1',issue_select+(' WHERE i.status = ?' if status else '')+' ORDER BY i.opened_at DESC,i.id DESC LIMIT 20 OFFSET ?',
      [status,offset] if status else [offset],f'status={status},offset={offset}')
 
 # Selective and empty date windows, minority/missing owners, and a deep hot history.
@@ -119,16 +91,16 @@ for owner in [uid(900002),uid(999999)]:
  for status in [None,'PENDING','RUNNING','SUCCEEDED','REJECTED']:
   where=' WHERE owner_id = ?'+(' AND business_status = ?' if status else '')
   values=[owner,status] if status else [owner]
-  add('TaskRepository:4','SELECT * FROM tasks'+where+' ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?',values+[0],f'owner={owner},status={status}')
-  add('TaskRepository:5','SELECT count(*) FROM tasks'+where,values,f'owner={owner},status={status}')
+  add('TaskRepository.list/5:1','SELECT * FROM tasks'+where+' ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?',values+[0],f'owner={owner},status={status}')
+  add('TaskRepository.countTasks/4:1','SELECT count(*) FROM tasks'+where,values,f'owner={owner},status={status}')
 for start,end in [('2026-01-01T01:00:00Z','2026-01-01T01:00:20Z'),('2030-01-01T00:00:00Z','2030-01-02T00:00:00Z')]:
  for operator in [False,True]:
   where=' WHERE true'+('' if operator else ' AND owner_id = ?')+' AND created_at >= ? AND created_at < ?'
   values=[] if operator else [U]
   values += [start,end]
-  add('TaskRepository:4','SELECT * FROM tasks'+where+' ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?',values+[0],f'operator={operator},window={start}/{end}')
-  add('TaskRepository:5','SELECT count(*) FROM tasks'+where,values,f'operator={operator},window={start}/{end}')
-static('TaskRepository:11',[T,1000],'hot-history-deep-page')
+  add('TaskRepository.list/5:1','SELECT * FROM tasks'+where+' ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?',values+[0],f'operator={operator},window={start}/{end}')
+  add('TaskRepository.countTasks/4:1','SELECT count(*) FROM tasks'+where,values,f'operator={operator},window={start}/{end}')
+static('TaskRepository.history/2:1',[T,1000],'hot-history-deep-page')
 
 covered={c['callSite'] for c in cases}
 assert set(inventory)==covered, {'uncovered':sorted(set(inventory)-covered),'stale':sorted(covered-set(inventory))}

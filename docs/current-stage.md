@@ -14,7 +14,7 @@ Spring JDBC сохраняется; новые SQL-таймауты и увел�
 
 | Часть | Состояние и подтверждение |
 | --- | --- |
-| SQL baseline | 71 JDBC-вызов, 280 вариантов, 840 EXPLAIN ANALYZE/BUFFERS/WAL (inline/custom/generic) на откатываемых fixtures. Отчёт tests/results/sql-plans/report.json. |
+| SQL-планы | Первичный source: 71 вызов, 280 вариантов, 840 планов. После выделения ReviewRepository: 70 вызовов, 282 варианта, 846 EXPLAIN ANALYZE/BUFFERS/WAL (inline/custom/generic), fixtures откатились. Реестр привязан к методам; 4 регрессии проверяют сканер. Актуальный отчёт tests/results/sql-plans/report.json. |
 | Наблюдение | Известный blocker в si_test распознан отдельным тестом; обе транзакции откатились. Добавлены блокирующие PID, возраст транзакций, CPU/RSS runner и запас общего хоста. |
 | Частота JDBC | Фиксированный успешный workflow с двумя повторами: 50 вызовов по 26 SQL; create 6, replay 2, rename 7, replay 3, list 2, card 1, claim 6, ack 7, два результата с курсором 12, history 3, final card 1. Это не нагрузочный p95. |
 | Модель и web | Чистая неизменяемая модель Task, TaskInput/TaskTitle/TaskOutcome, Actor без credentials; контроллеры и HTTP-ошибки в web. ApiProblem удалён. |
@@ -23,7 +23,9 @@ Spring JDBC сохраняется; новые SQL-таймауты и увел�
 | JSON mapping | После RED 2/3 регрессий лишний разбор убран: RUNNING-карточка не читает результат, обмен декодирует полный снимок один раз. Проверены terminal и rejected соседи. |
 | Внешняя модель | OperationResult/OperationSnapshot/OperationIdentity — чистые domain-records. Wire-проверка в infrastructure/http; Jackson MixIns в инфраструктуре сохраняют старый JSON, включая обязательный result:null. Domain не зависит от HTTP DTO/Jackson. |
 | Правила результата | ExchangeState владеет классификацией входящего результата и независимой версией обмена; TaskRepository в infrastructure/jdbc, обработчики используют TaskStore. Адресно прошли 10 domain/архитектурных и 28 PostgreSQL случаев. |
-| Не завершено | Review/доставка, их порты и инфраструктурные границы, слои эмулятора; конкурентный профиль под нагрузкой; оптимизации и полная квалификация. Рубеж A не пройден. |
+| Review | Issue/Reconciliation/Evidence/LocalSnapshot и ReviewContext принадлежат domain; единая политика для кнопок и команд. ReviewStore реализован JDBC-адаптером; IssueService пишет историю в транзакции вызывающего сценария. Квитанции и JSON-кодек в infrastructure, HTTP lookup отдаёт типизированный результат. OperationsTransactions ещё ожидает переноса вместе с доставкой. |
+| Проверки review | 33 unit/архитектурных и 28 PostgreSQL/API-проверок без ошибок/пропусков: права, конкуренция, старые JSON-квитанции и сверки, 7 вариантов реального loopback HTTP lookup. Receipt tests/results/si09/review/. |
+| Не завершено | Границы доставки/координаторов, слои эмулятора; конкурентный профиль под нагрузкой; оптимизации и полная квалификация. Рубеж A не пройден. |
 
 Тестовые fixtures очищены. Предыдущая нагрузка выполнялась генератором на
 самом Firebat1, вне лимитов контейнеров; новый сопоставимый прогон пока не выполнен.

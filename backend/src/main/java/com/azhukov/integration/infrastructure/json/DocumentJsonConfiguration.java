@@ -3,6 +3,10 @@ package com.azhukov.integration.infrastructure.json;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.exchange.OperationSnapshot;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.azhukov.integration.domain.exchange.LocalSnapshot;
+import com.azhukov.integration.domain.task.TaskOutcome;
+import com.azhukov.integration.domain.review.*;
+import com.azhukov.integration.application.review.IssueCommands;
 import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,7 +17,14 @@ public class DocumentJsonConfiguration {
     @Bean
     public JsonMapperBuilderCustomizer documents() {
         return builder -> builder.addMixIn(OperationResult.class,OptionalFields.class)
-            .addMixIn(OperationSnapshot.class,RequiredNullable.class);
+            .addMixIn(OperationSnapshot.class,RequiredNullable.class)
+            .addMixIn(LocalSnapshot.class,OptionalFields.class)
+            .addMixIn(TaskOutcome.class,OptionalFields.class)
+            .addMixIn(Evidence.class,OptionalFields.class)
+            .addMixIn(Issue.class,OptionalFields.class)
+            .addMixIn(Reconciliation.class,OptionalFields.class)
+            .addMixIn(IssueResolution.class,OptionalFields.class)
+            .addMixIn(IssueCommands.Retry.class,OptionalFields.class);
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

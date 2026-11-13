@@ -1,6 +1,9 @@
 package com.azhukov.integration.exchange;
 
 import com.azhukov.integration.contract.ExchangeReply;
+import com.azhukov.integration.application.port.OperationLookup;
+import com.azhukov.integration.domain.review.Reconciliation.Availability;
+import com.azhukov.integration.infrastructure.http.ExchangeProtocol;
 import com.azhukov.integration.domain.task.TaskInput;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -21,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 @Component
-public class ExchangeClient implements AutoCloseable {
+public class ExchangeClient implements OperationLookup, AutoCloseable {
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1))
         .version(HttpClient.Version.HTTP_1_1).build();
     private final URI base;
@@ -40,6 +43,23 @@ public class ExchangeClient implements AutoCloseable {
 
     public ExchangeReply get(UUID id) { return send(HttpRequest.newBuilder(base.resolve("/operations/" + id)).GET()); }
     public ExchangeReply events(long after) { return send(HttpRequest.newBuilder(base.resolve("/result-events?after=" + after + "&limit=100")).GET()); }
+
+    @Override
+    public Lookup lookup(UUID id) {
+        var reply=get(id);
+        if (ExchangeProtocol.missingOperation(reply.status(),reply.body()))
+            return new Lookup(Availability.NOT_FOUND,null,null,reply.body());
+        if (reply.status()>=400 && reply.status()<500)
+            return new Lookup(Availability.UNAVAILABLE,null,
+                "Сверка получила некорректный постоянный ответ HTTP "+reply.status(),reply.body());
+        if (reply.status()==200) {
+            try { return new Lookup(Availability.PRESENT,new ExchangeProtocol().state(reply.body()),null,reply.body()); }
+            catch (IllegalArgumentException invalid) {
+                return new Lookup(Availability.UNAVAILABLE,null,"Сверка получила некорректный внешний снимок",reply.body());
+            }
+        }
+        return new Lookup(Availability.UNAVAILABLE,null,null,reply.body());
+    }
 
     private ExchangeReply send(HttpRequest.Builder request) {
         var pending = http.sendAsync(
