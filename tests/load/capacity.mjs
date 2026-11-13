@@ -12,6 +12,10 @@ const root = fileURLToPath(new URL('../..', import.meta.url));
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 const sourceCommit = git('rev-parse', 'HEAD');
 if (git('status', '--porcelain')) throw new Error('Commit the capacity candidate before qualification');
+const mode = process.env.SI_CAPACITY_MODE || 'read';
+const clientCount = Number(process.env.SI_CAPACITY_CLIENTS || '20');
+if (!['read', 'mixed'].includes(mode) || ![20, 40, 80].includes(clientCount))
+  throw new Error('Select one capacity stage: SI_CAPACITY_MODE=read|mixed and SI_CAPACITY_CLIENTS=20|40|80');
 const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19580');
 const externalOrigin = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19581');
 const dataset = JSON.parse(await readFile(new URL('../results/load-dataset.json', import.meta.url), 'utf8'));
@@ -127,7 +131,7 @@ async function stage(mode, count) {
       const first = await clients[0].session.command('POST', '/api/tasks', input, key);
       const replay = await clients[0].session.command('POST', '/api/tasks', input, key);
       if (first.taskId !== replay.taskId) throw new Error('IDEMPOTENCY_REPLAY_CHANGED');
-      // Include this independent verification command in the next stage's starting state.
+      // Include this independent verification command in this stage's final integrity check.
       const replayDeadline = Date.now() + 30000;
       while (Date.now() < replayDeadline) {
         const item = await clients[0].session.get('/api/tasks/' + first.taskId);
@@ -155,21 +159,15 @@ async function stage(mode, count) {
   return result;
 }
 
-for (const mode of ['read', 'mixed']) {
-  for (const count of [20, 40, 80]) {
-    const result = await stage(mode, count); stages.push(result);
-    if (!result.passed) break;
-  }
-  if (integrityErrors.length || stages.at(-1).drain.drained === false || stages.at(-1).stoppedFor === 'container-failure') break;
-}
+stages.push(await stage(mode, clientCount));
 const noUnexpectedErrors = stages.every(item => Object.keys(item.warmupErrors).concat(item.operations.flatMap(op => Object.keys(op.errors)))
   .every(code => /^(503:|429:|TimeoutError$|AbortError$)/.test(code)));
-const report = { profile: 'capacity', sourceCommit, initialCount: 10000, resources, stages, integrityErrors,
+const report = { profile: 'capacity', sourceCommit, mode, clients: clientCount, initialCount: 10000, resources, stages, integrityErrors,
   sourceUnchanged: git('rev-parse', 'HEAD') === sourceCommit && !git('status', '--porcelain'),
-  maximumPassedClients: Object.fromEntries(['read', 'mixed'].map(mode => [mode, Math.max(0, ...stages.filter(item => item.mode === mode && item.passed).map(item => item.clients))])) };
+  preparation: 'One stage per fresh 10000-record dataset; drain and verify before resetting for the next stage' };
 report.passed = report.sourceUnchanged && noUnexpectedErrors && integrityErrors.length === 0 &&
   stages.every(item => item.observation.errors.length === 0 && item.stoppedFor !== 'container-failure' &&
-    item.observation.samples.every(sample => sample.containers.every(container => container.running && !container.oom && !container.restarted))) && report.maximumPassedClients.read >= 20 && report.maximumPassedClients.mixed >= 20;
+    item.observation.samples.every(sample => sample.containers.every(container => container.running && !container.oom && !container.restarted))) && stages.every(item => item.passed && item.recordsBefore === 10000);
 await mkdir(new URL('../results/', import.meta.url), { recursive: true });
 await writeFile(new URL('../results/capacity.json', import.meta.url), JSON.stringify(report, null, 2));
 if (!report.passed) process.exitCode = 1;
