@@ -19,7 +19,7 @@ public class ReconciliationService {
     public Reconciliation reconcile(Actor user,UUID task,UUID key) {
         var before=operations.snapshot(user,task);
         // Both database transactions finish outside this network call.
-        var reply=client.get(before.task().getOperationId());
+        var reply=client.get(before.task().operationId());
         return operations.saveReconciliation(user,key,before,reply);
     }
 }

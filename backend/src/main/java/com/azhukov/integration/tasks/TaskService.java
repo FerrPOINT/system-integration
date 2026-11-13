@@ -3,7 +3,9 @@ package com.azhukov.integration.tasks;
 import com.azhukov.integration.application.Actor;
 import com.azhukov.integration.contract.internal.model.*;
 import com.azhukov.integration.domain.RuleViolation;
-import com.azhukov.integration.domain.task.TaskTitle;
+import com.azhukov.integration.domain.task.Task;
+import com.azhukov.integration.domain.task.BusinessStatus;
+import com.azhukov.integration.application.TaskPage;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Isolation;
@@ -43,9 +45,9 @@ public class TaskService {
         requireInitiator(user);
         return commands.execute(user.id(), "CREATE_TASK", key, input, 201, CreateTaskResult.class, () -> {
             var task = tasks.insert(user.id(), input);
-            tasks.enqueue(task.getOperationId());
+            tasks.enqueue(task.operationId());
             tasks.history(task, user.id(), HistoryEvent.TypeEnum.CREATED, "Задание принято и поставлено в очередь");
-            return new CreateTaskResult(task.getTaskId());
+            return new CreateTaskResult(task.id());
         });
     }
 
@@ -57,12 +59,11 @@ public class TaskService {
         return commands.execute(user.id(), "RENAME_TASK", key, new RenameCommand(id, input),
             200, RenameTaskResult.class, () -> {
                 var task = tasks.get(id, user, true);
-                var renamed = new TaskTitle(task.getTitle(),task.getTitleRevision())
-                    .rename(input.getTitle(),input.getExpectedTitleRevision());
-                tasks.rename(id, renamed.value(), renamed.revision());
+                var renamed = task.rename(input.getTitle(),input.getExpectedTitleRevision());
+                tasks.rename(id, renamed.title().value(), renamed.title().revision());
                 tasks.history(task, user.id(), HistoryEvent.TypeEnum.RENAMED,
-                    "Название изменено: «" + task.getTitle() + "» → «" + input.getTitle() + "»");
-                return new RenameTaskResult(renamed.value(), renamed.revision());
+                    "Название изменено: «" + task.title().value() + "» → «" + input.getTitle() + "»");
+                return new RenameTaskResult(renamed.title().value(), renamed.title().revision());
             });
     }
 

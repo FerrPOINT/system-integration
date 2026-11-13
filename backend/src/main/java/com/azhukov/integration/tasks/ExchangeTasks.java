@@ -3,7 +3,7 @@ package com.azhukov.integration.tasks;
 import com.azhukov.integration.contract.ExchangeReply;
 import com.azhukov.integration.contract.external.model.OperationInput;
 import com.azhukov.integration.contract.external.model.Result;
-import com.azhukov.integration.contract.internal.model.DeliveryStatus;
+import com.azhukov.integration.domain.task.DeliveryStatus;
 import com.azhukov.integration.contract.internal.model.HistoryEvent;
 import com.azhukov.integration.contract.ExchangeProtocol;
 import com.azhukov.integration.domain.RuleViolation;
@@ -34,11 +34,11 @@ public class ExchangeTasks {
         var due = tasks.lockDueOperation();
         if (due == null) return null;
         var state = tasks.exchange(due, true);
-        var queue = tasks.lockQueue(state.task().getOperationId());
+        var queue = tasks.lockQueue(state.task().operationId());
         if (queue.claim() != null) {
             tasks.finishAttempt(queue.claim(),"INTERRUPTED");
-            tasks.scheduleAfterInterruptedClaim(state.task().getOperationId(),queue.until(),delay(queue.attempts()));
-            delivery(state, DeliveryStatus.UNKNOWN);
+            tasks.scheduleAfterInterruptedClaim(state.task().operationId(),queue.until(),delay(queue.attempts()));
+            state = delivery(state, DeliveryStatus.UNKNOWN);
             issues.temporary(state, queue.attempts() >= 4);
             tasks.history(state.task(), null, HistoryEvent.TypeEnum.DELIVERY_UNCERTAIN,
                 "Прерванная попытка: следующее действие — уточняющий GET", Map.of("attemptId",queue.claim()));
@@ -46,10 +46,10 @@ public class ExchangeTasks {
         }
         UUID claim = UUID.randomUUID();
         int number = Math.addExact(queue.attempts(),1);
-        tasks.startAttempt(state.task().getOperationId(),claim,queue.step(),number);
+        tasks.startAttempt(state.task().operationId(),claim,queue.step(),number);
         tasks.history(state.task(), null, HistoryEvent.TypeEnum.DELIVERY_ATTEMPT,
             "Попытка " + number + ": " + queue.step(), Map.of("attemptId",claim));
-        return new Claim(state.task().getOperationId(), claim, queue.step(), number, input(state));
+        return new Claim(state.task().operationId(), claim, queue.step(), number, input(state));
     }
 
     @Transactional
@@ -83,13 +83,13 @@ public class ExchangeTasks {
         if (invalid == null && !temporary && !missing) invalid = "Постоянная ошибка внешнего протокола, HTTP " + reply.status();
         if (invalid != null) {
             issues.protocol(state, invalid, reply.body());
-            delivery(state, DeliveryStatus.NEEDS_REVIEW);
+            state = delivery(state, DeliveryStatus.NEEDS_REVIEW);
             tasks.pauseQueue(claim.operationId());
             finishAttempt(claim, "PROTOCOL_ERROR");
             return;
         }
         boolean repeatPut = missing || (claim.step().equals("PUT") && reply.connectionFailed());
-        delivery(state, repeatPut ? DeliveryStatus.RETRY_WAIT : DeliveryStatus.UNKNOWN);
+        state = delivery(state, repeatPut ? DeliveryStatus.RETRY_WAIT : DeliveryStatus.UNKNOWN);
         tasks.scheduleRetry(claim.operationId(),repeatPut ? "PUT" : "GET",delay(claim.number()));
         if (!repeatPut || claim.number() >= 4) issues.temporary(state, claim.number() >= 4);
         if (!repeatPut) tasks.history(state.task(), null, HistoryEvent.TypeEnum.DELIVERY_UNCERTAIN,
@@ -147,11 +147,11 @@ public class ExchangeTasks {
                 return;
             }
         }
-        if (state.task().getDeliveryStatus() == DeliveryStatus.NEEDS_REVIEW) {
+        if (state.task().deliveryStatus() == DeliveryStatus.NEEDS_REVIEW) {
             issues.observe(state, received);
             return;
         }
-        if (state.task().getDeliveryStatus() == DeliveryStatus.STOPPED) {
+        if (state.task().deliveryStatus() == DeliveryStatus.STOPPED) {
             issues.open(state, received.getOperationId(), "RECONCILIATION_DIFFERENCE",
                 "Внешний снимок после остановки отправки требует решения оператора", received, received, cursor);
             return;
@@ -172,8 +172,8 @@ public class ExchangeTasks {
     }
 
     public void acknowledge(TaskRepository.ExchangeTask state) {
-        delivery(state, DeliveryStatus.ACKNOWLEDGED);
-        tasks.removeQueue(state.task().getOperationId());
+        state = delivery(state, DeliveryStatus.ACKNOWLEDGED);
+        tasks.removeQueue(state.task().operationId());
         issues.confirm(state);
         tasks.history(state.task(), null, HistoryEvent.TypeEnum.DELIVERY_ACKNOWLEDGED, "Исполнитель подтвердил получение операции");
     }
@@ -188,17 +188,17 @@ public class ExchangeTasks {
         tasks.finishAttempt(claim.attemptId(),outcome);
     }
 
-    private void delivery(TaskRepository.ExchangeTask state, DeliveryStatus status) {
-        tasks.delivery(state.task().getOperationId(),status);
-        state.task().setDeliveryStatus(status);
+    private TaskRepository.ExchangeTask delivery(TaskRepository.ExchangeTask state, DeliveryStatus status) {
+        tasks.delivery(state.task().operationId(),status);
+        return new TaskRepository.ExchangeTask(state.task().withDeliveryStatus(status),state.version(),state.result());
     }
 
     public static int delay(int attempts) { return switch(attempts) { case 1 -> 2; case 2 -> 5; case 3 -> 15; default -> 60; }; }
     public static OperationInput input(TaskRepository.ExchangeTask state) {
-        return new OperationInput(state.task().getRequest().getReference(),state.task().getRequest().getQuantity());
+        return new OperationInput(state.task().request().reference(),state.task().request().quantity());
     }
     public static ExchangeProtocol.Identity identity(TaskRepository.ExchangeTask state) {
-        return new ExchangeProtocol.Identity(state.task().getOperationId(),input(state));
+        return new ExchangeProtocol.Identity(state.task().operationId(),input(state));
     }
 
     private UUID operationId(JsonNode raw) {

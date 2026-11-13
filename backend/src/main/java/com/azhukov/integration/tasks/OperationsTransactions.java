@@ -5,6 +5,7 @@ import com.azhukov.integration.application.Actor;
 import com.azhukov.integration.contract.external.model.OperationState;
 import com.azhukov.integration.contract.external.model.Result;
 import com.azhukov.integration.contract.internal.model.*;
+import com.azhukov.integration.domain.task.DeliveryStatus;
 import com.azhukov.integration.contract.ExchangeProtocol;
 import com.azhukov.integration.domain.RuleViolation;
 import org.springframework.stereotype.Service;
@@ -41,7 +42,7 @@ public class OperationsTransactions {
     @Transactional(readOnly=true)
     public TaskRepository.ExchangeTask snapshot(Actor user,UUID task) {
         requireOperator(user);
-        return tasks.exchange(tasks.get(task,user,false).getOperationId(),false);
+        return tasks.exchange(tasks.get(task,user,false).operationId(),false);
     }
 
     @Transactional(readOnly=true)
@@ -79,8 +80,8 @@ public class OperationsTransactions {
     @Transactional
     public Reconciliation saveReconciliation(Actor user,UUID key,TaskRepository.ExchangeTask before,ExchangeReply reply) {
         requireOperator(user);
-        return commands.execute(user.id(),"RECONCILE",key,before.task().getTaskId(),200,Reconciliation.class,() -> {
-            var current=tasks.exchange(before.task().getOperationId(),true);
+        return commands.execute(user.id(),"RECONCILE",key,before.task().id(),200,Reconciliation.class,() -> {
+            var current=tasks.exchange(before.task().operationId(),true);
             if (current.version()!=before.version()) throw stale();
             OperationState external=null;
             String protocolFailure=null;
@@ -94,14 +95,14 @@ public class OperationsTransactions {
             }
             var outcome=availability==Reconciliation.ExternalAvailabilityEnum.UNAVAILABLE ? Reconciliation.OutcomeEnum.UNAVAILABLE :
                 matches(current,external) ? Reconciliation.OutcomeEnum.MATCH : Reconciliation.OutcomeEnum.DIFFERENCE;
-            UUID issue=issues.active(current.task().getTaskId());
-            if (protocolFailure!=null) issue=issues.open(current,current.task().getOperationId(),"PROTOCOL_ERROR",
+            UUID issue=issues.active(current.task().id());
+            if (protocolFailure!=null) issue=issues.open(current,current.task().operationId(),"PROTOCOL_ERROR",
                 protocolFailure,reply.body(),null,null);
             if (outcome==Reconciliation.OutcomeEnum.DIFFERENCE && issue==null) {
-                issue=issues.open(current,current.task().getOperationId(),"RECONCILIATION_DIFFERENCE",
+                issue=issues.open(current,current.task().operationId(),"RECONCILIATION_DIFFERENCE",
                     "Сверка обнаружила расхождение с внешней системой",java.util.Arrays.asList(issues.snapshot(current),external),null,null);
             }
-            var saved=new Reconciliation(UUID.randomUUID(),current.task().getTaskId(),current.task().getOperationId(),
+            var saved=new Reconciliation(UUID.randomUUID(),current.task().id(),current.task().operationId(),
                 OffsetDateTime.now(ZoneOffset.UTC),user.id(),outcome,json.convertValue(issues.snapshot(current),LocalSnapshot.class),availability)
                 .issueId(issue);
             if (external!=null) saved.external(external);
@@ -139,11 +140,11 @@ public class OperationsTransactions {
             boolean protocolError=context.issue().value().getKind()==Issue.KindEnum.PROTOCOL_ERROR;
             if (protocolError) requireFresh(context,input.getReconciliationId());
             requireAction(context,user,RETRY);
-            var queue=tasks.lockQueue(context.state().task().getOperationId());
+            var queue=tasks.lockQueue(context.state().task().operationId());
             if (queue.claim()!=null) throw notAllowed();
-            tasks.scheduleRetry(context.state().task().getOperationId(),protocolError ? "GET" : queue.step(),0);
+            tasks.scheduleRetry(context.state().task().operationId(),protocolError ? "GET" : queue.step(),0);
             if (protocolError) {
-                tasks.delivery(context.state().task().getOperationId(),DeliveryStatus.UNKNOWN);
+                tasks.delivery(context.state().task().operationId(),DeliveryStatus.UNKNOWN);
                 issues.resumeProtocol(id);
             } else issues.advanceRevision(id);
             var details=new LinkedHashMap<String,Object>(); details.put("issueId",id);
@@ -168,9 +169,9 @@ public class OperationsTransactions {
             if (input.getAction()==ResolutionAction.APPLY_EXTERNAL_RESULT) {
                 exchange.apply(context.state(),(Result)external(context).getResult(),user.id());
             } else if (context.issue().value().getKind()==Issue.KindEnum.PROTOCOL_ERROR &&
-                context.state().task().getDeliveryStatus()==DeliveryStatus.NEEDS_REVIEW) {
-                tasks.delivery(context.state().task().getOperationId(),DeliveryStatus.STOPPED);
-                tasks.removeQueue(context.state().task().getOperationId());
+                context.state().task().deliveryStatus()==DeliveryStatus.NEEDS_REVIEW) {
+                tasks.delivery(context.state().task().operationId(),DeliveryStatus.STOPPED);
+                tasks.removeQueue(context.state().task().operationId());
             }
             tasks.history(context.state().task(),user.id(),HistoryEvent.TypeEnum.ISSUE_RESOLVED,
                 "Решение оператора: "+input.getReason(),Map.of("issueId",id,"reconciliationId",input.getReconciliationId()));
@@ -187,7 +188,7 @@ public class OperationsTransactions {
         var task=original.value().getTaskId();
         if (task==null) return new Context(original,null,null);
         var record=tasks.get(task,user,lock);
-        var state=tasks.exchange(record.getOperationId(),false);
+        var state=tasks.exchange(record.operationId(),false);
         var row=lock ? issues.get(original.value().getIssueId(),true) : original;
         var reconciliation=row.value().getLatestReconciliationId()==null ? null : issues.reconciliation(task,row.value().getLatestReconciliationId());
         return new Context(row,state,reconciliation);
@@ -204,7 +205,7 @@ public class OperationsTransactions {
         if (issue.getKind()==Issue.KindEnum.DELIVERY_DELAYED && context.issue().queueFree()) actions.add(RETRY);
         var external=fresh(context) ? external(context) : null;
         boolean protocolError=issue.getKind()==Issue.KindEnum.PROTOCOL_ERROR;
-        if (protocolError && context.state().task().getDeliveryStatus()==DeliveryStatus.NEEDS_REVIEW && context.issue().queueFree() && fresh(context) &&
+        if (protocolError && context.state().task().deliveryStatus()==DeliveryStatus.NEEDS_REVIEW && context.issue().queueFree() && fresh(context) &&
             context.reconciliation().value().getExternalAvailability()!=Reconciliation.ExternalAvailabilityEnum.UNAVAILABLE &&
             (external==null || (sameIdentity(context.state(),external) && external.getExecutions().getValue()==0))) actions.add(RETRY);
         boolean reviewKind=protocolError || issue.getKind()==Issue.KindEnum.RESULT_CONFLICT || issue.getKind()==Issue.KindEnum.RECONCILIATION_DIFFERENCE;
@@ -227,12 +228,12 @@ public class OperationsTransactions {
     }
 
     private boolean matches(TaskRepository.ExchangeTask state,OperationState external) {
-        if (external==null) return state.task().getDeliveryStatus()!=DeliveryStatus.ACKNOWLEDGED && state.result()==null;
-        return sameIdentity(state,external) && state.task().getDeliveryStatus()==DeliveryStatus.ACKNOWLEDGED && Objects.equals(state.result(),external.getResult());
+        if (external==null) return state.task().deliveryStatus()!=DeliveryStatus.ACKNOWLEDGED && state.result()==null;
+        return sameIdentity(state,external) && state.task().deliveryStatus()==DeliveryStatus.ACKNOWLEDGED && Objects.equals(state.result(),external.getResult());
     }
 
     private boolean sameIdentity(TaskRepository.ExchangeTask state,OperationState external) {
-        return external.getOperationId().equals(state.task().getOperationId()) && external.getRequest().equals(ExchangeTasks.input(state));
+        return external.getOperationId().equals(state.task().operationId()) && external.getRequest().equals(ExchangeTasks.input(state));
     }
 
     private void requireFresh(Context context,UUID id) {

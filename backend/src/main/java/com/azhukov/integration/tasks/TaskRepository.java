@@ -2,6 +2,12 @@ package com.azhukov.integration.tasks;
 
 import com.azhukov.integration.application.Actor;
 import com.azhukov.integration.contract.internal.model.*;
+import com.azhukov.integration.domain.task.Task;
+import com.azhukov.integration.domain.task.TaskTitle;
+import com.azhukov.integration.domain.task.TaskInput;
+import com.azhukov.integration.domain.task.TaskOutcome;
+import com.azhukov.integration.domain.task.BusinessStatus;
+import com.azhukov.integration.domain.task.DeliveryStatus;
 import com.azhukov.integration.domain.RuleViolation;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -34,21 +40,24 @@ public class TaskRepository {
     private final RowMapper<Task> taskRow = this::mapTask;
 
     private Task mapTask(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
-        var task = new Task(
-        rs.getObject("id", UUID.class), rs.getObject("operation_id", UUID.class),
-        rs.getObject("owner_id", UUID.class), rs.getString("title"), rs.getLong("title_revision"),
-        new Request(rs.getString("request_reference"), rs.getInt("request_quantity")),
-        DeliveryStatus.fromValue(rs.getString("delivery_status")),
-        BusinessStatus.fromValue(rs.getString("business_status")),
-        rs.getObject("created_at", OffsetDateTime.class));
-        if (rs.getString("accepted_result") != null &&
-            (task.getBusinessStatus() == BusinessStatus.SUCCEEDED || task.getBusinessStatus() == BusinessStatus.REJECTED)) {
-            var result = json.readTree(rs.getString("accepted_result"));
-            task.result(new TaskResult(TaskResult.StatusEnum.fromValue(result.get("status").asString()),
-                OffsetDateTime.parse(result.get("completedAt").asString()))
-                .rejectionCode(result.has("rejectionCode") ? TaskResult.RejectionCodeEnum.fromValue(result.get("rejectionCode").asString()) : null));
-        }
-        return task;
+        return mapTask(rs,storedResult(rs));
+    }
+
+    private com.azhukov.integration.contract.external.model.Result storedResult(java.sql.ResultSet rs) throws java.sql.SQLException {
+        var value = rs.getString("accepted_result");
+        return value == null ? null : json.readValue(value,com.azhukov.integration.contract.external.model.Result.class);
+    }
+
+    private Task mapTask(java.sql.ResultSet rs, com.azhukov.integration.contract.external.model.Result result) throws java.sql.SQLException {
+        var business = BusinessStatus.valueOf(rs.getString("business_status"));
+        TaskOutcome outcome = null;
+        if (result != null && (business == BusinessStatus.SUCCEEDED || business == BusinessStatus.REJECTED))
+            outcome = new TaskOutcome(BusinessStatus.valueOf(result.getStatus().getValue()),result.getCompletedAt(),result.getRejectionCode());
+        return new Task(rs.getObject("id",UUID.class),rs.getObject("operation_id",UUID.class),
+            rs.getObject("owner_id",UUID.class),new TaskTitle(rs.getString("title"),rs.getLong("title_revision")),
+            new TaskInput(rs.getString("request_reference"),rs.getInt("request_quantity")),
+            DeliveryStatus.valueOf(rs.getString("delivery_status")),business,
+            rs.getObject("created_at",OffsetDateTime.class),outcome);
     }
 
     public Task get(UUID id, Actor user, boolean lock) {
@@ -67,16 +76,15 @@ public class TaskRepository {
     }
 
     private ExchangeTask mapExchange(java.sql.ResultSet rs, int n) throws java.sql.SQLException {
-        return new ExchangeTask(taskRow.mapRow(rs,n), rs.getLong("exchange_version"),
-            rs.getString("accepted_result") == null ? null : json.readValue(rs.getString("accepted_result"),
-                com.azhukov.integration.contract.external.model.Result.class));
+        var result = storedResult(rs);
+        return new ExchangeTask(mapTask(rs,result),rs.getLong("exchange_version"),result);
     }
 
     public Map<UUID,ExchangeTask> exchangeByTask(List<UUID> ids) {
         if (ids.isEmpty()) return Map.of();
         var placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
         return jdbc.query("SELECT * FROM tasks WHERE id IN (" + placeholders + ")", this::mapExchange, ids.toArray())
-            .stream().collect(java.util.stream.Collectors.toMap(row -> row.task().getTaskId(), row -> row));
+            .stream().collect(java.util.stream.Collectors.toMap(row -> row.task().id(), row -> row));
     }
 
     public List<Task> list(Actor user, int page, BusinessStatus status,
@@ -98,7 +106,7 @@ public class TaskRepository {
                                          OffsetDateTime from, OffsetDateTime to, List<Object> args) {
         var where = new StringBuilder(" WHERE true");
         if (!user.isOperator()) { where.append(" AND owner_id = ?"); args.add(user.id()); }
-        if (status != null) { where.append(" AND business_status = ?"); args.add(status.getValue()); }
+        if (status != null) { where.append(" AND business_status = ?"); args.add(status.name()); }
         if (from != null) { where.append(" AND created_at >= ?"); args.add(from); }
         if (to != null) { where.append(" AND created_at < ?"); args.add(to); }
         return where.toString();
@@ -133,13 +141,13 @@ public class TaskRepository {
         jdbc.update("""
             INSERT INTO task_history(id,task_id,operation_id,actor,actor_user_id,event_type,summary,details)
             VALUES (?,?,?,?,?,?,?,?::jsonb)
-            """, eventId, task.getTaskId(), task.getOperationId(),
+            """, eventId, task.id(), task.operationId(),
             actorId == null ? "SYSTEM" : "USER", actorId, type.getValue(), summary, json.writeValueAsString(details));
         var references = json.valueToTree(details);
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override public void afterCommit() {
                 log.info("audit eventId={} taskId={} operationId={} type={} actorUserId={} attemptId={} resultVersion={} issueId={} reconciliationId={}",
-                    eventId,task.getTaskId(),task.getOperationId(),type.getValue(),actorId,
+                    eventId,task.id(),task.operationId(),type.getValue(),actorId,
                     references.get("attemptId"),references.get("resultVersion"),
                     references.get("issueId"),references.get("reconciliationId"));
             }
@@ -211,7 +219,7 @@ public class TaskRepository {
     public void removeQueue(UUID operation) { jdbc.update("DELETE FROM delivery_queue WHERE operation_id = ?",operation); }
 
     public void delivery(UUID operation, DeliveryStatus status) {
-        jdbc.update("UPDATE tasks SET delivery_status = ?,exchange_version = exchange_version + 1 WHERE operation_id = ? AND delivery_status <> ?",status.getValue(),operation,status.getValue());
+        jdbc.update("UPDATE tasks SET delivery_status = ?,exchange_version = exchange_version + 1 WHERE operation_id = ? AND delivery_status <> ?",status.name(),operation,status.name());
     }
 
     public void applyResult(com.azhukov.integration.contract.external.model.Result result) {

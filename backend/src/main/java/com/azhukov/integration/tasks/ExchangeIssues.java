@@ -36,7 +36,7 @@ public class ExchangeIssues {
         var inserted = jdbc.query("""
             INSERT INTO exchange_issues(id,task_id,operation_id,scope,fingerprint,kind,summary,evidence)
             VALUES (?,?,?,?,?,?,?,?::jsonb) ON CONFLICT(scope,fingerprint) DO NOTHING RETURNING id
-            """, (rs,n) -> rs.getObject(1,UUID.class), id, state == null ? null : state.task().getTaskId(),
+            """, (rs,n) -> rs.getObject(1,UUID.class), id, state == null ? null : state.task().id(),
             operationId, scope, fingerprint, kind, reason, json.writeValueAsString(evidence));
         if (inserted.isEmpty()) return jdbc.queryForObject("SELECT id FROM exchange_issues WHERE scope = ? AND fingerprint = ?",
             UUID.class, scope, fingerprint);
@@ -48,7 +48,7 @@ public class ExchangeIssues {
         var existing = jdbc.query("""
             SELECT id FROM exchange_issues WHERE task_id = ? AND status = 'OPEN'
             AND kind IN ('DELIVERY_UNCERTAIN','DELIVERY_DELAYED') ORDER BY opened_at LIMIT 1 FOR UPDATE
-            """, (rs,n) -> rs.getObject(1,UUID.class), state.task().getTaskId());
+            """, (rs,n) -> rs.getObject(1,UUID.class), state.task().id());
         if (!existing.isEmpty()) {
             if (delayed) jdbc.update("""
                 UPDATE exchange_issues SET kind = 'DELIVERY_DELAYED',summary = 'Доставка задерживается после четырёх попыток',
@@ -57,7 +57,7 @@ public class ExchangeIssues {
             return;
         }
         String reason = delayed ? "Доставка задерживается после четырёх попыток" : "Получение операции исполнителем пока не подтверждено";
-        open(state, state.task().getOperationId(), delayed ? "DELIVERY_DELAYED" : "DELIVERY_UNCERTAIN",
+        open(state, state.task().operationId(), delayed ? "DELIVERY_DELAYED" : "DELIVERY_UNCERTAIN",
             reason, reason, null, null);
     }
 
@@ -65,7 +65,7 @@ public class ExchangeIssues {
         var ids = jdbc.query("""
             UPDATE exchange_issues SET status = 'RESOLVED',issue_revision = issue_revision + 1
             WHERE task_id = ? AND status = 'OPEN' AND kind IN ('DELIVERY_UNCERTAIN','DELIVERY_DELAYED') RETURNING id
-            """, (rs,n) -> rs.getObject(1,UUID.class), state.task().getTaskId());
+            """, (rs,n) -> rs.getObject(1,UUID.class), state.task().id());
         for (UUID id : ids) tasks.history(state.task(), null, HistoryEvent.TypeEnum.ISSUE_RESOLVED,
             "Получение подтверждено; проблема доставки закрыта", Map.of("issueId", id));
     }
@@ -74,8 +74,8 @@ public class ExchangeIssues {
         var temporary = jdbc.query("""
             SELECT id FROM exchange_issues WHERE task_id = ? AND status = 'OPEN'
             AND kind IN ('DELIVERY_UNCERTAIN','DELIVERY_DELAYED') ORDER BY opened_at LIMIT 1 FOR UPDATE
-            """, (rs,n) -> rs.getObject(1,UUID.class), state.task().getTaskId());
-        if (temporary.isEmpty()) return open(state, state.task().getOperationId(), "PROTOCOL_ERROR", reason, content, null, null);
+            """, (rs,n) -> rs.getObject(1,UUID.class), state.task().id());
+        if (temporary.isEmpty()) return open(state, state.task().operationId(), "PROTOCOL_ERROR", reason, content, null, null);
         UUID id = temporary.getFirst();
         jdbc.update("UPDATE exchange_issues SET kind = 'PROTOCOL_ERROR',summary = ?,evidence = ?::jsonb,issue_revision = issue_revision + 1 WHERE id = ?",
             reason, json.writeValueAsString(Map.of("reason",reason,"local",snapshot(state))), id);
@@ -87,23 +87,30 @@ public class ExchangeIssues {
         UUID issue = jdbc.queryForObject("""
             SELECT id FROM exchange_issues WHERE task_id = ? AND status = 'OPEN' AND kind = 'PROTOCOL_ERROR'
             ORDER BY opened_at DESC LIMIT 1
-            """, UUID.class, state.task().getTaskId());
+            """, UUID.class, state.task().id());
         jdbc.update("""
             INSERT INTO task_history(id,task_id,operation_id,actor,event_type,summary,details,observed_result,observation_fingerprint)
             VALUES (?,?,?,'SYSTEM','RESULT_IGNORED','Внешний снимок сохранён как наблюдение до решения оператора',?::jsonb,?::jsonb,?)
             ON CONFLICT(operation_id,observation_fingerprint) WHERE observation_fingerprint IS NOT NULL DO NOTHING
-            """, UUID.randomUUID(), state.task().getTaskId(), result.getOperationId(),
+            """, UUID.randomUUID(), state.task().id(), result.getOperationId(),
             json.writeValueAsString(Map.of("issueId",issue,"resultVersion",result.getVersion().getValue())),
             json.writeValueAsString(result), ContentFingerprint.of(json,result));
     }
 
     public Map<String,Object> snapshot(TaskRepository.ExchangeTask state) {
         var snapshot = new LinkedHashMap<String,Object>();
-        snapshot.put("request", state.task().getRequest());
-        snapshot.put("deliveryStatus", state.task().getDeliveryStatus());
-        snapshot.put("businessStatus", state.task().getBusinessStatus());
+        snapshot.put("request", state.task().request());
+        snapshot.put("deliveryStatus", state.task().deliveryStatus());
+        snapshot.put("businessStatus", state.task().businessStatus());
         if (state.result() != null) snapshot.put("resultVersion", state.result().getVersion().getValue());
-        if (state.task().getResult() != null) snapshot.put("result", state.task().getResult());
+        if (state.task().outcome() != null) {
+            var outcome = state.task().outcome();
+            var result = new LinkedHashMap<String,Object>();
+            result.put("status",outcome.status());
+            result.put("completedAt",outcome.completedAt());
+            if (outcome.rejectionCode() != null) result.put("rejectionCode",outcome.rejectionCode());
+            snapshot.put("result",result);
+        }
         return snapshot;
     }
 

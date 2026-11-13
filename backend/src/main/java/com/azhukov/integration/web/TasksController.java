@@ -22,11 +22,14 @@ public class TasksController implements TasksApi {
     }
 
     @Override
-    public ResponseEntity<Task> getTask(UUID id) { return ResponseEntity.ok(tasks.get(AppUser.current().actor(), id)); }
+    public ResponseEntity<Task> getTask(UUID id) { return ResponseEntity.ok(view(tasks.get(AppUser.current().actor(), id))); }
 
     @Override
     public ResponseEntity<TaskPage> listTasks(Integer page, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
-        return ResponseEntity.ok(tasks.list(AppUser.current().actor(), page, status, from, to));
+        var result = tasks.list(AppUser.current().actor(), page,
+            status == null ? null : com.azhukov.integration.domain.task.BusinessStatus.valueOf(status.getValue()), from, to);
+        return ResponseEntity.ok(new TaskPage(result.items().stream().map(TasksController::view).toList(),
+            result.page(),result.hasNext(),result.totalItems(),result.totalPages()));
     }
 
     @Override
@@ -37,5 +40,16 @@ public class TasksController implements TasksApi {
     @Override
     public ResponseEntity<HistoryPage> listTaskHistory(UUID id, Integer page) {
         return ResponseEntity.ok(tasks.history(AppUser.current().actor(), id, page));
+    }
+    private static Task view(com.azhukov.integration.domain.task.Task value) {
+        var task = new Task(value.id(),value.operationId(),value.ownerId(),value.title().value(),value.title().revision(),
+            new Request(value.request().reference(),value.request().quantity()),
+            DeliveryStatus.fromValue(value.deliveryStatus().name()),BusinessStatus.fromValue(value.businessStatus().name()),value.createdAt());
+        if (value.outcome() != null) {
+            var outcome = value.outcome();
+            task.result(new TaskResult(TaskResult.StatusEnum.fromValue(outcome.status().name()),outcome.completedAt())
+                .rejectionCode(outcome.rejectionCode() == null ? null : TaskResult.RejectionCodeEnum.fromValue(outcome.rejectionCode())));
+        }
+        return task;
     }
 }
