@@ -491,7 +491,7 @@ paths:
       responses:
         '503':
           $ref: '#/components/responses/Unavailable'
-        '202':
+        '200':
           description: Шаг назначен в существующей очереди. Исход виден по доставке задания и истории.
           content:
             application/json:

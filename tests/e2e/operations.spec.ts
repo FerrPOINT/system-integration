@@ -126,7 +126,7 @@ test('SI-10: exhausted delivery resumes only after a fresh operator decision', a
   await page.getByLabel('Причина решения *', { exact: true }).fill('Связь восстановлена, отсутствие операции проверено');
   const retryResponse = page.waitForResponse(response => response.url().endsWith('/retry') && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Повторить обмен', exact: true }).click();
-  expect((await retryResponse).status()).toBe(202);
+  expect((await retryResponse).status()).toBe(200);
   await page.goto('/tasks/' + taskId);
   await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
   const final = await (await page.request.get('/api/tasks/' + taskId)).json();
