@@ -160,7 +160,7 @@ paths:
                     format: int64
                     minimum: 0
                     maximum: 9007199254740991
-                    description: Число страниц по 20 записей; 0 для пустого результата.
+                    description: Число страниц по запрошенному размеру (по умолчанию 20); 0 для пустого результата.
         '400':
           $ref: '#/components/responses/Invalid'
         '401':
@@ -791,7 +791,7 @@ components:
           format: int64
           minimum: 0
           maximum: 9007199254740991
-          description: Число страниц по 20 записей; 0 для пустого результата.
+          description: Число страниц по запрошенному размеру (по умолчанию 20); 0 для пустого результата.
     HistoryEvent:
       type: object
       required: [eventId, taskId, operationId, occurredAt, actor, type, summary]
@@ -892,7 +892,7 @@ components:
           format: int64
           minimum: 0
           maximum: 9007199254740991
-          description: Число страниц по 20 записей; 0 для пустого результата.
+          description: Число страниц по запрошенному размеру (по умолчанию 20); 0 для пустого результата.
     IssueStatus:
       type: string
       enum: [OPEN, RESOLVED]

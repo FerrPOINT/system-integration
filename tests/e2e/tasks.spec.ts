@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './support';
+import { login, waitForRegistry } from './support';
 
 test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive list', async ({ page }, testInfo) => {
   await login(page);
@@ -119,6 +119,7 @@ test('TC-09 / TC-12: empty filter, server error recovery and UTC rendering', asy
 
 test('TC-08 / TC-09: expired server session clears protected screens and allows another login', async ({ page }) => {
   await login(page);
+  await waitForRegistry(page);
   const token = await (await page.request.get('/api/csrf')).json();
   expect((await page.request.post('/api/logout', { headers: { 'X-CSRF-TOKEN': token.token } })).status()).toBe(204);
   await page.getByRole('button', { name: 'Обновить', exact: true }).click();

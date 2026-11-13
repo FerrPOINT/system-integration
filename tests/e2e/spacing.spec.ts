@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
-import { login } from './support';
+import { login, waitForRegistry } from './support';
 
 async function expectGaps(region: Locator) {
   const gaps = await region.evaluate(el => {
@@ -84,6 +84,7 @@ test('UI-08: task registry, editor, card and history use consistent section gaps
     await expect(page.getByRole('status').filter({ hasText: 'Загрузка…' })).toBeVisible();
     await expectGaps(page.locator('main'));
   } finally { release(); await page.unrouteAll({ behavior: 'wait' }); }
+  await waitForRegistry(page);
   await expect(page.locator('.list-heading')).toBeVisible();
   await expectGaps(page.locator('main'));
   await expectCards(page);

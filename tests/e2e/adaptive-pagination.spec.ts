@@ -69,12 +69,15 @@ test('UI-15: tasks fit the viewport, enumerate every record and keep filters thr
   const links='.task-card h2 a, .task-table tbody a';
   const seen=await collect(page,region,links);
   expect(seen).toEqual(ids);
+  const first=new URL(page.url()); first.searchParams.set('page','0');
+  await page.goto(first.toString());
+  await settled(page,region);
   await region.getByRole('button',{name:'Страница 2',exact:true}).click();
   await settled(page,region);
   const anchor=await region.locator(links).first().getAttribute('href');
   const oldSize=Number(new URL(page.url()).searchParams.get('size'));
   const width=page.viewportSize()!.width;
-  await page.setViewportSize({width,height:1200});
+  await page.setViewportSize({width,height:1600});
   await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeGreaterThan(oldSize);
   await settled(page,region);
   await expect(region.locator('a[href="'+anchor+'"]')).toBeVisible();
