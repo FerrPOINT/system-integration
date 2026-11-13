@@ -195,11 +195,11 @@ Backend читает фактическое состояние эмулятор�
 Условия действий заданы в [аналитике](analysis.md#сверка-и-действия-оператора).
 
 Реализация потока:
-[создание](../backend/src/main/java/com/azhukov/integration/application/TaskService.java),
-[фоновые HTTP-вызовы](../backend/src/main/java/com/azhukov/integration/application/ExchangeCoordinator.java),
-[планировщик](../backend/src/main/java/com/azhukov/integration/infrastructure/scheduling/ExchangeScheduler.java),
-[захват и применение результатов](../backend/src/main/java/com/azhukov/integration/application/ExchangeTasks.java),
-[исполнение и публикация эмулятора](../emulator/src/main/java/com/azhukov/emulator/application/OperationService.java).
+[создание](../backend/src/main/java/com/azhukov/integration/service/TaskService.java),
+[фоновые HTTP-вызовы](../backend/src/main/java/com/azhukov/integration/service/ExchangeCoordinator.java),
+[планировщик](../backend/src/main/java/com/azhukov/integration/scheduler/ExchangeScheduler.java),
+[захват и применение результатов](../backend/src/main/java/com/azhukov/integration/service/ExchangeService.java),
+[исполнение и публикация эмулятора](../emulator/src/main/java/com/azhukov/emulator/service/OperationService.java).
 
 ## Границы кода
 
@@ -213,22 +213,29 @@ Flyway-миграции остаются внутри каждого прило�
 
 Основное приложение — один контекст интеграции; эмулятор — отдельный процесс
 со своей моделью и БД. Domain не зависит от Spring, JDBC, Jackson и HTTP DTO.
-Направление зависимостей: web → application → domain; infrastructure реализует
-порты application. Auth преобразует Spring Security в явного пользователя.
+Направление вызовов: controller → service → repository/client;
+JDBC и HTTP реализуют эти контракты. Предметные правила остаются в domain.
+MapStruct преобразует HTTP DTO; security преобразует пользователя в Actor.
 
 ~~~text
 com.azhukov.integration
-  domain/           task, exchange, review: состояние и предметные правила
-  application/      сценарии, права, транзакции, порты хранения/обмена
-  infrastructure/   jdbc, http, json, scheduling: реализации портов
-  web/              generated API, DTO-маппинг, HTTP-ошибки
-  auth/             Spring Security, сессия, преобразование пользователя
+  controller/       тонкие generated API
+  service/          сценарии, права, транзакции и координация
+    idempotency/    квитанции команд, JSON и канонический fingerprint
+  repository/       контракты хранения
+    jdbc/           SQL и row mapping
+  domain/           task, exchange, review: состояние и правила
+  dto/              внутренние команды, результаты и страницы
+  mapper/           MapStruct HTTP-проекции
+  client/http/      внешний HTTP и проверка протокола
+  security/         Spring Security и сессия
+  scheduler/        тонкие планировщики
+  config/           Boot, JSON mixins и MapStructConfig
+  exception/        отображение ошибок в HTTP
 
 com.azhukov.emulator
-  domain/
-  application/
-  infrastructure/
-  web/
+  controller/, service/, repository/jdbc/, domain/, mapper/
+  config/, scheduler/, exception/
 ~~~
 
 Task владеет неизменяемым исходным запросом и двумя независимыми ревизиями
@@ -242,11 +249,11 @@ Task владеет неизменяемым исходным запросом �
 | `frontend/src/app` | Оболочка, маршруты, сессия и единственное состояние цветовой темы. |
 | `frontend/src/features/{tasks,operations}` | Самостоятельные страницы task-list/create/details, issue-list/details и reconciliation-details. Малые формы рядом с владельцами; кнопка сверки и отображение снимка общие только для реальных потребителей. На узком экране список показан карточками. |
 | `frontend/src/ui` | Компоненты, которые используются несколькими экранами. Поля, кнопки, карточки, заголовки, таблица, история и состояния скопированы из Base с атрибуцией. Правила и палитры общие, специфичная разметка остаётся в экранах. |
-| `backend/src/main/java/com/azhukov/integration/auth` | Вход, сессия и роли Spring Security. |
+| `backend/src/main/java/com/azhukov/integration/security` | Вход, сессия и роли Spring Security. |
 | backend domain | task/exchange/review: состояние, инварианты и переходы без Spring/JDBC/HTTP DTO. |
-| backend application | Сценарии, права, транзакции, координация и порты хранения/обмена. |
-| backend infrastructure | JDBC-адаптеры, HTTP-клиент и протокол, JSON-кодеки, тонкие планировщики. |
-| backend web | Generated API, преобразование DTO/actor и HTTP-ошибки. |
+| backend service / repository / client | Сценарии, права и транзакции используют явные контракты хранения/обмена. |
+| backend repository/jdbc / client/http / scheduler | SQL, внешний протокол и тонкие планировщики. |
+| backend controller / mapper / exception | Generated API, MapStruct-преобразование DTO/actor и HTTP-ошибки. |
 | `emulator/` | Независимое Gradle-приложение. Приём, исполнение, хранение результата и управление сбоями. |
 | `contracts/` | Версионируемые контракты внутреннего API и внешнего обмена. |
 | `tests/` | Проверки запущенного сервиса и нагрузка. |
@@ -262,25 +269,29 @@ Spring MVC принимает запросы, Spring Security
 
 | Компонент | Ответственность |
 | --- | --- |
-| TaskStore / ExchangeStore / TaskRepository | Порт заданий/истории и порт состояния обмена, очереди, попыток и курсора. Один JDBC-адаптер реализует оба; SQL и транзакционные границы сохранены. |
-| TaskService | Прикладные создание/чтение/переименование. Создание использует оба порта в одной транзакции; правила состояния в domain, HTTP-маппинг в web. |
-| ExchangeTasks | Прикладные захват/фиксация попытки/применение страницы; чистые переходы в domain, SQL в адаптере. |
-| ReviewContext / IssueService / ReviewRepository / ReviewService | Единая domain-политика действий; прикладные операции и история через ReviewStore, отдельный JDBC-адаптер. ReviewService находится в application. |
-| CommandReceipts | Порт и JDBC-кодек квитанций с прежним каноническим входом и сохранённым ответом. |
-| ExchangeClient / ExchangeProtocol | Внешний HTTP-адаптер, строгая проверка контракта и преобразование во внутреннюю модель. |
-| ReconciliationService / ExchangeCoordinator / ExchangeScheduler | Прикладная координация через ExternalExchange без общей сетевой транзакции; тонкий scheduling-адаптер, ограниченный executor с четырьмя отправителями. |
-| Operation / Fault / OperationService / OperationRepository эмулятора | Предметное исполнение/режимы отказа, прикладные транзакции через OperationStore, отдельный JDBC-адаптер; generated-модели только в web. |
-| RuleViolation / ProblemResponses | Смысловые ошибки domain отображаются в существующий HTTP-контракт на web-границе. |
+| TaskRepository / JdbcTaskRepository | Задания, страницы и история. |
+| ExchangeRepository / JdbcExchangeRepository | Состояние обмена, очередь, попытки и курсор. TaskRowMapper читает общие проекции; SQL не дублируется. |
+| TaskService | Создание/чтение/переименование, права и атомарное задание/outbox/история/квитанция. |
+| ExchangeService | Захват/фиксация попытки/применение страницы; чистые переходы в domain, SQL в репозитории. |
+| ReviewContext / IssueLifecycleService / ReviewService | Domain-политика действий, транзакции операторского разбора и история через ReviewRepository/JdbcReviewRepository. |
+| IdempotencyService / CommandReceiptRepository | Сервис координирует lock/read/callback/save и JSON. JdbcCommandReceiptRepository только блокирует, читает и пишет; транзакция обязательна от вызывающего сценария. |
+| HttpExternalExchangeClient / ExchangeProtocol | Внешний HTTP-адаптер, строгая проверка протокола и преобразование во внутреннюю модель. |
+| ReconciliationService / ExchangeCoordinator / ExchangeScheduler | HTTP между короткими транзакциями, четыре отправителя и ограниченный executor. Сверка использует два существующих bean: prepare/save в ReviewService, сеть в ReconciliationService. |
+| OperationService / OperationRepository / JdbcOperationRepository эмулятора | Независимое исполнение и публикация событий, своя БД; HTTP-проекции в OperationApiMapper. |
+| TaskApiMapper / ReviewApiMapper / OperationApiMapper | Реальные MapStruct Spring beans; поля и enum/null проверяются через generated impl, бизнес-решений нет. |
+| RuleViolation / ApiExceptionHandler | Предметная ошибка и единый действующий HTTP-формат. |
 
 
 - Контроллер преобразует HTTP DTO и пользователя в прикладную команду.
-  Domain и application используют внутренние типы; generated DTO остаются
+  Domain и service используют внутренние типы; generated DTO остаются
   на HTTP-границах. React использует сгенерированный Fetch-клиент.
 - У данных и правил один владелец. TaskService создаёт задание, outbox,
-  историю и квитанцию одной транзакцией. ExchangeTasks захватывает и завершает
+  историю и квитанцию одной транзакцией. ExchangeService захватывает и завершает
   попытки, применяет результаты; ExchangeCoordinator выполняет HTTP между
-  транзакциями. SQL находится в JDBC-адаптерах портов application.
-- Обычный сценарий реализуем конкретными классами и методами. Отдельный
+  транзакциями. SQL находится в repository/jdbc.
+- Обычный сценарий реализуем конкретными классами и методами. Lombok убирает только простой DI/log; валидирующие конструкторы сохраняются.
+  MapStructConfig запрещает незамаппленные целевые поля; generated находится
+  только в build, processors не включаются в runtime. Отдельный
   интерфейс нужен для действующего контракта или заменяемой внешней границы.
   Выделяйте общий код, когда у него есть реальные потребители и одинаковое
   правило. Каталог, слой или зависимость появляются вместе с задачей, которой
@@ -387,7 +398,7 @@ ID задания и операции создаёт приложение, ID в
 Зависимости слоёв проверяются тестами классов, например ArchUnit как test-only
 зависимостью с проверенной поддержкой Java 25; самодельный regex-анализатор
 исходников не нужен. Правила: domain без фреймворков/HTTP DTO, application без
-web/infrastructure/JDBC, web без SQL, отсутствие циклов. Ограничения проверяют
+controller/JDBC/HTTP-адаптеров, controller без SQL, отсутствие циклов. Ограничения проверяют
 реальные импорты, не только имена пакетов.
 
 
@@ -736,7 +747,7 @@ statement_timestamp(); будущее задание и действующий l
 ## Конечная серия доставки (SI-10)
 
 Единственный владелец лимита и задержек — DeliveryAttempt в domain.
-ExchangeTasks фиксирует расход лимита и захват до HTTP, затем атомарно
+ExchangeService фиксирует расход лимита и захват до HTTP, затем атомарно
 сохраняет исход, остановку и историю через существующие порты.
 Очередь хранит automatic_attempts отдельно от сквозного attempts.
 Только команда ReviewService после свежей сверки начинает новую серию с GET.

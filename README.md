@@ -53,6 +53,9 @@ Node.js 26 с Corepack. При запуске Java вне контейнеров
 Gradle Wrapper закрепляет
 Gradle 9.9.1, `frontend/package.json` — pnpm 12.19.0. Контейнерные сборки используют
 Temurin 25.0.5 и Node.js 26.13.1. Backend собран на Spring Boot 4.1.2.
+Явные controller/service/repository и mapper описаны в
+[архитектуре](docs/architecture.md#границы-кода). MapStruct 1.6.3 и Lombok 1.18.48
+настроены в root Gradle; код генерируется при сборке в build и не хранится в Git.
 
 В корне скопируйте `.env.example`
 в `.env` и задайте шесть разных локальных паролей. `SI_DEMO_PASSWORD`

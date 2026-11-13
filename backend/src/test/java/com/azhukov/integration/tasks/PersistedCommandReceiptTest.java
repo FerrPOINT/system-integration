@@ -1,16 +1,28 @@
 package com.azhukov.integration.tasks;
 
 import com.azhukov.integration.support.PostgresTest;
-import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.UUID;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 class PersistedCommandReceiptTest extends PostgresTest {
+    @org.springframework.beans.factory.annotation.Autowired
+    com.azhukov.integration.service.idempotency.IdempotencyService commands;
+
+    @Test
+    void idempotentCommandCannotRunOutsideItsCallersTransaction() {
+        assertTrue(org.springframework.aop.support.AopUtils.isAopProxy(commands));
+        assertThrows(org.springframework.transaction.IllegalTransactionStateException.class,
+            () -> commands.execute(first,com.azhukov.integration.dto.CommandType.CREATE_TASK,
+                UUID.randomUUID(),java.util.Map.of(),String.class,() -> fail("Callback must not run")));
+        assertEquals(0,count("command_receipts"));
+    }
+
     @Test
     void historicalCreateResponseAndFingerprintReplayWithoutAnotherWrite() throws Exception {
         var owner = login("initiator.one");

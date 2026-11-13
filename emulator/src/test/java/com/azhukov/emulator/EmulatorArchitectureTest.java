@@ -6,6 +6,7 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -13,7 +14,7 @@ class EmulatorArchitectureTest {
     private final JavaClasses production=new ClassFileImporter()
         .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS).importPackages("com.azhukov.emulator");
     private static final ArchRule SQL=noClasses().that()
-        .resideOutsideOfPackage("com.azhukov.emulator.infrastructure.jdbc..")
+        .resideOutsideOfPackage("com.azhukov.emulator.repository.jdbc..")
         .should().dependOnClassesThat().resideInAPackage("org.springframework.jdbc..");
 
     @Test
@@ -23,13 +24,14 @@ class EmulatorArchitectureTest {
     }
     @Test
     void applicationHasNoHttpJsonSqlOrAdapterDependencies() {
-        noClasses().that().resideInAPackage("com.azhukov.emulator.application..").should().dependOnClassesThat()
-            .resideInAnyPackage("com.azhukov.emulator.infrastructure..","com.azhukov.emulator.web..",
+        noClasses().that().resideInAPackage("com.azhukov.emulator.service..").should().dependOnClassesThat()
+            .resideInAnyPackage("com.azhukov.emulator.repository.jdbc..","com.azhukov.emulator.controller..",
                 "com.azhukov.integration..","org.springframework.jdbc..","org.springframework.web..",
                 "tools.jackson..","com.fasterxml.jackson..","jakarta.servlet..").check(production);
     }
     @Test
     void sqlIsConfinedToJdbcAdaptersAndRuleDetectsViolations() {
+        assertFalse(production.isEmpty());
         SQL.check(production);
         assertThrows(AssertionError.class,() -> SQL.check(new ClassFileImporter().importClasses(BadAdapter.class)));
     }

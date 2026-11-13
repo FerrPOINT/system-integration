@@ -1,25 +1,21 @@
 package com.azhukov.integration.tasks;
 
-import static com.azhukov.integration.support.ExchangeTestData.*;
-
-import com.azhukov.integration.application.ExchangeTasks;
-
+import com.azhukov.integration.client.http.ExchangeReply;
 import com.azhukov.integration.domain.exchange.DeliveryAttempt;
-
-import com.azhukov.integration.infrastructure.jdbc.TaskRepository;
-import com.azhukov.integration.infrastructure.http.ExchangeReply;
+import com.azhukov.integration.repository.jdbc.JdbcTaskRepository;
+import com.azhukov.integration.service.ExchangeService;
 import com.azhukov.integration.support.PostgresTest;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
-import java.util.UUID;
-
+import static com.azhukov.integration.support.ExchangeTestData.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ExchangeWorkflowTest extends PostgresTest {
-    @Autowired ExchangeTasks exchange;
+    @Autowired ExchangeService exchange;
     @Autowired PlatformTransactionManager transactions;
 
     @Test
@@ -292,7 +288,7 @@ class ExchangeWorkflowTest extends PostgresTest {
     @Test
     void auditLogsOnlyCommittedChangesAndContainsNoCredentials() throws Exception {
         var owner=login("initiator.one");
-        var logger=(ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger(TaskRepository.class);
+        var logger=(ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger(JdbcTaskRepository.class);
         var appender=new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
         appender.start(); logger.addAppender(appender);
         try {

@@ -1,11 +1,17 @@
 package com.azhukov.integration.tasks;
 
-import static com.azhukov.integration.support.ExchangeTestData.*;
-
-import com.azhukov.integration.application.ExchangeTasks;
-
-import com.azhukov.integration.infrastructure.http.ExchangeReply;
+import com.azhukov.integration.client.http.ExchangeReply;
+import com.azhukov.integration.service.ExchangeService;
 import com.azhukov.integration.support.PostgresTest;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.LongAccumulator;
+import java.util.concurrent.atomic.LongAdder;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.ProxyFactory;
@@ -16,16 +22,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.LongAdder;
-import java.util.concurrent.atomic.LongAccumulator;
-
+import static com.azhukov.integration.support.ExchangeTestData.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
@@ -33,7 +30,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @Import(SqlWorkflowProfileTest.SqlObservation.class)
 class SqlWorkflowProfileTest extends PostgresTest {
     private static final Map<String,Timing> TIMINGS = new ConcurrentHashMap<>();
-    @Autowired ExchangeTasks exchange;
+    @Autowired ExchangeService exchange;
     private final List<Map<String,Object>> steps = new java.util.ArrayList<>();
 
     @Test

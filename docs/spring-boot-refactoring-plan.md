@@ -95,7 +95,9 @@ backend/src/main/java/com/azhukov/integration/
     ReviewService.java
     ReconciliationService.java
     IssueLifecycleService.java
-    IdempotencyService.java
+    idempotency/
+      IdempotencyService.java
+      ContentFingerprint.java
   repository/
     TaskRepository.java
     ExchangeRepository.java
