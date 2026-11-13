@@ -63,7 +63,7 @@ export function IssueList() {
     queryFn: ({ signal }) => data(listExchangeIssues({ page, size, status: status as IssueStatus }, { signal })), placeholderData: keepPreviousData });
   return <>
     <div className="list-tools base-page-stack"><PageHeader title="Разбор обмена" context="Доставка, конфликты и решения операторов." actions={<RefreshButton pending={issues.isFetching} disabled={!valid} onClick={() => issues.refetch()} />} />
-    <div className="readable"><FormField id="issue-status" label="Состояние разбора">{attrs => <Select {...attrs} value={status}
+    <div className="issue-status-filter"><FormField id="issue-status" label="Состояние разбора">{attrs => <Select {...attrs} value={status}
       onValueChange={status => setSearch({ status, size: String(size) })} options={[{ value: 'OPEN', label: 'Открытые' }, { value: 'RESOLVED', label: 'Завершённые' }]} />}</FormField></div></div>
     <section className="paged-list base-page-stack" aria-busy={issues.isFetching}><div className="paged-viewport" ref={viewportRef}>
     {!valid ? <Notice role="alert" tone="danger">Некорректные параметры страницы.</Notice> : issues.isPending ? <Loading /> : !issues.data ?

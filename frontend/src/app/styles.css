@@ -42,6 +42,7 @@ main { max-width: 1280px; padding: 26px 24px 56px; margin: 0 auto; }
 
 .issue-cards { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
 .issue-meta { display: grid; gap: 4px; }
+.issue-status-filter { width: 220px; max-width: 100%; }
 .issue-page-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
 .issue-page-header > .base-page-actions { width: auto; }
 .issue-summary-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
