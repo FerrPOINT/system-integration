@@ -408,7 +408,6 @@ color: var(--color-danger);
 .base-disclosure[data-size="sm"] {
 font-size: var(--base-font-label);
 }
-
 .base-disclosure > summary {
 cursor: pointer;
   display: flex;
@@ -416,9 +415,7 @@ cursor: pointer;
   gap: 8px;
   font-weight: 500;
   list-style: none;
-}
-.base-disclosure > summary {
-min-height: var(--shell-control-min);
+  min-height: var(--shell-control-min);
   padding: var(--base-control-padding-block) var(--base-control-padding-inline);
 }
 .base-disclosure > summary::-webkit-details-marker {

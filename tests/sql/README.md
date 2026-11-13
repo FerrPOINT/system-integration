@@ -74,7 +74,7 @@ N+1, не лимит числа запросов в рабочем API. Сост
 С окружением тестовых БД и GRADLE_USER_HOME, из корня репозитория:
 
 ~~~sh
-sh ./gradlew --no-daemon --max-workers=2 :emulator:backend:integrationTest --tests '*PublisherProfileTest'
+sh ./gradlew --no-daemon --max-workers=2 :emulator:integrationTest --tests '*PublisherProfileTest'
 ~~~
 
 Настоящий Spring proxy и PostgreSQL публикуют один и тот же набор из 2 000
