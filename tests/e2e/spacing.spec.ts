@@ -85,7 +85,11 @@ test('UI-08: task registry, editor, card and history use consistent section gaps
     await expectGaps(page.locator('main'));
   } finally { release(); await page.unrouteAll({ behavior: 'wait' }); }
   await waitForRegistry(page);
-  await expect(page.locator('.list-heading')).toBeVisible();
+  const refresh=page.locator('.base-page-header').getByRole('button', { name: 'Обновить', exact: true });
+  await expect(refresh).toBeVisible();
+  await expect(refresh).toHaveAttribute('title','Обновить');
+  await expect(refresh).toHaveText('');
+  await expect(refresh.locator('svg')).toHaveCount(1);
   await expectGaps(page.locator('main'));
   await expectCards(page);
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();

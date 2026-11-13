@@ -17,7 +17,7 @@ import type { Issue, IssueKind, IssueStatus, LocalSnapshot, OperationState, Reso
 import { csrf, data, keys } from '../../app/api';
 import { businessLabels, deliveryLabels, timestamp } from '../../app/format';
 import { useCommandKey } from '../../app/use-command-key';
-import { Loading, Pagination } from '../../ui/Feedback';
+import { Loading, Pagination, RefreshButton } from '../../ui/Feedback';
 import { usePagination } from '../../app/use-pagination';
 
 const kinds: Record<IssueKind, string> = {
@@ -62,7 +62,7 @@ export function IssueList() {
   const issues = useQuery({ queryKey: [...keys.issues, 'list', page, size, status], enabled: valid,
     queryFn: ({ signal }) => data(listExchangeIssues({ page, size, status: status as IssueStatus }, { signal })), placeholderData: keepPreviousData });
   return <>
-    <div className="list-tools base-page-stack"><PageHeader title="Разбор обмена" context="Доставка, конфликты и решения операторов." actions={<Button onClick={() => issues.refetch()} disabled={issues.isFetching || !valid}>Обновить</Button>} />
+    <div className="list-tools base-page-stack"><PageHeader title="Разбор обмена" context="Доставка, конфликты и решения операторов." actions={<RefreshButton pending={issues.isFetching} disabled={!valid} onClick={() => issues.refetch()} />} />
     <div className="readable"><FormField id="issue-status" label="Состояние разбора">{attrs => <Select {...attrs} value={status}
       onValueChange={status => setSearch({ status, size: String(size) })} options={[{ value: 'OPEN', label: 'Открытые' }, { value: 'RESOLVED', label: 'Завершённые' }]} />}</FormField></div></div>
     <section className="paged-list base-page-stack" aria-busy={issues.isFetching}><div className="paged-viewport" ref={viewportRef}>

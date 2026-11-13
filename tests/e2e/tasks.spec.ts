@@ -156,7 +156,7 @@ test('TC-08: session refresh removes the previous owner cache before an in-place
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Отмена', exact: true }).click();
-  await expect(page.getByText('Сохранённые задания', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0);
 });
 

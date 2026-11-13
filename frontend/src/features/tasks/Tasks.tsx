@@ -19,7 +19,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { createTask, getTask, listTaskHistory, listTasks, renameTask } from '../../../build/generated/openapi/client';
 import type { BusinessStatus, GetSession200, Task } from '../../../build/generated/openapi/client';
 import { ApiError, csrf, data, keys } from '../../app/api';
-import { Loading, Pagination } from '../../ui/Feedback';
+import { Loading, Pagination, RefreshButton } from '../../ui/Feedback';
 import { useMediaQuery } from '../../ui/use-media-query';
 import { useCommandKey } from '../../app/use-command-key';
 import { businessLabels, deliveryLabels, timestamp } from '../../app/format';
@@ -56,7 +56,8 @@ export function TaskList({ user }: { user: GetSession200 }) {
   return <>
     <div className="list-tools base-page-stack"><PageHeader title={user.role === 'OPERATOR' ? 'Все задания' : 'Мои задания'}
       context="Приём задания, доставка и результат исполнения показаны отдельно."
-      actions={user.role === 'INITIATOR' && <Button asChild variant="default"><Link to="/tasks/new">Создать задание</Link></Button>} />
+      actions={<>{user.role === 'INITIATOR' && <Button asChild variant="default"><Link to="/tasks/new">Создать задание</Link></Button>}
+        <RefreshButton pending={tasks.isFetching} disabled={!valid} onClick={() => tasks.refetch()} /></>} />
     <Disclosure className="filter-panel" open={filtersOpen} onToggle={event => setFiltersOpen(event.currentTarget.open)} summary={<>Фильтры <span className="muted">{status || params.createdFrom || params.createdTo ? 'Заданы условия' : 'Результат и период'}</span></>}>
     <div className="base-form filters">
       <FormField id="business-status" label="Результат">{attrs => <Select {...attrs} value={status || 'ALL'}
@@ -68,8 +69,7 @@ export function TaskList({ user }: { user: GetSession200 }) {
         onChange={event => changeFilters({ createdTo: event.target.value ? event.target.value + ':00Z' : undefined })} />}</FormField>
       <Button type="button" onClick={() => setSearch({}, { replace: true })}>Сбросить</Button>
     </div></Disclosure>
-    <div className="list-heading"><span>{tasks.isFetching ? 'Обновляем…' : 'Сохранённые задания'}</span>
-      <Button type="button" onClick={() => tasks.refetch()} disabled={tasks.isFetching || !valid}>Обновить</Button></div></div>
+    </div>
     <section className="paged-list base-page-stack" aria-busy={tasks.isFetching}>
     <div className="paged-viewport" ref={viewportRef}>
     {!valid ? <Notice role="alert" tone="danger">{validParameters ? 'Начало периода должно быть раньше конца.' : 'Некорректные параметры страницы. Сбросьте фильтры.'}</Notice> : tasks.isPending ? <Loading /> :
@@ -138,7 +138,7 @@ export function TaskCard({ user }: { user: GetSession200 }) {
     <Button onClick={() => task.refetch()}>Повторить</Button></>;
   const item = task.data;
   return <><BackLink to="/tasks">К заданиям</BackLink>
-    <PageHeader title={item.title} actions={<Button onClick={() => task.refetch()} disabled={task.isFetching}>Обновить</Button>} />
+    <PageHeader title={item.title} actions={<RefreshButton pending={task.isFetching} onClick={() => task.refetch()} />} />
     <ErrorMessage error={task.error} />
     <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>Состояние задания</h2></CardTitle>
       <dl className="details"><dt>Доставка</dt><dd>{deliveryLabels[item.deliveryStatus]}</dd>

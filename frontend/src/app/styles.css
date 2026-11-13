@@ -26,7 +26,6 @@ main { max-width: 1280px; padding: 26px 24px 56px; margin: 0 auto; }
 .readable { max-width: 760px; }
 
 .filters { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr) auto; align-items: end; gap: 14px; padding: 0; }
-.list-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--color-text-muted); font-size: 13px; }
 .task-table { table-layout: fixed; }
 .task-table th:first-child { width: 37%; }
 .task-table td:first-child > a { color: var(--color-text-primary); font-weight: 600; text-decoration: none; }
