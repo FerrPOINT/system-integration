@@ -172,8 +172,9 @@ export function TaskCard({ user }: { user: GetSession200 }) {
   if (!task.data) return <><BackLink to="/tasks">К заданиям</BackLink><ErrorMessage error={task.error} />
     <Button onClick={() => task.refetch()}>Повторить</Button></>;
   const item = task.data;
-  return <><BackLink to="/tasks">К заданиям</BackLink>
-    <PageHeader title={item.title} actions={<RefreshButton pending={task.isFetching} onClick={() => task.refetch()} />} />
+  return <>
+    <PageHeader back={<BackLink to="/tasks">К заданиям</BackLink>} title={item.title}
+      actions={<RefreshButton pending={task.isFetching} onClick={() => task.refetch()} />} />
     <ErrorMessage error={task.error} />
     <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>Состояние задания</h2></CardTitle>
       <dl className="details"><dt>Доставка</dt><dd>{deliveryLabels[item.deliveryStatus]}</dd>

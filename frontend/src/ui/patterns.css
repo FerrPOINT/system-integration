@@ -689,6 +689,11 @@ outline: 2px solid Highlight;
 
 /* Plain CSS equivalents for the consumed Base utility classes. */
 .base-page-heading { min-width: 0; }
+.base-page-heading > .base-back-link { flex-shrink: 0; }
+@media (max-width: 760px) {
+  .base-page-heading > .base-back-link { width: 44px; padding-inline: 0; }
+  .base-page-heading .base-back-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}
 .base-page-context { margin-top: 4px; color: var(--color-text-secondary); font-size: var(--base-font-body); }
 .base-field-hint { margin: 0; color: var(--color-text-muted); font-size: var(--base-font-label); }
 

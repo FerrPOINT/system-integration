@@ -89,8 +89,8 @@ export function IssueCard() {
     <Button onClick={() => issue.refetch()}>Повторить</Button></>;
   const item = issue.data;
   return <>
-    <BackLink to="/issues">К разбору обмена</BackLink>
-    <PageHeader title={kinds[item.kind]} actions={<Button onClick={() => issue.refetch()} disabled={issue.isFetching}>Обновить</Button>} />
+    <PageHeader back={<BackLink to="/issues">К разбору обмена</BackLink>} title={kinds[item.kind]}
+      actions={<RefreshButton pending={issue.isFetching} onClick={() => issue.refetch()} />} />
     <ErrorMessage error={issue.error} />
     <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>{item.status === 'OPEN' ? 'Открытый разбор' : 'Разбор завершён'}</h2></CardTitle><p>{item.summary}</p>
       <dl><dt>Открыт</dt><dd>{timestamp(item.openedAt)}</dd><dt>Ответственный</dt><dd className="technical">{item.assignedTo || 'Не назначен'}</dd>
@@ -177,8 +177,8 @@ export function ReconciliationCard() {
     <Button onClick={() => snapshot.refetch()}>Повторить</Button></>;
   const item = snapshot.data;
   return <>
-    <BackLink to={'/tasks/' + taskId}>К заданию</BackLink>
-    <PageHeader title="Сохранённая сверка" actions={<ReconcileButton taskId={taskId} />} />
+    <PageHeader back={<BackLink to={'/tasks/' + taskId}>К заданию</BackLink>}
+      title="Сохранённая сверка" actions={<ReconcileButton taskId={taskId} />} />
     <ErrorMessage error={snapshot.error} />
     <Card asChild><section className="reconciliation-panel" data-outcome={item.outcome}><CardContent className="base-page-stack"><Notice tone={item.outcome === 'MATCH' ? 'success' : 'danger'} title={<CardTitle asChild><h2>{outcomes[item.outcome]}</h2></CardTitle>}>
       {timestamp(item.checkedAt)} · Оператор {item.checkedBy}</Notice>
