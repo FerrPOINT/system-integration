@@ -219,4 +219,21 @@ class TaskWorkflowTest extends PostgresTest {
         assertEquals(0, count("tasks"));
     }
 
+    @Test
+    void unicodeBlankTitlesAreClientErrorsAndNeverCreateOrRenameState() throws Exception {
+        var owner=login("initiator.one");
+        var blanks=List.of("\u2003","\u3000","\u00a0");
+        for (String blank:blanks)
+            status(400,create(owner,UUID.randomUUID(),CREATE.replace("Проверка заявки",blank)));
+        assertEquals(0,count("tasks"));
+        assertEquals(0,count("delivery_queue"));
+        assertEquals(0,count("task_history"));
+        assertEquals(0,count("command_receipts"));
+        var id=created(owner,UUID.randomUUID());
+        for (String blank:blanks) status(400,rename(owner,id,UUID.randomUUID(),blank,1));
+        assertEquals(1,jdbc.queryForObject("SELECT title_revision FROM tasks WHERE id=?",Long.class,id));
+        status(200,rename(owner,id,UUID.randomUUID(),"Имя\u2003объекта",1));
+    }
+
+
 }

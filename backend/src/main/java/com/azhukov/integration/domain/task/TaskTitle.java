@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 /** Local title versioning is independent of the external exchange version. */
 public record TaskTitle(String value, long revision) {
     public static final long MAX_REVISION = 9007199254740991L;
-    private static final Pattern NON_BLANK = Pattern.compile("\\S");
+    private static final Pattern NON_BLANK = Pattern.compile("\\S",Pattern.UNICODE_CHARACTER_CLASS);
 
     public TaskTitle {
         if (value == null || value.length() > 160 || !NON_BLANK.matcher(value).find())
