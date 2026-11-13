@@ -103,6 +103,7 @@ export function NewTask() {
   const navigate = useNavigate();
   const [search] = useSearchParams();
   const returnFocusRef = useOutletContext<RefObject<HTMLAnchorElement | null>>();
+  const titleInput = useRef<HTMLInputElement>(null);
   const [dirty, setDirty] = useState(false);
   const saved = useRef(false);
   const client = useQueryClient();
@@ -138,7 +139,7 @@ export function NewTask() {
       }} onSubmit={event => { event.preventDefault(); if (!create.isPending) create.mutate(new FormData(event.currentTarget)); }}>
         <div className="base-dialog-body base-page-stack">
           <fieldset className="base-form-fieldset base-form" disabled={create.isPending} aria-label="Данные задания">
-            <FormField id="field-title" label="Название" required>{attrs => <Input {...attrs} name="title" maxLength={160} pattern=".*\S.*" autoFocus />}</FormField>
+            <FormField id="field-title" label="Название" required>{attrs => <Input {...attrs} ref={titleInput} name="title" maxLength={160} pattern=".*\S.*" autoFocus />}</FormField>
             <div className="task-input-row">
               <FormField id="field-reference" label="Номер заявки" required hint="REQ- и шесть цифр. После создания изменить нельзя.">{attrs => <Input {...attrs} name="reference" pattern="REQ-[0-9]{6}" placeholder="REQ-000001" />}</FormField>
               <FormField id="field-quantity" label="Количество" required hint="От 1 до 1000 единиц.">{attrs => <Input {...attrs} name="quantity" type="number" min={1} max={1000} step={1} defaultValue={25} />}</FormField>
@@ -153,7 +154,7 @@ export function NewTask() {
         </div>
       </form>
     </Dialog>
-    <DiscardDialog open={blocker.state === 'blocked' && !create.isPending}
+    <DiscardDialog open={blocker.state === 'blocked' && !create.isPending} returnFocusRef={titleInput}
       onCancel={() => blocker.state === 'blocked' && blocker.reset()}
       onDiscard={() => blocker.state === 'blocked' && blocker.proceed()} />
   </>;

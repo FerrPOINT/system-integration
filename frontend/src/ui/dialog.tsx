@@ -27,13 +27,15 @@ export function Dialog({ open, title, description, onClose, pending = false, ret
   </DialogPrimitive.Root>;
 }
 
-export function DiscardDialog({ open, onCancel, onDiscard }: {
-  open: boolean; onCancel: () => void; onDiscard: () => void;
+export function DiscardDialog({ open, onCancel, onDiscard, returnFocusRef }: {
+  open: boolean; onCancel: () => void; onDiscard: () => void; returnFocusRef: RefObject<HTMLElement | null>;
 }) {
   return <AlertDialogPrimitive.Root open={open} onOpenChange={next => { if (!next) onCancel(); }}>
     <AlertDialogPrimitive.Portal>
       <AlertDialogPrimitive.Overlay className="base-dialog-overlay" />
-      <AlertDialogPrimitive.Content className="base-dialog-content">
+      <AlertDialogPrimitive.Content className="base-dialog-content" onCloseAutoFocus={event => {
+        if (returnFocusRef.current) { event.preventDefault(); returnFocusRef.current.focus(); }
+      }}>
         <div className="base-dialog-header">
           <AlertDialogPrimitive.Title className="base-dialog-title">Закрыть форму?</AlertDialogPrimitive.Title>
           <AlertDialogPrimitive.Description className="base-dialog-description">Введённые данные будут потеряны.</AlertDialogPrimitive.Description>
