@@ -1,9 +1,9 @@
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Route, Routes, useNavigate } from 'react-router-dom';
 import { usePagination } from '../src/app/use-pagination';
 
 // Control observer delivery to reproduce a queued layout measurement in the same
-// turn as navigation. The hook and BrowserRouter are the actual production code.
+// turn as navigation. The hook is production code; the router setup matches main.tsx.
 const observers = new Set<ResizeObserverCallback>();
 const frames = new Map<number, FrameRequestCallback>();
 let frame = 0;
@@ -41,7 +41,8 @@ function Source() {
     }}>Filter with queued measurement</button>
   </>;
 }
-createRoot(document.getElementById('root')!).render(<BrowserRouter><Routes>
+const router = createBrowserRouter([{ path: '*', element: <Routes>
   <Route path="/destination" element={<h1>Destination</h1>} />
   <Route path="*" element={<Source />} />
-</Routes></BrowserRouter>);
+</Routes> }]);
+createRoot(document.getElementById('root')!).render(<RouterProvider router={router} />);

@@ -11,7 +11,7 @@ export function usePagination() {
   const { viewportRef, measuredSize } = usePageSize(page);
   useEffect(() => {
     if (!valid || measuredSize === null || measuredSize === size) return;
-    // BrowserRouter updates the address before its transitioned React location.
+    // The router can update the address before its transitioned React location.
     // A queued measurement must not overwrite a newer route or filter navigation.
     if (window.location.pathname !== location.pathname || window.location.search !== location.search ||
       window.location.hash !== location.hash) return;
