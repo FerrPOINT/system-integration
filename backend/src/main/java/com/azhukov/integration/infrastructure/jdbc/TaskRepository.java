@@ -1,5 +1,7 @@
 package com.azhukov.integration.infrastructure.jdbc;
 
+import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
 import com.azhukov.integration.domain.exchange.ExchangeState;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.HistoryType;
@@ -18,8 +20,6 @@ import com.azhukov.integration.domain.RuleViolation;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -33,15 +33,11 @@ import java.util.Map;
 import java.util.UUID;
 
 @Repository
+@RequiredArgsConstructor
+@Slf4j
 public class TaskRepository implements TaskStore, ExchangeStore {
-    private static final Logger log = LoggerFactory.getLogger(TaskRepository.class);
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
-
-    public TaskRepository(JdbcTemplate jdbc, ObjectMapper json) {
-        this.jdbc = jdbc;
-        this.json = json;
-    }
 
     private final RowMapper<Task> taskRow = this::mapTask;
 

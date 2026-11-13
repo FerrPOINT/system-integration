@@ -1,5 +1,6 @@
 package com.azhukov.integration.application;
 
+import lombok.RequiredArgsConstructor;
 import com.azhukov.integration.application.port.TaskStore;
 import com.azhukov.integration.application.port.ExchangeStore;
 import com.azhukov.integration.domain.exchange.ExchangeState;
@@ -19,16 +20,11 @@ import java.util.Map;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class ExchangeTasks {
     private final TaskStore tasks;
     private final ExchangeStore exchanges;
     private final IssueService issues;
-
-    public ExchangeTasks(TaskStore tasks, ExchangeStore exchanges, IssueService issues) {
-        this.tasks = tasks;
-        this.exchanges = exchanges;
-        this.issues = issues;
-    }
 
     @Transactional
     public DeliveryAttempt claim() {

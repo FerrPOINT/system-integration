@@ -10,10 +10,26 @@ allprojects {
     version = '0.1.0-SNAPSHOT'
 }
 
+ext {
+    lombokVersion = '1.18.48'
+    mapstructVersion = '1.6.3'
+    mapstructLombokBindingVersion = '0.2.0'
+}
+
 subprojects {
     apply plugin: 'java'
     java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
     repositories { mavenCentral() }
+    dependencies {
+        implementation "org.mapstruct:mapstruct:$rootProject.mapstructVersion"
+        compileOnly "org.projectlombok:lombok:$rootProject.lombokVersion"
+        annotationProcessor "org.projectlombok:lombok:$rootProject.lombokVersion"
+        annotationProcessor "org.mapstruct:mapstruct-processor:$rootProject.mapstructVersion"
+        annotationProcessor "org.projectlombok:lombok-mapstruct-binding:$rootProject.mapstructLombokBindingVersion"
+    }
+    tasks.withType(JavaCompile).configureEach {
+        options.compilerArgs += '-Amapstruct.suppressGeneratorTimestamp=true'
+    }
     tasks.named('test') { useJUnitPlatform { excludeTags 'postgres' } }
 }
 

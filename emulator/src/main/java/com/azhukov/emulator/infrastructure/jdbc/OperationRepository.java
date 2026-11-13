@@ -1,5 +1,6 @@
 package com.azhukov.emulator.infrastructure.jdbc;
 
+import lombok.RequiredArgsConstructor;
 import com.azhukov.emulator.application.port.OperationStore;
 import com.azhukov.emulator.domain.*;
 
@@ -16,11 +17,10 @@ import java.sql.Statement;
 import java.util.UUID;
 
 @Repository
+@RequiredArgsConstructor
 public class OperationRepository implements OperationStore {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
-
-    public OperationRepository(JdbcTemplate jdbc, ObjectMapper json) { this.jdbc = jdbc; this.json = json; }
 
     private final RowMapper<Operation> operationRow = this::mapOperation;
 

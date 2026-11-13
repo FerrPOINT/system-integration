@@ -1,5 +1,6 @@
 package com.azhukov.integration.application;
 
+import lombok.RequiredArgsConstructor;
 import com.azhukov.integration.domain.review.Reconciliation;
 import com.azhukov.integration.application.port.ExternalExchange;
 import org.springframework.stereotype.Service;
@@ -7,13 +8,10 @@ import org.springframework.stereotype.Service;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class ReconciliationService {
     private final ReviewService operations;
     private final ExternalExchange client;
-
-    public ReconciliationService(ReviewService operations,ExternalExchange client) {
-        this.operations=operations; this.client=client;
-    }
 
     public Reconciliation reconcile(Actor user,UUID task,UUID key) {
         var start=operations.prepareReconciliation(user,task,key);

@@ -1,5 +1,6 @@
 package com.azhukov.integration.infrastructure.jdbc;
 
+import lombok.RequiredArgsConstructor;
 import com.azhukov.integration.infrastructure.json.ContentFingerprint;
 
 import com.azhukov.integration.domain.RuleViolation;
@@ -15,14 +16,10 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 @Repository
+@RequiredArgsConstructor
 public class CommandReceipts implements CommandReceiptStore {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
-
-    public CommandReceipts(JdbcTemplate jdbc, ObjectMapper json) {
-        this.jdbc = jdbc;
-        this.json = json;
-    }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public <T> T execute(UUID actor, Command command, UUID key, Object input,

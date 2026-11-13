@@ -1,5 +1,6 @@
 package com.azhukov.integration.application;
 
+import lombok.RequiredArgsConstructor;
 import com.azhukov.integration.application.port.ReviewStore;
 import com.azhukov.integration.application.port.TaskStore;
 import com.azhukov.integration.domain.exchange.ExchangeState;
@@ -18,13 +19,12 @@ import java.util.UUID;
 /** Issue changes and their audit entries join the caller's exchange transaction. */
 @Service
 @Transactional(propagation=Propagation.MANDATORY)
+@RequiredArgsConstructor
 public class IssueService {
     private static final String DELAYED="Автоматическая доставка приостановлена: исчерпан лимит "
         + DeliveryAttempt.MAX_AUTOMATIC_ATTEMPTS + " попыток";
     private final ReviewStore issues;
     private final TaskStore tasks;
-
-    public IssueService(ReviewStore issues,TaskStore tasks) { this.issues=issues; this.tasks=tasks; }
 
     public UUID open(ExchangeState state,UUID operationId,Issue.Kind kind,String reason,
                      Object content,OperationResult received,Long cursor) {

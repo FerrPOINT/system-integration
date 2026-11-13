@@ -1,5 +1,6 @@
 package com.azhukov.integration.infrastructure.jdbc;
 
+import lombok.RequiredArgsConstructor;
 import com.azhukov.integration.application.port.ReviewStore;
 import com.azhukov.integration.domain.exchange.ExchangeState;
 import com.azhukov.integration.domain.exchange.OperationResult;
@@ -15,11 +16,10 @@ import java.util.List;
 import java.time.OffsetDateTime;
 
 @Repository
+@RequiredArgsConstructor
 public class ReviewRepository implements ReviewStore {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
-
-    public ReviewRepository(JdbcTemplate jdbc,ObjectMapper json) { this.jdbc=jdbc; this.json=json; }
 
     public Opened open(UUID task,UUID operation,Issue.Kind kind,String reason,Object content,Evidence evidence) {
         var scope=operation==null ? "feed" : operation.toString();

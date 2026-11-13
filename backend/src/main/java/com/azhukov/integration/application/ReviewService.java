@@ -1,5 +1,6 @@
 package com.azhukov.integration.application;
 
+import lombok.RequiredArgsConstructor;
 import com.azhukov.integration.application.port.TaskStore;
 import com.azhukov.integration.application.port.ExchangeStore;
 import com.azhukov.integration.application.port.ReviewStore;
@@ -27,6 +28,7 @@ import java.util.UUID;
 import static com.azhukov.integration.domain.review.Issue.Action.*;
 
 @Service
+@RequiredArgsConstructor
 public class ReviewService {
     private final TaskStore tasks;
     private final ExchangeStore exchanges;
@@ -34,11 +36,6 @@ public class ReviewService {
     private final IssueService issueChanges;
     private final ExchangeTasks exchange;
     private final CommandReceiptStore commands;
-
-    public ReviewService(TaskStore tasks,ExchangeStore exchanges,ReviewStore issues,IssueService issueChanges,
-                                  ExchangeTasks exchange,CommandReceiptStore commands) {
-        this.tasks=tasks; this.exchanges=exchanges; this.issues=issues; this.issueChanges=issueChanges; this.exchange=exchange; this.commands=commands;
-    }
 
     public record ReconciliationStart(ExchangeState before,Reconciliation replay) {}
 

@@ -1,5 +1,6 @@
 package com.azhukov.integration.application;
 
+import lombok.RequiredArgsConstructor;
 import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.domain.RuleViolation;
 import com.azhukov.integration.domain.task.Task;
@@ -20,16 +21,11 @@ import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class TaskService {
     private final TaskStore tasks;
     private final ExchangeStore exchange;
     private final CommandReceiptStore commands;
-
-    public TaskService(TaskStore tasks, ExchangeStore exchange, CommandReceiptStore commands) {
-        this.tasks = tasks;
-        this.exchange = exchange;
-        this.commands = commands;
-    }
 
     @Transactional(readOnly = true)
     public Task get(Actor user, UUID id) { return tasks.get(id, user, false); }

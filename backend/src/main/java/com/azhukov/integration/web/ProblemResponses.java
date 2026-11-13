@@ -1,5 +1,7 @@
 package com.azhukov.integration.web;
 
+import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
 import com.azhukov.integration.contract.internal.model.Problem;
 import com.azhukov.integration.domain.RuleViolation;
 import jakarta.servlet.http.HttpServletResponse;
@@ -18,15 +20,12 @@ import java.io.IOException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.dao.DataAccessResourceFailureException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @RestControllerAdvice
+@RequiredArgsConstructor
+@Slf4j
 public class ProblemResponses {
-    private static final Logger log = LoggerFactory.getLogger(ProblemResponses.class);
     private final ObjectMapper json;
-
-    public ProblemResponses(ObjectMapper json) { this.json = json; }
 
     @ExceptionHandler(RuleViolation.class)
     ResponseEntity<Problem> handle(RuleViolation error) {

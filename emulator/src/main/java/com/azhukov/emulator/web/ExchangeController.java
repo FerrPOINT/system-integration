@@ -1,5 +1,6 @@
 package com.azhukov.emulator.web;
 
+import lombok.RequiredArgsConstructor;
 import com.azhukov.emulator.application.OperationService;
 import com.azhukov.emulator.domain.OperationRequest;
 
@@ -12,10 +13,9 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
+@RequiredArgsConstructor
 public class ExchangeController implements ExchangeApi {
     private final OperationService service;
-
-    public ExchangeController(OperationService service) { this.service=service; }
 
     @Override
     public ResponseEntity<Acknowledgement> acceptOperation(UUID id, OperationInput input) {

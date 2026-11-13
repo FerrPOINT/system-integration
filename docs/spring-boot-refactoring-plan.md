@@ -1,7 +1,7 @@
 # Переход backend на явные Spring-слои
 
 Дата исследования: 14 ноября 2026 года.
-Статус: план проверен; SP-00 выполнен, реализация SP-01–SP-08 предстоит.
+Статус выполнения — в [текущей стадии](current-stage.md#spring-слои--реализация).
 Рабочая среда этой задачи — Firebat1 через SSH, выбранный checkout
 в /opt/dev/system-integration/.local/structure. Локальную Mini-CRM не изменяем.
 
@@ -214,8 +214,10 @@ HTTP остаётся между короткими транзакциями. Co
 Фактическая совместимость с Java 25, Jackson 3 и нашими generated моделями
 закрывается чистой компиляцией в SP-01; исследование не заменяет этот gate.
 
-Один MapStructConfig: componentModel spring, constructor injection,
-unmappedTargetPolicy ERROR, подавленный generation timestamp. Мапперы описывают
+Один MapStructConfig на приложение: componentModel spring, constructor injection,
+unmappedTargetPolicy ERROR, подавленный generation timestamp. Backend и emulator имеют разные classpath,
+поэтому владеют своими небольшими конфигурациями без общего JAR; версии
+процессоров общие в корне Gradle. Мапперы описывают
 реальные HTTP-проекции, вложенные поля, nullable-значения и enum/version.
 Для умышленно отсутствующего target-поля нужен явный ignore с объяснением;
 глобальное игнорирование новых target properties не используется.

@@ -1,5 +1,6 @@
 package com.azhukov.integration.web;
 
+import lombok.RequiredArgsConstructor;
 import com.azhukov.integration.auth.AppUser;
 import com.azhukov.integration.application.review.IssueCommands;
 import com.azhukov.integration.application.ReconciliationService;
@@ -12,12 +13,11 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.UUID;
 
 @RestController
+@RequiredArgsConstructor
 public class OperationsController implements OperationsApi {
     private final ReviewService operations;
     private final ReconciliationService reconciliation;
-    public OperationsController(ReviewService operations,ReconciliationService reconciliation) {
-        this.operations=operations; this.reconciliation=reconciliation;
-    }
+
     @Override
     public ResponseEntity<Issue> getExchangeIssue(UUID id) {
         var result = operations.get(AppUser.current().actor(), id);

@@ -1,5 +1,6 @@
 package com.azhukov.integration.web;
 
+import lombok.RequiredArgsConstructor;
 import com.azhukov.integration.auth.AppUser;
 import com.azhukov.integration.application.TaskService;
 import com.azhukov.integration.application.task.CreateTask;
@@ -15,10 +16,9 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @RestController
+@RequiredArgsConstructor
 public class TasksController implements TasksApi {
     private final TaskService tasks;
-
-    public TasksController(TaskService tasks) { this.tasks = tasks; }
 
     @Override
     public ResponseEntity<CreateTaskResult> createTask(String csrf, UUID key, CreateTaskRequest input) {

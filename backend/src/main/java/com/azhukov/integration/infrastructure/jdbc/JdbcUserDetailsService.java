@@ -1,5 +1,6 @@
 package com.azhukov.integration.infrastructure.jdbc;
 
+import lombok.RequiredArgsConstructor;
 import com.azhukov.integration.auth.AppUser;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -10,9 +11,9 @@ import java.util.UUID;
 
 /** Uses Spring Security's existing storage boundary; no second authentication abstraction. */
 @Repository
+@RequiredArgsConstructor
 public class JdbcUserDetailsService implements UserDetailsService {
     private final JdbcTemplate jdbc;
-    public JdbcUserDetailsService(JdbcTemplate jdbc) { this.jdbc=jdbc; }
 
     @Override
     public AppUser loadUserByUsername(String username) {

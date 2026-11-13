@@ -1,5 +1,6 @@
 package com.azhukov.emulator.application;
 
+import lombok.RequiredArgsConstructor;
 import com.azhukov.emulator.application.port.OperationStore;
 import com.azhukov.emulator.domain.*;
 import org.springframework.stereotype.Service;
@@ -10,10 +11,11 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class OperationService {
     public static final int MAX_PUBLICATION_BATCH=100;
     private final OperationStore operations;
-    public OperationService(OperationStore operations) { this.operations=operations; }
+
     public record Accepted(Operation operation,boolean created,boolean dropResponse) {}
 
     @Transactional

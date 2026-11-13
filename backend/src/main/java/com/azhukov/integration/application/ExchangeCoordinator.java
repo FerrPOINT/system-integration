@@ -1,8 +1,8 @@
 package com.azhukov.integration.application;
 
+import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
 import com.azhukov.integration.application.port.ExternalExchange;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -12,16 +12,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.CompletableFuture;
 
 @Service
+@RequiredArgsConstructor
+@Slf4j
 public class ExchangeCoordinator implements AutoCloseable {
-    private static final Logger log = LoggerFactory.getLogger(ExchangeCoordinator.class);
     private final ExchangeTasks tasks;
     private final ExternalExchange client;
     private final ExecutorService senders = Executors.newFixedThreadPool(4, Thread.ofVirtual().name("delivery-",0).factory());
     private Instant nextRead = Instant.MIN;
     private int feedFailures;
     private boolean feedPaused;
-
-    public ExchangeCoordinator(ExchangeTasks tasks, ExternalExchange client) { this.tasks = tasks; this.client = client; }
 
     public void deliver() {
         var pending=new ArrayList<CompletableFuture<Void>>();

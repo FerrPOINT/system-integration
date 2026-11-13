@@ -1,5 +1,6 @@
 package com.azhukov.integration.web;
 
+import lombok.RequiredArgsConstructor;
 import com.azhukov.integration.auth.AppUser;
 
 import com.azhukov.integration.contract.internal.api.SessionApi;
@@ -10,10 +11,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@RequiredArgsConstructor
 public class SessionController implements SessionApi {
     private final HttpServletRequest request;
-
-    public SessionController(HttpServletRequest request) { this.request = request; }
 
     @Override
     public ResponseEntity<CsrfToken> getCsrfToken() {
