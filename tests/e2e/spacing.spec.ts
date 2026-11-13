@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
-import { login } from './support';
+import { login, waitForRegistry } from './support';
 
 async function expectGaps(region: Locator) {
   const gaps = await region.evaluate(el => {
@@ -84,14 +84,19 @@ test('UI-08: task registry, editor, card and history use consistent section gaps
     await expect(page.getByRole('status').filter({ hasText: 'Загрузка…' })).toBeVisible();
     await expectGaps(page.locator('main'));
   } finally { release(); await page.unrouteAll({ behavior: 'wait' }); }
-  await expect(page.locator('.list-heading')).toBeVisible();
+  await waitForRegistry(page);
+  const refresh=page.locator('.base-page-header').getByRole('button', { name: 'Обновить', exact: true });
+  await expect(refresh).toBeVisible();
+  await expect(refresh).toHaveAttribute('title','Обновить');
+  await expect(refresh).toHaveText('');
+  await expect(refresh.locator('svg')).toHaveCount(1);
   await expectGaps(page.locator('main'));
   await expectCards(page);
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toBeVisible();
   await expectGaps(page.locator('main'));
   await expectCards(page);
-  await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
+  await page.getByRole('button', { name: 'Отмена', exact: true }).click();
   await page.locator('.task-card h2 a, .task-table tbody a').first().click();
   await expect(page.getByRole('heading', { name: 'История', exact: true })).toBeVisible();
   await expect(page.locator('.base-timeline')).toBeVisible();

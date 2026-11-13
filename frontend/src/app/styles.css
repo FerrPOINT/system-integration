@@ -26,9 +26,10 @@ main { max-width: 1280px; padding: 26px 24px 56px; margin: 0 auto; }
 .readable { max-width: 760px; }
 
 .filters { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr) auto; align-items: end; gap: 14px; padding: 0; }
-.list-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--color-text-muted); font-size: 13px; }
 .task-table { table-layout: fixed; }
-.task-table th:first-child { width: 37%; }
+.task-table th:nth-child(2) { width: 22%; }
+.task-table th:nth-child(3) { width: 176px; }
+.task-table th:nth-child(4) { width: 210px; }
 .task-table td:first-child > a { color: var(--color-text-primary); font-weight: 600; text-decoration: none; }
 .task-table td:first-child > a:hover { color: var(--color-accent); text-decoration: underline; }
 .task-table td small { margin-top: 5px; }
@@ -41,6 +42,32 @@ main { max-width: 1280px; padding: 26px 24px 56px; margin: 0 auto; }
 
 .issue-cards { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
 .issue-meta { display: grid; gap: 4px; }
+.issue-status-filter { width: 220px; max-width: 100%; }
+.issue-page-header, .task-page-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.issue-page-header > .base-page-actions, .task-page-header > .base-page-actions { width: auto; }
+.issue-summary-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
+.issue-summary-heading .base-action-group { gap: 12px 24px; }
+.issue-facts { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px 24px; }
+.issue-facts > div { display: grid; min-width: 0; align-content: start; gap: 4px; }
+.issue-facts dt { font-size: 12px; }
+.issue-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 420px); align-items: start; gap: var(--shell-page-block-gap); }
+.issue-workspace > * { min-width: 0; }
+.issue-workspace > :only-child { grid-column: 1 / -1; }
+.issue-workspace .comparison-grid > :only-child { grid-column: 1 / -1; }
+.issue-workspace .snapshot dl { grid-template-columns: 110px minmax(0, 1fr); gap: 10px 12px; }
+.issue-decision-reason { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 1100px) {
+  .issue-workspace { grid-template-columns: minmax(0, 1fr) minmax(320px, 380px); }
+  .issue-workspace .comparison-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  .issue-workspace { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .issue-summary-heading .base-action-group > a { display: inline-flex; align-items: center; min-height: 32px; }
+  .issue-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .issue-operation { grid-column: 1 / -1; }
+}
 .comparison-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--shell-page-block-gap); }
 .inline-action { display: grid; gap: 8px; }
 .edit-form { max-width: 680px; }
@@ -87,3 +114,25 @@ main { max-width: 1280px; padding: 26px 24px 56px; margin: 0 auto; }
   .app-brand { gap: 8px; }
   .login-toolbar { gap: 12px; }
 }
+
+
+.app-shell { height: 100dvh; display: flex; flex-direction: column; }
+.app-shell > .app-header { flex-shrink: 0; }
+.app-shell > main { flex: 1; min-height: 0; width: 100%; overflow: auto; padding-bottom: 24px; }
+.app-shell > main > * { flex-shrink: 0; }
+.app-shell > main > .paged-list { flex-shrink: 1; }
+.list-tools { flex-shrink: 0; max-height: 45%; overflow: auto; }
+.list-tools > * { flex-shrink: 0; }
+.task-cards, .issue-cards { align-content: start; }
+.app-shell > main > .task-workspace { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); gap: var(--shell-page-block-gap); flex: 1; min-height: 0; }
+.task-summary { align-self: start; min-width: 0; }
+.task-history-viewport { min-width: 0; min-height: 0; overflow: auto; }
+@media (max-width: 900px) {
+  .app-shell > main > .task-workspace { flex: none; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(320px, 70dvh); }
+}
+@media (max-width: 760px) {
+  .app-shell > main { padding-bottom: 16px; }
+}
+
+.task-input-row { display: grid; grid-template-columns: minmax(0, 1fr) 140px; gap: 16px; align-items: start; }
+@media (max-width: 480px) { .task-input-row { grid-template-columns: 1fr; } }

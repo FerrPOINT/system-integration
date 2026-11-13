@@ -55,16 +55,18 @@ test('UI-02: theme survives navigation and logout, synchronizes tabs and preserv
   await expect(page).not.toHaveURL(/businessStatus=/);
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
   await page.getByLabel('Название *', { exact: true }).fill('Черновик сохраняется при смене темы');
-  await selectChoice(page, 'Цветовая тема', themeLabels['light']);
-  await expect(page.getByLabel('Название *', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');
   const other = await context.newPage();
   try {
     await other.goto('/tasks');
-    await expect(other.getByRole('combobox', { name: 'Цветовая тема', exact: true })).toHaveAttribute('data-value', 'light');
+    await selectChoice(other, 'Цветовая тема', themeLabels['light']);
+    await expect(page.locator('#theme-choice')).toHaveAttribute('data-value', 'light');
+    await expect(page.getByLabel('Название *', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');
     await selectChoice(other, 'Цветовая тема', 'Тёмная');
-    await expect(picker).toHaveAttribute('data-value', 'dark');
+    await expect(page.locator('#theme-choice')).toHaveAttribute('data-value', 'dark');
     await expect(page.getByLabel('Название *', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');
   } finally { await other.close(); }
+  await page.getByRole('button', { name: 'Отмена', exact: true }).click();
+  await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
   await expect(picker).toHaveAttribute('data-value', 'dark');
@@ -132,21 +134,15 @@ test('UI-06: shared brand, surfaces and form fields across the application', asy
   await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
   await expect(page.locator('.app-brand .base-icon-mark svg')).toHaveCount(1);
   const logo = await page.locator('.app-brand').innerHTML();
-  const surface = await page.locator('.login-panel').evaluate(el => ({
-    radius: getComputedStyle(el).borderRadius,
-    padding: getComputedStyle(el.querySelector('.base-card-content')!).padding,
-  }));
+  const dialogRadius = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--base-radius-dialog').trim());
   await expect(page.getByLabel('Логин *', { exact: true })).toHaveAttribute('required', '');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await login(page);
   expect(await page.locator('.app-brand').innerHTML()).toBe(logo);
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toHaveClass('base-page-title');
-  const editor = page.locator('main .base-card');
-  expect(await editor.evaluate(el => ({
-    radius: getComputedStyle(el).borderRadius,
-    padding: getComputedStyle(el.querySelector('.base-card-content')!).padding,
-  }))).toEqual(surface);
+  await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toHaveClass('base-dialog-title');
+  const editor = page.getByRole('dialog', { name: 'Новое задание', exact: true });
+  expect(await editor.evaluate(el => getComputedStyle(el).borderRadius)).toBe(dialogRadius);
   const reference = page.getByLabel('Номер заявки');
   await expect(reference).toHaveAttribute('aria-describedby', 'field-reference-hint');
   await expect(page.locator('#field-reference-hint')).toHaveText('REQ- и шесть цифр. После создания изменить нельзя.');

@@ -20,7 +20,7 @@ public interface ReviewStore {
     void observe(ExchangeState state, OperationResult result);
     StoredIssue get(UUID id, boolean lock);
     long count(Issue.Status status);
-    List<StoredIssue> list(int page, Issue.Status status);
+    List<StoredIssue> list(int page, int size, Issue.Status status);
     void assign(UUID id, UUID operator);
     UUID active(UUID task);
     void saveReconciliation(Reconciliation value, long version);

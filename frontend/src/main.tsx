@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { App } from './app/App';
 import { queryClient } from './app/api';
 import './ui/design-tokens.css';
@@ -8,6 +8,7 @@ import './ui/controls.css';
 import './ui/patterns.css';
 import './app/styles.css';
 
+const router = createBrowserRouter([{ path: '*', element: <App /> }]);
 const container = document.getElementById('root');
 
 if (!container) {
@@ -16,6 +17,6 @@ if (!container) {
 
 createRoot(container).render(
   <QueryClientProvider client={queryClient}>
-    <BrowserRouter><App /></BrowserRouter>
+    <RouterProvider router={router} />
   </QueryClientProvider>,
 );

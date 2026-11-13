@@ -25,10 +25,10 @@ public class OperationsController implements OperationsApi {
     }
 
     @Override
-    public ResponseEntity<IssuePage> listExchangeIssues(Integer page, IssueStatus status) {
+    public ResponseEntity<IssuePage> listExchangeIssues(Integer page, Integer size, IssueStatus status) {
         var filter = status == null ? null :
             com.azhukov.integration.domain.review.Issue.Status.valueOf(status.getValue());
-        var result = operations.list(AppUser.current().actor(), page, filter);
+        var result = operations.list(AppUser.current().actor(), page, size, filter);
         return ResponseEntity.ok(new IssuePage(
             result.items().stream().map(ReviewViews::issue).toList(),
             result.page(), result.hasNext(), result.totalItems(), result.totalPages()));

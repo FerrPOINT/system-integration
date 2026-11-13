@@ -36,14 +36,40 @@ test('TC-03 / TC-07: lost reply, independent execution, reconciliation and opera
   await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Обнаружено расхождение', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Перейти к разбору и решению' }).click();
+  const actions = page.getByRole('region', { name: 'Действия оператора', exact: true });
+  const evidence = page.getByRole('region', { name: 'Диагностика первого события', exact: true });
+  await expect(evidence).toContainText('Сохранённые данные на момент ошибки');
+  await expect(page.getByRole('link', { name: 'Открыть последнюю сверку', exact: true })).toHaveCount(1);
+  await expect(actions.getByRole('button', { name: 'Применить решение', exact: true })).toBeDisabled();
+  const panels = await page.locator('.issue-workspace').evaluate(el => Array.from(el.children).map(child => {
+    const { top, bottom, left, right } = child.getBoundingClientRect();
+    return { top, bottom, left, right };
+  }));
+  if (info.project.name === 'desktop') {
+    expect(panels[1].left).toBeGreaterThan(panels[0].right);
+    expect(panels[1].top).toBe(panels[0].top);
+  } else expect(panels[1].top).toBeGreaterThan(panels[0].bottom);
   const operator = await (await page.request.get('/api/session')).json();
   await page.getByRole('button', { name: 'Взять разбор', exact: true }).click();
   await expect(page.getByText(operator.userId, { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Взять разбор', exact: true })).toHaveCount(0);
   await selectChoice(page, 'Действие', 'Принять внешний результат');
+  await expect(actions).toContainText('Результат последней сверки будет применён к заданию');
   await page.getByLabel('Причина решения *', { exact: true }).fill('Проверено фактическое исполнение, принимаю сохранённый результат');
-  await page.getByRole('button', { name: 'Принять внешний результат', exact: true }).click();
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/exchange/issues/*/resolve', async route => { await held; await route.continue(); });
+  try {
+    await page.getByRole('button', { name: 'Принять внешний результат', exact: true }).click();
+    await expect(page.getByRole('form', { name: 'Решение оператора', exact: true })).toHaveAttribute('aria-busy', 'true');
+    await expect(page.getByRole('combobox', { name: 'Действие', exact: true })).toBeDisabled();
+    await expect(page.getByLabel('Причина решения *', { exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Сохраняем решение…', exact: true })).toBeDisabled();
+  } finally { release(); }
   await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
+  await page.unrouteAll({ behavior: 'wait' });
+  await expect(page.getByRole('region', { name: 'Решение', exact: true })).toContainText('Проверено фактическое исполнение');
+  await expect(page.getByRole('region', { name: 'Действия оператора', exact: true })).toHaveCount(0);
   await page.getByRole('link', { name: 'Открыть задание и историю' }).click();
   await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Открыть сохранённую сверку', exact: true }).first().click();

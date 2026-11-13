@@ -10,14 +10,15 @@ import { Select } from '../../ui/select';
 import { Textarea } from '../../ui/textarea';
 import { Button } from '../../ui/button';
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getExchangeIssue, getTaskReconciliation, listExchangeIssues, reconcileTask, resolveExchangeIssue, retryExchange, takeExchangeIssue } from '../../../build/generated/openapi/client';
 import type { Issue, IssueKind, IssueStatus, LocalSnapshot, OperationState, ResolutionAction, Result } from '../../../build/generated/openapi/client';
 import { csrf, data, keys } from '../../app/api';
 import { businessLabels, deliveryLabels, timestamp } from '../../app/format';
 import { useCommandKey } from '../../app/use-command-key';
-import { Loading, Pagination } from '../../ui/Feedback';
+import { Loading, Pagination, RefreshButton } from '../../ui/Feedback';
+import { usePagination } from '../../app/use-pagination';
 
 const kinds: Record<IssueKind, string> = {
   DELIVERY_UNCERTAIN: 'Доставка не подтверждена', DELIVERY_DELAYED: 'Лимит попыток исчерпан', PROTOCOL_ERROR: 'Ошибка протокола',
@@ -55,27 +56,28 @@ export function ReconcileButton({ taskId }: { taskId: string }) {
 
 export function IssueList() {
   const [search, setSearch] = useSearchParams();
-  const page = Number(search.get('page') || 0);
+  const { page, size, valid: validPage, viewportRef, changePage } = usePagination();
   const status = search.get('status') || 'OPEN';
-  const valid = Number.isSafeInteger(page) && page >= 0 && ['OPEN', 'RESOLVED'].includes(status);
-  const issues = useQuery({ queryKey: [...keys.issues, 'list', page, status], enabled: valid,
-    queryFn: ({ signal }) => data(listExchangeIssues({ page, status: status as IssueStatus }, { signal })) });
+  const valid = validPage && ['OPEN', 'RESOLVED'].includes(status);
+  const issues = useQuery({ queryKey: [...keys.issues, 'list', page, size, status], enabled: valid,
+    queryFn: ({ signal }) => data(listExchangeIssues({ page, size, status: status as IssueStatus }, { signal })), placeholderData: keepPreviousData });
   return <>
-    <PageHeader title="Разбор обмена" context="Доставка, конфликты и решения операторов." actions={<Button onClick={() => issues.refetch()} disabled={issues.isFetching || !valid}>Обновить</Button>} />
-    <div className="readable"><FormField id="issue-status" label="Состояние разбора">{attrs => <Select {...attrs} value={status}
-      onValueChange={status => setSearch({ status })} options={[{ value: 'OPEN', label: 'Открытые' }, { value: 'RESOLVED', label: 'Завершённые' }]} />}</FormField></div>
+    <div className="list-tools base-page-stack"><PageHeader title="Разбор обмена" context="Доставка, конфликты и решения операторов." actions={<RefreshButton pending={issues.isFetching} disabled={!valid} onClick={() => issues.refetch()} />} />
+    <div className="issue-status-filter"><FormField id="issue-status" label="Состояние разбора">{attrs => <Select {...attrs} value={status}
+      onValueChange={status => setSearch({ status, size: String(size) })} options={[{ value: 'OPEN', label: 'Открытые' }, { value: 'RESOLVED', label: 'Завершённые' }]} />}</FormField></div></div>
+    <section className="paged-list base-page-stack" aria-busy={issues.isFetching}><div className="paged-viewport" ref={viewportRef}>
     {!valid ? <Notice role="alert" tone="danger">Некорректные параметры страницы.</Notice> : issues.isPending ? <Loading /> : !issues.data ?
       <><ErrorMessage error={issues.error} /><Button onClick={() => issues.refetch()}>Повторить</Button></> : <>
       <ErrorMessage error={issues.error} />
       {issues.data.items.length === 0 ? <Card><EmptyState message="Проблем в выбранном состоянии нет." /></Card> :
-        <ul className="issue-cards">{issues.data.items.map(issue => <Card asChild key={issue.issueId}><li><CardContent className="base-page-stack">
-          <CardTitle asChild><h2><Link to={'/issues/' + issue.issueId}>{kinds[issue.kind]}</Link></h2></CardTitle><p>{issue.summary}</p>
+        <ul className="issue-cards" data-page-items>{issues.data.items.slice(0, size).map(issue => <Card asChild key={issue.issueId} data-page-item><li><CardContent className="base-page-stack">
+          <CardTitle asChild><h2><Link className="base-truncate" title={kinds[issue.kind]} to={'/issues/' + issue.issueId}>{kinds[issue.kind]}</Link></h2></CardTitle><p className="base-truncate" title={issue.summary}>{issue.summary}</p>
           <div className="issue-meta"><small>{timestamp(issue.openedAt)}</small><small>{issue.assignedTo ? 'Ответственный: ' + issue.assignedTo : 'Ответственный пока не назначен'}</small>
           {issue.nextAttemptAt && <small>Следующая попытка: {timestamp(issue.nextAttemptAt)}</small>}</div>
         </CardContent></li></Card>)}</ul>}
-      <Pagination page={page} totalItems={issues.data.totalItems} totalPages={issues.data.totalPages} pending={issues.isFetching}
-        onChange={next => setSearch({ status, page: String(next) })} />
     </>}
+    </div><Pagination page={validPage ? page : 0} totalItems={issues.data?.totalItems ?? 0} totalPages={issues.data?.totalPages ?? 0} pending={issues.isFetching || !valid} onChange={changePage} />
+    </section>
   </>;
 }
 
@@ -87,30 +89,49 @@ export function IssueCard() {
     <Button onClick={() => issue.refetch()}>Повторить</Button></>;
   const item = issue.data;
   return <>
-    <BackLink to="/issues">К разбору обмена</BackLink>
-    <PageHeader title={kinds[item.kind]} actions={<Button onClick={() => issue.refetch()} disabled={issue.isFetching}>Обновить</Button>} />
+    <PageHeader className="issue-page-header" back={<BackLink to="/issues">К разбору обмена</BackLink>} title={kinds[item.kind]}
+      actions={<RefreshButton pending={issue.isFetching} onClick={() => issue.refetch()} />} />
     <ErrorMessage error={issue.error} />
-    <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>{item.status === 'OPEN' ? 'Открытый разбор' : 'Разбор завершён'}</h2></CardTitle><p>{item.summary}</p>
-      <dl><dt>Открыт</dt><dd>{timestamp(item.openedAt)}</dd><dt>Ответственный</dt><dd className="technical">{item.assignedTo || 'Не назначен'}</dd>
-        {item.operationId && <><dt>ID операции</dt><dd className="technical">{item.operationId}</dd></>}
-        {item.nextAttemptAt && <><dt>Следующая попытка</dt><dd>{timestamp(item.nextAttemptAt)}</dd></>}
-      </dl>
-      {item.taskId && <Link to={'/tasks/' + item.taskId}>Открыть задание и историю</Link>}
-      <IssueActions issue={item} />
-    </CardContent></section></Card>
-    {item.evidence && <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>Диагностика первого события</h2></CardTitle><p>{item.evidence.reason}</p>
-      {item.evidence.cursor && <p>Позиция ленты: {item.evidence.cursor}</p>}
-      <div className="comparison-grid">
-        {item.evidence.local && <Snapshot title="Локальный снимок при ошибке" value={item.evidence.local} />}
-        {item.evidence.received && <ReceivedResult value={item.evidence.received} />}
+    <Card asChild><section aria-labelledby="issue-summary-title"><CardContent className="base-page-stack">
+      <div className="issue-summary-heading"><CardTitle asChild><h2 id="issue-summary-title">{item.status === 'OPEN' ? 'Открытый разбор' : 'Разбор завершён'}</h2></CardTitle>
+        <ActionGroup align="start">
+          {item.taskId && <Link to={'/tasks/' + item.taskId}>Открыть задание и историю</Link>}
+          {item.latestReconciliationId && item.taskId && <Link to={'/tasks/' + item.taskId + '/reconciliations/' + item.latestReconciliationId}>Открыть последнюю сверку</Link>}
+        </ActionGroup>
       </div>
-    </CardContent></section></Card>}
-    {item.latestReconciliationId && item.taskId && <p><Button asChild><Link to={'/tasks/' + item.taskId + '/reconciliations/' + item.latestReconciliationId}>
-      Открыть последнюю сверку</Link></Button></p>}
-    {item.resolution && <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>Решение</h2></CardTitle><p>{actionLabels[item.resolution.action]}</p><p>{item.resolution.reason}</p>
-      <small>{timestamp(item.resolution.decidedAt)} · Оператор {item.resolution.decidedBy}</small>
-      {item.taskId && <Link to={'/tasks/' + item.taskId + '/reconciliations/' + item.resolution.reconciliationId}>Сверка, на которой основано решение</Link>}
-    </CardContent></section></Card>}
+      <p>{item.summary}</p>
+      <dl className="issue-facts">
+        <div><dt>Открыт</dt><dd><time dateTime={item.openedAt}>{timestamp(item.openedAt)}</time></dd></div>
+        <div><dt>Ответственный</dt><dd className={item.assignedTo ? 'technical' : undefined}>{item.assignedTo || 'Не назначен'}</dd></div>
+        {item.operationId && <div className="issue-operation"><dt>ID операции</dt><dd className="technical">{item.operationId}</dd></div>}
+        {item.nextAttemptAt && <div><dt>Следующая попытка</dt><dd><time dateTime={item.nextAttemptAt}>{timestamp(item.nextAttemptAt)}</time></dd></div>}
+      </dl>
+    </CardContent></section></Card>
+    <div className="issue-workspace">
+      {item.evidence && <Card asChild><section aria-labelledby="issue-evidence-title"><CardContent className="base-page-stack">
+        <CardTitle asChild><h2 id="issue-evidence-title">Диагностика первого события</h2></CardTitle>
+        <p className="muted">Сохранённые данные на момент ошибки. Текущее состояние проверяется отдельной сверкой.</p>
+        {item.evidence.reason !== item.summary && <p>{item.evidence.reason}</p>}
+        {item.evidence.cursor && <p>Позиция ленты: {item.evidence.cursor}</p>}
+        {(item.evidence.local || item.evidence.received) && <div className="comparison-grid">
+          {item.evidence.local && <Snapshot title="Локальный снимок при ошибке" value={item.evidence.local} />}
+          {item.evidence.received && <ReceivedResult value={item.evidence.received} />}
+        </div>}
+      </CardContent></section></Card>}
+      {item.status === 'OPEN' && <Card asChild><section aria-labelledby="issue-actions-title"><CardContent className="base-page-stack">
+        <CardTitle asChild><h2 id="issue-actions-title">Действия оператора</h2></CardTitle>
+        <IssueActions key={item.issueId} issue={item} />
+      </CardContent></section></Card>}
+      {item.resolution && <Card asChild><section aria-labelledby="issue-resolution-title"><CardContent className="base-page-stack">
+        <CardTitle asChild><h2 id="issue-resolution-title">Решение</h2></CardTitle>
+        <p>{actionLabels[item.resolution.action]}</p><p className="issue-decision-reason">{item.resolution.reason}</p>
+        <dl className="issue-facts">
+          <div><dt>Принято</dt><dd><time dateTime={item.resolution.decidedAt}>{timestamp(item.resolution.decidedAt)}</time></dd></div>
+          <div><dt>Оператор</dt><dd className="technical">{item.resolution.decidedBy}</dd></div>
+        </dl>
+        {item.taskId && <Link to={'/tasks/' + item.taskId + '/reconciliations/' + item.resolution.reconciliationId}>Сверка, на которой основано решение</Link>}
+      </CardContent></section></Card>}
+    </div>
   </>;
 }
 
@@ -124,17 +145,18 @@ function IssueActions({ issue }: { issue: Issue }) {
     },
     onSuccess: async () => { await refresh(); command.reset(); },
   });
-  if (issue.status !== 'OPEN') return null;
   const decisions = issue.allowedActions.filter((action): action is DecisionAction => action === 'RETRY' || action === 'APPLY_EXTERNAL_RESULT' || action === 'ACKNOWLEDGE_DIFFERENCE');
   return <div className="base-page-stack">
-    <ActionGroup align="start">
+    {issue.allowedActions.some(action => action === 'TAKE_OWNERSHIP' || action === 'RECONCILE') && <ActionGroup align="start">
       {issue.allowedActions.includes('TAKE_OWNERSHIP') && <Button onClick={() => take.mutate()} disabled={take.isPending}>
         {take.isPending ? 'Сохраняем…' : issue.assignedTo ? 'Перенять разбор' : 'Взять разбор'}</Button>}
       {issue.taskId && issue.allowedActions.includes('RECONCILE') && <ReconcileButton taskId={issue.taskId} />}
-    </ActionGroup>
+    </ActionGroup>}
     <ErrorMessage error={take.error} />
     {decisions.length > 0 ? <DecisionForm issue={issue} actions={decisions} /> :
-      issue.taskId && <p className="muted">Чтобы принять решение, выполните свежую сверку. Автоматические попытки приостановленной доставки не возобновляются без решения оператора.</p>}
+      <Notice appearance="inline">{issue.taskId
+        ? 'Чтобы принять решение, выполните свежую сверку. Автоматические попытки приостановленной доставки не возобновляются без решения оператора.'
+        : 'Это общая проблема ленты событий. Проверьте диагностику и источник событий; действия над заданием недоступны.'}</Notice>}
   </div>;
 }
 
@@ -154,15 +176,18 @@ function DecisionForm({ issue, actions }: { issue: Issue; actions: DecisionActio
     },
     onSuccess: async () => { await refresh(); command.reset(); setReason(''); setAction(''); },
   });
-  return <form className="base-form edit-form" onSubmit={event => { event.preventDefault(); decide.mutate(); }}>
+  return <form aria-label="Решение оператора" aria-busy={decide.isPending} onSubmit={event => { event.preventDefault(); decide.mutate(); }}>
+    <fieldset className="base-form-fieldset base-form" disabled={decide.isPending}>
     <FormField id="decision-action" label="Действие" required>{attrs => <Select {...attrs} value={action} placeholder="Выберите действие"
       onValueChange={value => setAction(value as DecisionAction)} options={actions.map(value => ({ value, label: actionLabels[value] }))} />}</FormField>
-    {action === 'ACKNOWLEDGE_DIFFERENCE' && <Notice>Локальный результат сохранится. Приостановленная доставка будет окончательно остановлена.</Notice>}
-    {issue.latestReconciliationId && issue.taskId && <Link to={'/tasks/' + issue.taskId + '/reconciliations/' + issue.latestReconciliationId}>Сверка для этого решения</Link>}
-    <FormField id="decision-reason" label="Причина решения" required>{attrs => <Textarea {...attrs} value={reason} maxLength={500} rows={3} onChange={event => setReason(event.target.value)} />}</FormField>
+    {action === 'RETRY' && <Notice appearance="inline">Обмен продолжится с тем же ID операции и исходным запросом.</Notice>}
+    {action === 'APPLY_EXTERNAL_RESULT' && <Notice appearance="inline">Результат последней сверки будет применён к заданию, разбор завершится.</Notice>}
+    {action === 'ACKNOWLEDGE_DIFFERENCE' && <Notice>Локальный результат сохранится. Если доставка приостановлена, она будет окончательно остановлена.</Notice>}
+    <FormField id="decision-reason" label="Причина решения" required hint="До 500 символов. Укажите, что проверили и почему выбрали это действие.">{attrs => <Textarea {...attrs} value={reason} maxLength={500} rows={3} onChange={event => setReason(event.target.value)} />}</FormField>
     <ErrorMessage error={decide.error} />
     <Button variant="default" disabled={decide.isPending || !reason.trim() || !action || !actions.includes(action)}>
-      {decide.isPending ? 'Сохраняем решение…' : action ? actionLabels[action] : 'Выполнить'}</Button>
+      {decide.isPending ? 'Сохраняем решение…' : action ? actionLabels[action] : 'Применить решение'}</Button>
+    </fieldset>
   </form>;
 }
 
@@ -175,8 +200,8 @@ export function ReconciliationCard() {
     <Button onClick={() => snapshot.refetch()}>Повторить</Button></>;
   const item = snapshot.data;
   return <>
-    <BackLink to={'/tasks/' + taskId}>К заданию</BackLink>
-    <PageHeader title="Сохранённая сверка" actions={<ReconcileButton taskId={taskId} />} />
+    <PageHeader back={<BackLink to={'/tasks/' + taskId}>К заданию</BackLink>}
+      title="Сохранённая сверка" actions={<ReconcileButton taskId={taskId} />} />
     <ErrorMessage error={snapshot.error} />
     <Card asChild><section className="reconciliation-panel" data-outcome={item.outcome}><CardContent className="base-page-stack"><Notice tone={item.outcome === 'MATCH' ? 'success' : 'danger'} title={<CardTitle asChild><h2>{outcomes[item.outcome]}</h2></CardTitle>}>
       {timestamp(item.checkedAt)} · Оператор {item.checkedBy}</Notice>

@@ -19,9 +19,9 @@ export default defineConfig({
     },
   }],
   server: {
-    port: 19573,
+    port: 19673,
     proxy: {
-      '/api': 'http://127.0.0.1:19580',
+      '/api': 'http://127.0.0.1:19680',
     },
   },
 });

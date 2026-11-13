@@ -60,7 +60,7 @@ function Shell({ user, appearance }: { user: GetSession200; appearance: ReactNod
     mutationFn: async () => { await data(logOut(await csrf())); await csrf(); },
     onSuccess: clearSession,
   });
-  return <>
+  return <div className="app-shell">
     <a className="skip-link" href="#main">К содержимому</a>
     <header className="app-header">
       <Link to="/tasks" className="brand-link"><Brand /></Link>
@@ -72,8 +72,9 @@ function Shell({ user, appearance }: { user: GetSession200; appearance: ReactNod
     <main id="main" className="base-page-stack" tabIndex={-1}>
       <ErrorMessage error={logout.error} />
       <Routes>
-        <Route path="/tasks" element={<TaskList user={user} />} />
-        <Route path="/tasks/new" element={user.role === 'INITIATOR' ? <NewTask /> : <Navigate to="/tasks" replace />} />
+        <Route path="/tasks" element={<TaskList user={user} />}>
+          <Route path="new" element={user.role === 'INITIATOR' ? <NewTask /> : <Navigate to="/tasks" replace />} />
+        </Route>
         <Route path="/tasks/:id" element={<TaskCard user={user} />} />
         <Route path="/issues" element={user.role === 'OPERATOR' ? <IssueList /> : <Navigate to="/tasks" replace />} />
         <Route path="/issues/:id" element={user.role === 'OPERATOR' ? <IssueCard /> : <Navigate to="/tasks" replace />} />
@@ -82,5 +83,5 @@ function Shell({ user, appearance }: { user: GetSession200; appearance: ReactNod
         <Route path="*" element={<section><PageHeader title="Страница не найдена" actions={<Button asChild><Link to="/tasks">К заданиям</Link></Button>} /></section>} />
       </Routes>
     </main>
-  </>;
+  </div>;
 }
