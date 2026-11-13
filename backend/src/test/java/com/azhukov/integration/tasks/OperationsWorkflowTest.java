@@ -366,7 +366,7 @@ class OperationsWorkflowTest extends PostgresTest {
         return new Scenario(task,claim,op,issue,revision,body(saved).get("reconciliationId").asString());
     }
     private ExchangeReply external(ExchangeTasks.Claim claim,boolean completed,int quantity) {
-        var request=json.valueToTree(new com.azhukov.integration.contract.external.model.OperationInput(claim.request().getReference(),quantity));
+        var request=json.valueToTree(new com.azhukov.integration.contract.external.model.OperationInput(claim.request().reference(),quantity));
         var body=json.createObjectNode().put("operationId",claim.operationId().toString()).set("request",request)
             .put("acceptedAt","2026-11-12T00:00:00Z");
         if (!completed) {

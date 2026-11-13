@@ -1,7 +1,7 @@
 package com.azhukov.integration.tasks;
 
 import com.azhukov.integration.application.Actor;
-import com.azhukov.integration.contract.external.model.Result;
+import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.BusinessStatus;
 import com.azhukov.integration.support.PostgresTest;
 import org.junit.jupiter.api.Test;
@@ -27,7 +27,7 @@ class TaskMappingTest extends PostgresTest {
         var card = store.get(task.id(),new Actor(first,Actor.Role.INITIATOR),false);
         assertEquals(BusinessStatus.RUNNING,card.businessStatus());
         assertNull(card.outcome());
-        verify(observedJson,never()).readValue(anyString(),eq(Result.class));
+        verify(observedJson,never()).readValue(anyString(),eq(OperationResult.class));
         verify(observedJson,never()).readTree(anyString());
     }
 
@@ -36,9 +36,9 @@ class TaskMappingTest extends PostgresTest {
         var task = running();
         clearInvocations(observedJson);
         var state = store.exchange(task.operation(),false);
-        assertEquals(Result.VersionEnum.NUMBER_1,state.result().getVersion());
+        assertEquals(1,state.result().version());
         assertNull(state.task().outcome());
-        verify(observedJson,times(1)).readValue(anyString(),eq(Result.class));
+        verify(observedJson,times(1)).readValue(anyString(),eq(OperationResult.class));
         verify(observedJson,never()).readTree(anyString());
     }
 
@@ -53,7 +53,7 @@ class TaskMappingTest extends PostgresTest {
         var card = store.get(task.id(),new Actor(first,Actor.Role.INITIATOR),false);
         assertEquals(BusinessStatus.SUCCEEDED,card.outcome().status());
         assertEquals("2026-01-01T00:00:01Z",card.outcome().completedAt().toString());
-        verify(observedJson,never()).readValue(anyString(),eq(Result.class));
+        verify(observedJson,never()).readValue(anyString(),eq(OperationResult.class));
         verify(observedJson,times(1)).readTree(anyString());
     }
 

@@ -4,11 +4,11 @@ import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.contract.ExchangeReply;
 import com.azhukov.integration.application.Actor;
 import com.azhukov.integration.application.port.CommandReceiptStore.Command;
-import com.azhukov.integration.contract.external.model.OperationState;
-import com.azhukov.integration.contract.external.model.Result;
+import com.azhukov.integration.domain.exchange.OperationSnapshot;
+import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.contract.internal.model.*;
 import com.azhukov.integration.domain.task.DeliveryStatus;
-import com.azhukov.integration.contract.ExchangeProtocol;
+import com.azhukov.integration.infrastructure.http.ExchangeProtocol;
 import com.azhukov.integration.domain.RuleViolation;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,7 +38,7 @@ public class OperationsTransactions {
     public OperationsTransactions(TaskRepository tasks,ExchangeIssues issues,ExchangeTasks exchange,
                                   CommandReceipts commands,ObjectMapper json) {
         this.tasks=tasks; this.issues=issues; this.exchange=exchange; this.commands=commands; this.json=json;
-        this.protocol=new ExchangeProtocol(json);
+        this.protocol=new ExchangeProtocol();
     }
 
     @Transactional(readOnly=true)
@@ -85,7 +85,7 @@ public class OperationsTransactions {
         return commands.execute(user.id(),Command.RECONCILE,key,before.task().id(),Reconciliation.class,() -> {
             var current=tasks.exchange(before.task().operationId(),true);
             if (current.version()!=before.version()) throw stale();
-            OperationState external=null;
+            OperationSnapshot external=null;
             String protocolFailure=null;
             var availability=Reconciliation.ExternalAvailabilityEnum.UNAVAILABLE;
             if (ExchangeProtocol.missingOperation(reply.status(),reply.body()))
@@ -169,7 +169,7 @@ public class OperationsTransactions {
             // Close the target first so common result application closes only other temporary issues.
             issues.resolve(id,resolution);
             if (input.getAction()==ResolutionAction.APPLY_EXTERNAL_RESULT) {
-                exchange.apply(context.state(),(Result)external(context).getResult(),user.id());
+                exchange.apply(context.state(),external(context).result(),user.id());
             } else if (context.issue().value().getKind()==Issue.KindEnum.PROTOCOL_ERROR &&
                 context.state().task().deliveryStatus()==DeliveryStatus.NEEDS_REVIEW) {
                 tasks.delivery(context.state().task().operationId(),DeliveryStatus.STOPPED);
@@ -209,13 +209,14 @@ public class OperationsTransactions {
         boolean protocolError=issue.getKind()==Issue.KindEnum.PROTOCOL_ERROR;
         if (protocolError && context.state().task().deliveryStatus()==DeliveryStatus.NEEDS_REVIEW && context.issue().queueFree() && fresh(context) &&
             context.reconciliation().value().getExternalAvailability()!=Reconciliation.ExternalAvailabilityEnum.UNAVAILABLE &&
-            (external==null || (sameIdentity(context.state(),external) && external.getExecutions().getValue()==0))) actions.add(RETRY);
+            (external==null || (sameIdentity(context.state(),external) && external.executions()==0))) actions.add(RETRY);
         boolean reviewKind=protocolError || issue.getKind()==Issue.KindEnum.RESULT_CONFLICT || issue.getKind()==Issue.KindEnum.RECONCILIATION_DIFFERENCE;
         if (reviewKind && fresh(context) && context.reconciliation().value().getOutcome()!=Reconciliation.OutcomeEnum.UNAVAILABLE) {
             actions.add(ACKNOWLEDGE_DIFFERENCE);
-            if (external!=null && sameIdentity(context.state(),external) && external.getResult() instanceof Result result &&
-                result.getVersion()==Result.VersionEnum.NUMBER_2 &&
-                (context.state().result()==null || result.getVersion().getValue()>context.state().result().getVersion().getValue())) actions.add(APPLY_EXTERNAL_RESULT);
+            var result = external == null ? null : external.result();
+            if (result!=null && sameIdentity(context.state(),external) &&
+                result.version()==2 &&
+                (context.state().result()==null || result.version()>context.state().result().version())) actions.add(APPLY_EXTERNAL_RESULT);
         }
         return actions;
     }
@@ -224,18 +225,18 @@ public class OperationsTransactions {
         return context.reconciliation()!=null && context.reconciliation().exchangeVersion()==context.state().version();
     }
 
-    private OperationState external(Context context) {
+    private OperationSnapshot external(Context context) {
         var value=context.reconciliation().value().getExternal();
         return value==null ? null : protocol.state(json.valueToTree(value));
     }
 
-    private boolean matches(TaskRepository.ExchangeTask state,OperationState external) {
+    private boolean matches(TaskRepository.ExchangeTask state,OperationSnapshot external) {
         if (external==null) return state.task().deliveryStatus()!=DeliveryStatus.ACKNOWLEDGED && state.result()==null;
-        return sameIdentity(state,external) && state.task().deliveryStatus()==DeliveryStatus.ACKNOWLEDGED && Objects.equals(state.result(),external.getResult());
+        return sameIdentity(state,external) && state.task().deliveryStatus()==DeliveryStatus.ACKNOWLEDGED && Objects.equals(state.result(),external.result());
     }
 
-    private boolean sameIdentity(TaskRepository.ExchangeTask state,OperationState external) {
-        return external.getOperationId().equals(state.task().operationId()) && external.getRequest().equals(ExchangeTasks.input(state));
+    private boolean sameIdentity(TaskRepository.ExchangeTask state,OperationSnapshot external) {
+        return external.operationId().equals(state.task().operationId()) && external.request().equals(ExchangeTasks.input(state));
     }
 
     private void requireFresh(Context context,UUID id) {

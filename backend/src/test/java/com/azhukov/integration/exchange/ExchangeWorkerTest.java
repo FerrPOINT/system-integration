@@ -2,7 +2,7 @@ package com.azhukov.integration.exchange;
 
 import com.azhukov.integration.tasks.ExchangeTasks;
 import com.azhukov.integration.contract.ExchangeReply;
-import com.azhukov.integration.contract.external.model.OperationInput;
+import com.azhukov.integration.domain.task.TaskInput;
 import org.junit.jupiter.api.Test;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -21,7 +21,7 @@ class ExchangeWorkerTest {
         when(tasks.claim()).thenAnswer(call -> {
             if (claimed.incrementAndGet() > 40) return null;
             return new ExchangeTasks.Claim(UUID.randomUUID(), UUID.randomUUID(), "PUT", 1,
-                new OperationInput("REQ-900001", 25));
+                new TaskInput("REQ-900001", 25));
         });
         when(client.put(any(), any())).thenAnswer(call -> {
             int current = active.incrementAndGet();

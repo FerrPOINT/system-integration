@@ -1,7 +1,7 @@
 package com.azhukov.integration.exchange;
 
 import com.azhukov.integration.contract.ExchangeReply;
-import com.azhukov.integration.contract.external.model.OperationInput;
+import com.azhukov.integration.domain.task.TaskInput;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -33,7 +33,7 @@ public class ExchangeClient implements AutoCloseable {
         this.json = json;
     }
 
-    public ExchangeReply put(UUID id, OperationInput input) {
+    public ExchangeReply put(UUID id, TaskInput input) {
         return send(HttpRequest.newBuilder(base.resolve("/operations/" + id))
             .header("Content-Type", "application/json").PUT(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(input))));
     }

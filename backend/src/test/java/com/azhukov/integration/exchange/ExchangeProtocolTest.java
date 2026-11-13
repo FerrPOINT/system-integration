@@ -1,8 +1,10 @@
 package com.azhukov.integration.exchange;
 
-import com.azhukov.integration.contract.ExchangeProtocol;
-import com.azhukov.integration.contract.external.model.OperationInput;
-import com.azhukov.integration.contract.external.model.Result;
+import com.azhukov.integration.infrastructure.http.ExchangeProtocol;
+import com.azhukov.integration.domain.task.TaskInput;
+import com.azhukov.integration.domain.task.BusinessStatus;
+import com.azhukov.integration.domain.exchange.OperationIdentity;
+import com.azhukov.integration.domain.exchange.OperationResult;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -12,17 +14,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ExchangeProtocolTest {
     private final JsonMapper json = JsonMapper.builder().build();
-    private final ExchangeProtocol protocol = new ExchangeProtocol(json);
+    private final ExchangeProtocol protocol = new ExchangeProtocol();
     private final String result = """
         {"operationId":"00000000-0000-4000-8000-000000000001","request":{"reference":"REQ-000001","quantity":25},
         "version":2,"status":"SUCCEEDED","completedAt":"2026-11-12T00:00:00Z"}
         """;
-    private final ExchangeProtocol.Identity identity = new ExchangeProtocol.Identity(
-        UUID.fromString("00000000-0000-4000-8000-000000000001"),new OperationInput("REQ-000001",25));
+    private final OperationIdentity identity = new OperationIdentity(
+        UUID.fromString("00000000-0000-4000-8000-000000000001"),new TaskInput("REQ-000001",25));
 
     @Test
     void validatesConditionalResultRulesAndImmutableInput() {
-        assertEquals(Result.StatusEnum.SUCCEEDED,protocol.result(json.readTree(result)).getStatus());
+        assertEquals(BusinessStatus.SUCCEEDED,protocol.result(json.readTree(result)).status());
         for (String invalid : new String[]{result.replace("\"version\":2","\"version\":1"),
             result.replace("SUCCEEDED","RUNNING"), result.replace("SUCCEEDED","REJECTED"),
             result.replace("\"quantity\":25","\"quantity\":25.0"),
@@ -32,7 +34,16 @@ class ExchangeProtocolTest {
             assertThrows(IllegalArgumentException.class,() -> protocol.result(json.readTree(invalid)));
         }
         var rejected = result.replace("SUCCEEDED","REJECTED").replace("\"version\":2","\"rejectionCode\":\"QUANTITY_LIMIT_EXCEEDED\",\"version\":2");
-        assertEquals("QUANTITY_LIMIT_EXCEEDED",protocol.result(json.readTree(rejected)).getRejectionCode());
+        assertEquals("QUANTITY_LIMIT_EXCEEDED",protocol.result(json.readTree(rejected)).rejectionCode());
+    }
+
+    @Test
+    void explicitNullDoesNotBecomeAnAbsentConditionalField() {
+        var succeeded = (tools.jackson.databind.node.ObjectNode) json.readTree(result);
+        assertThrows(IllegalArgumentException.class,() -> protocol.result(succeeded.deepCopy().putNull("rejectionCode")));
+        assertThrows(IllegalArgumentException.class,() -> protocol.result(succeeded.deepCopy().putNull("completedAt")));
+        var running = succeeded.deepCopy().put("version",1).put("status","RUNNING").putNull("completedAt");
+        assertThrows(IllegalArgumentException.class,() -> protocol.result(running));
     }
 
     @Test
@@ -41,7 +52,7 @@ class ExchangeProtocolTest {
             {"operationId":"00000000-0000-4000-8000-000000000001","request":{"reference":"REQ-000001","quantity":25},
             "acceptedAt":"2026-11-11T00:00:00Z","executions":1,"result":%s}
             """.formatted(result);
-        assertInstanceOf(Result.class,protocol.state(json.readTree(state),identity).getResult());
+        assertInstanceOf(OperationResult.class,protocol.state(json.readTree(state),identity).result());
         assertThrows(IllegalArgumentException.class,() -> protocol.state(json.readTree(state.replace("\"executions\":1","\"executions\":0")),identity));
         var changedResult = state.replace("\"result\":" + result,"\"result\":" + result.replace("\"quantity\":25","\"quantity\":26"));
         assertThrows(IllegalArgumentException.class,() -> protocol.state(json.readTree(changedResult),identity));
@@ -61,7 +72,7 @@ class ExchangeProtocolTest {
     void allResultStateCombinationsFollowTheThreeDeclaredVariants() {
         var allowed=java.util.Set.of("1:RUNNING:false:false","2:SUCCEEDED:true:false","2:REJECTED:true:true");
         for (int version=0;version<=3;version++) {
-            for (String status:new String[]{"RUNNING","SUCCEEDED","REJECTED","UNKNOWN"}) {
+            for (String status:new String[]{"RUNNING","SUCCEEDED","REJECTED","PENDING","UNKNOWN"}) {
                 for (boolean completed:new boolean[]{false,true}) {
                     for (boolean rejection:new boolean[]{false,true}) {
                         var body=json.createObjectNode().put("operationId",identity.id().toString())
@@ -84,9 +95,9 @@ class ExchangeProtocolTest {
         var running=json.createObjectNode().put("operationId",identity.id().toString())
             .set("request",json.valueToTree(identity.request())).put("version",1).put("status","RUNNING");
         var empty=base.deepCopy().put("executions",0).putNull("result");
-        assertEquals(0,protocol.state(empty).getExecutions().getValue());
+        assertEquals(0,protocol.state(empty).executions());
         var active=base.deepCopy().put("executions",0).set("result",running);
-        assertEquals(Result.StatusEnum.RUNNING,((Result)protocol.state(active).getResult()).getStatus());
+        assertEquals(BusinessStatus.RUNNING,((OperationResult)protocol.state(active).result()).status());
         assertThrows(IllegalArgumentException.class,() -> protocol.state(base.deepCopy().put("executions",0)));
         assertThrows(IllegalArgumentException.class,() -> protocol.state(base.deepCopy().put("executions",1).set("result",running)));
         assertThrows(IllegalArgumentException.class,() -> protocol.state(base.deepCopy().put("executions",2).set("result",json.readTree(result))));

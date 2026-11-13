@@ -2,16 +2,16 @@ package com.azhukov.integration.tasks;
 
 import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.contract.ExchangeReply;
-import com.azhukov.integration.contract.external.model.OperationInput;
-import com.azhukov.integration.contract.external.model.Result;
+import com.azhukov.integration.domain.task.TaskInput;
+import com.azhukov.integration.domain.exchange.OperationIdentity;
+import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.DeliveryStatus;
 import com.azhukov.integration.contract.internal.model.HistoryEvent;
-import com.azhukov.integration.contract.ExchangeProtocol;
+import com.azhukov.integration.infrastructure.http.ExchangeProtocol;
 import com.azhukov.integration.domain.RuleViolation;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 import java.util.UUID;
@@ -22,12 +22,12 @@ public class ExchangeTasks {
     private final ExchangeIssues issues;
     private final ExchangeProtocol protocol;
 
-    public ExchangeTasks(TaskRepository tasks, ExchangeIssues issues, ObjectMapper json) {
+    public ExchangeTasks(TaskRepository tasks, ExchangeIssues issues) {
         this.tasks = tasks; this.issues = issues;
-        this.protocol = new ExchangeProtocol(json);
+        this.protocol = new ExchangeProtocol();
     }
 
-    public record Claim(UUID operationId, UUID attemptId, String step, int number, OperationInput request) {}
+    public record Claim(UUID operationId, UUID attemptId, String step, int number, TaskInput request) {}
 
     @Transactional
     public Claim claim() {
@@ -68,7 +68,7 @@ public class ExchangeTasks {
         if ((claim.step().equals("PUT") && (reply.status() == 200 || reply.status() == 202)) ||
             (claim.step().equals("GET") && reply.status() == 200)) {
             try {
-                var expected = new ExchangeProtocol.Identity(claim.operationId(), claim.request());
+                var expected = new OperationIdentity(claim.operationId(), claim.request());
                 if (claim.step().equals("PUT")) protocol.acknowledgement(reply.body(), expected);
                 else protocol.state(reply.body(), expected);
                 confirmed = true;
@@ -120,7 +120,7 @@ public class ExchangeTasks {
     }
 
     private void receive(JsonNode raw, long cursor) {
-        Result received;
+        OperationResult received;
         try { received = protocol.result(raw); }
         catch (RuntimeException malformed) {
             UUID id = operationId(raw);
@@ -128,19 +128,19 @@ public class ExchangeTasks {
             issues.open(state, id, "RESULT_CONFLICT", "Входящий снимок не соответствует контракту", raw, null, cursor);
             return;
         }
-        var state = find(received.getOperationId());
+        var state = find(received.operationId());
         if (state == null) {
-            issues.open(null, received.getOperationId(), "RESULT_CONFLICT", "Неизвестная внешняя операция", received, received, cursor);
+            issues.open(null, received.operationId(), "RESULT_CONFLICT", "Неизвестная внешняя операция", received, received, cursor);
             return;
         }
-        try { ExchangeProtocol.same(new ExchangeProtocol.Identity(received.getOperationId(), received.getRequest()), identity(state)); }
+        try { identity(state).requireSame(received.identity()); }
         catch (IllegalArgumentException different) {
-            issues.open(state, received.getOperationId(), "RESULT_CONFLICT", "Запрос события не совпадает с заданием", received, received, cursor);
+            issues.open(state, received.operationId(), "RESULT_CONFLICT", "Запрос события не совпадает с заданием", received, received, cursor);
             return;
         }
         if (state.result() != null) {
-            int oldVersion = state.result().getVersion().getValue();
-            int newVersion = received.getVersion().getValue();
+            int oldVersion = state.result().version();
+            int newVersion = received.version();
             if (oldVersion == newVersion && state.result().equals(received)) return;
             if (oldVersion > newVersion) {
                 tasks.history(state.task(), null, HistoryType.RESULT_IGNORED, "Запоздалый снимок не изменил результат",
@@ -153,23 +153,23 @@ public class ExchangeTasks {
             return;
         }
         if (state.task().deliveryStatus() == DeliveryStatus.STOPPED) {
-            issues.open(state, received.getOperationId(), "RECONCILIATION_DIFFERENCE",
+            issues.open(state, received.operationId(), "RECONCILIATION_DIFFERENCE",
                 "Внешний снимок после остановки отправки требует решения оператора", received, received, cursor);
             return;
         }
-        if (state.result() != null && state.result().getVersion() == received.getVersion()) {
-            issues.open(state, received.getOperationId(), "RESULT_CONFLICT", "Разное содержимое одной версии результата", received, received, cursor);
+        if (state.result() != null && state.result().version() == received.version()) {
+            issues.open(state, received.operationId(), "RESULT_CONFLICT", "Разное содержимое одной версии результата", received, received, cursor);
             return;
         }
         apply(state, received, null);
     }
 
-    public void apply(TaskRepository.ExchangeTask state, Result result, UUID actor) {
+    public void apply(TaskRepository.ExchangeTask state, OperationResult result, UUID actor) {
         tasks.applyResult(result);
-        tasks.removeQueue(result.getOperationId());
+        tasks.removeQueue(result.operationId());
         issues.confirm(state);
         tasks.history(state.task(), actor, HistoryType.RESULT_APPLIED,
-            "Принят внешний результат: " + result.getStatus().getValue(), Map.of("resultVersion",result.getVersion().getValue()));
+            "Принят внешний результат: " + result.status().name(), Map.of("resultVersion",result.version()));
     }
 
     public void acknowledge(TaskRepository.ExchangeTask state) {
@@ -195,11 +195,11 @@ public class ExchangeTasks {
     }
 
     public static int delay(int attempts) { return switch(attempts) { case 1 -> 2; case 2 -> 5; case 3 -> 15; default -> 60; }; }
-    public static OperationInput input(TaskRepository.ExchangeTask state) {
-        return new OperationInput(state.task().request().reference(),state.task().request().quantity());
+    public static TaskInput input(TaskRepository.ExchangeTask state) {
+        return state.task().request();
     }
-    public static ExchangeProtocol.Identity identity(TaskRepository.ExchangeTask state) {
-        return new ExchangeProtocol.Identity(state.task().operationId(),input(state));
+    public static OperationIdentity identity(TaskRepository.ExchangeTask state) {
+        return new OperationIdentity(state.task().operationId(),input(state));
     }
 
     private UUID operationId(JsonNode raw) {

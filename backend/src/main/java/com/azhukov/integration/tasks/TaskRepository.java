@@ -55,9 +55,9 @@ public class TaskRepository implements TaskStore {
         return mapTask(rs,business,outcome);
     }
 
-    private com.azhukov.integration.contract.external.model.Result storedResult(java.sql.ResultSet rs) throws java.sql.SQLException {
+    private com.azhukov.integration.domain.exchange.OperationResult storedResult(java.sql.ResultSet rs) throws java.sql.SQLException {
         var value = rs.getString("accepted_result");
-        return value == null ? null : json.readValue(value,com.azhukov.integration.contract.external.model.Result.class);
+        return value == null ? null : json.readValue(value,com.azhukov.integration.domain.exchange.OperationResult.class);
     }
 
     private Task mapTask(java.sql.ResultSet rs, BusinessStatus business, TaskOutcome outcome) throws java.sql.SQLException {
@@ -75,7 +75,7 @@ public class TaskRepository implements TaskStore {
         return rows.stream().findFirst().orElseThrow(RuleViolation::notFound);
     }
 
-    public record ExchangeTask(Task task, long version, com.azhukov.integration.contract.external.model.Result result) {}
+    public record ExchangeTask(Task task, long version, com.azhukov.integration.domain.exchange.OperationResult result) {}
 
     public ExchangeTask exchange(UUID operationId, boolean lock) {
         return jdbc.query("SELECT * FROM tasks WHERE operation_id = ?" + (lock ? " FOR UPDATE" : ""),
@@ -87,7 +87,7 @@ public class TaskRepository implements TaskStore {
         var business = BusinessStatus.valueOf(rs.getString("business_status"));
         var result = storedResult(rs);
         var outcome = result != null && business.isTerminal()
-            ? new TaskOutcome(BusinessStatus.valueOf(result.getStatus().getValue()),result.getCompletedAt(),result.getRejectionCode())
+            ? new TaskOutcome(result.status(),result.completedAt(),result.rejectionCode())
             : null;
         return new ExchangeTask(mapTask(rs,business,outcome),rs.getLong("exchange_version"),result);
     }
@@ -235,9 +235,9 @@ public class TaskRepository implements TaskStore {
         jdbc.update("UPDATE tasks SET delivery_status = ?,exchange_version = exchange_version + 1 WHERE operation_id = ? AND delivery_status <> ?",status.name(),operation,status.name());
     }
 
-    public void applyResult(com.azhukov.integration.contract.external.model.Result result) {
+    public void applyResult(com.azhukov.integration.domain.exchange.OperationResult result) {
         jdbc.update("UPDATE tasks SET accepted_result = ?::jsonb,business_status = ?,delivery_status = 'ACKNOWLEDGED',exchange_version = exchange_version + 1 WHERE operation_id = ?",
-            json.writeValueAsString(result),result.getStatus().getValue(),result.getOperationId());
+            json.writeValueAsString(result),result.status().name(),result.operationId());
     }
 
     public long cursor(boolean lock) {
