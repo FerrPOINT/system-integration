@@ -72,8 +72,9 @@ function Shell({ user, appearance }: { user: GetSession200; appearance: ReactNod
     <main id="main" className="base-page-stack" tabIndex={-1}>
       <ErrorMessage error={logout.error} />
       <Routes>
-        <Route path="/tasks" element={<TaskList user={user} />} />
-        <Route path="/tasks/new" element={user.role === 'INITIATOR' ? <NewTask /> : <Navigate to="/tasks" replace />} />
+        <Route path="/tasks" element={<TaskList user={user} />}>
+          <Route path="new" element={user.role === 'INITIATOR' ? <NewTask /> : <Navigate to="/tasks" replace />} />
+        </Route>
         <Route path="/tasks/:id" element={<TaskCard user={user} />} />
         <Route path="/issues" element={user.role === 'OPERATOR' ? <IssueList /> : <Navigate to="/tasks" replace />} />
         <Route path="/issues/:id" element={user.role === 'OPERATOR' ? <IssueCard /> : <Navigate to="/tasks" replace />} />

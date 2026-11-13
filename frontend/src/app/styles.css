@@ -101,3 +101,6 @@ main { max-width: 1280px; padding: 26px 24px 56px; margin: 0 auto; }
 @media (max-width: 760px) {
   .app-shell > main { padding-bottom: 16px; }
 }
+
+.task-input-row { display: grid; grid-template-columns: minmax(0, 1fr) 140px; gap: 16px; align-items: start; }
+@media (max-width: 480px) { .task-input-row { grid-template-columns: 1fr; } }

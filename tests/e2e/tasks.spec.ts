@@ -9,6 +9,8 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
   await page.getByLabel('Номер заявки').fill('REQ-800001');
   await page.getByLabel('Количество *', { exact: true }).fill('25');
   await page.getByLabel('Количество *', { exact: true }).press('Tab');
+  await expect(page.getByRole('button', { name: 'Отмена', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Создать', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
@@ -155,7 +157,7 @@ test('TC-08: session refresh removes the previous owner cache before an in-place
   await page.getByLabel('Пароль *', { exact: true }).fill(process.env.SI_DEMO_PASSWORD!);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: 'Отмена', exact: true }).click();
+  await page.getByRole('button', { name: 'Отмена', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0);
 });

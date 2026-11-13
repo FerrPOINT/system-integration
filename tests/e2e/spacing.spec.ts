@@ -96,7 +96,7 @@ test('UI-08: task registry, editor, card and history use consistent section gaps
   await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toBeVisible();
   await expectGaps(page.locator('main'));
   await expectCards(page);
-  await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
+  await page.getByRole('button', { name: 'Отмена', exact: true }).click();
   await page.locator('.task-card h2 a, .task-table tbody a').first().click();
   await expect(page.getByRole('heading', { name: 'История', exact: true })).toBeVisible();
   await expect(page.locator('.base-timeline')).toBeVisible();
