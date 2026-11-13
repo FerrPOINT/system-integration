@@ -173,6 +173,7 @@ node tests/demo.mjs inspect <operation-id>
 
 ```sh
 corepack pnpm build
+corepack pnpm test:assets
 corepack pnpm test:api
 ```
 

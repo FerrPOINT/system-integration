@@ -6,12 +6,16 @@ export default defineConfig({
   plugins: [react(), {
     name: 'gzip-static-assets',
     apply: 'build',
-    generateBundle(_options, bundle) {
-      for (const [fileName, asset] of Object.entries(bundle)) {
-        if (!fileName.endsWith('.js') && !fileName.endsWith('.css')) continue;
-        const source = asset.type === 'chunk' ? asset.code : asset.source;
-        this.emitFile({ type: 'asset', fileName: fileName + '.gz', source: gzipSync(source, { level: 9 }) });
-      }
+    enforce: 'post',
+    generateBundle: {
+      order: 'post',
+      handler(_options, bundle) {
+        for (const [fileName, asset] of Object.entries(bundle)) {
+          if (!fileName.endsWith('.js') && !fileName.endsWith('.css')) continue;
+          const source = asset.type === 'chunk' ? asset.code : asset.source;
+          this.emitFile({ type: 'asset', fileName: fileName + '.gz', source: gzipSync(source, { level: 9 }) });
+        }
+      },
     },
   }],
   server: {
