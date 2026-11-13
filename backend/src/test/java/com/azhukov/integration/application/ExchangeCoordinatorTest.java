@@ -25,7 +25,7 @@ class ExchangeCoordinatorTest {
         var peak = new AtomicInteger();
         when(tasks.claim()).thenAnswer(call -> {
             if (claimed.incrementAndGet() > 40) return null;
-            return new DeliveryAttempt(UUID.randomUUID(), UUID.randomUUID(), "PUT", 1,
+            return new DeliveryAttempt(UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1,
                 new TaskInput("REQ-900001", 25));
         });
         when(client.deliver(any())).thenAnswer(call -> {
@@ -59,7 +59,7 @@ class ExchangeCoordinatorTest {
         when(tasks.claim()).thenAnswer(call -> {
             int n=claimed.incrementAndGet();
             peakUnfinishedClaims.accumulateAndGet(n-finished.get(),Math::max);
-            return new DeliveryAttempt(n==1 ? slow : UUID.randomUUID(),UUID.randomUUID(),"PUT",1,new TaskInput("REQ-900001",25));
+            return new DeliveryAttempt(n==1 ? slow : UUID.randomUUID(),UUID.randomUUID(),"PUT",1,1,new TaskInput("REQ-900001",25));
         });
         when(client.deliver(any())).thenAnswer(call -> {
             DeliveryAttempt attempt=call.getArgument(0);
@@ -97,7 +97,7 @@ class ExchangeCoordinatorTest {
         when(tasks.claim()).thenAnswer(call -> {
             int n=claimed.incrementAndGet();
             if (n>4) return null;
-            return new DeliveryAttempt(n==2 ? failed : UUID.randomUUID(),UUID.randomUUID(),"PUT",1,new TaskInput("REQ-900001",25));
+            return new DeliveryAttempt(n==2 ? failed : UUID.randomUUID(),UUID.randomUUID(),"PUT",1,1,new TaskInput("REQ-900001",25));
         });
         when(client.deliver(any())).thenAnswer(call -> {
             DeliveryAttempt attempt=call.getArgument(0);

@@ -66,36 +66,111 @@ class ExchangeWorkflowTest extends PostgresTest {
     }
 
     @Test
-    void prolongedOutageKeepsDurableBackoffAndRecoversWithoutAnOperator() throws Exception {
+    void automaticSeriesStopsAfterFiveFailuresAndDoesNotHideOtherWork() throws Exception {
         UUID id=created(login("initiator.one"),UUID.randomUUID());
         UUID operation=jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id = ?",UUID.class,id);
-        for (int n=1;n<=8;n++) {
+        for (int n=1;n<=5;n++) {
             dueNow();
             var attempt=exchange.claim();
             assertNotNull(attempt);
             assertEquals(n,attempt.number());
+            assertEquals(n,attempt.automaticNumber());
             assertEquals(operation,attempt.operationId());
             assertEquals(n==1 ? "PUT" : "GET",attempt.step());
             finish(exchange,attempt,new ExchangeReply(503,null,false));
-            int delay=DeliveryAttempt.delay(n);
-            double remaining=jdbc.queryForObject(
-                "SELECT extract(epoch FROM due_at-clock_timestamp()) FROM delivery_queue WHERE operation_id = ?",
-                Double.class,operation);
-            assertTrue(remaining>delay-1 && remaining<=delay,"The next attempt must use durable backoff");
-            assertNull(exchange.claim(),"A temporary failure must not cause an immediate retry");
+            if (n<5) {
+                int delay=DeliveryAttempt.delay(n);
+                double remaining=jdbc.queryForObject(
+                    "SELECT extract(epoch FROM due_at-clock_timestamp()) FROM delivery_queue WHERE operation_id = ?",
+                    Double.class,operation);
+                assertTrue(remaining>delay-1 && remaining<=delay);
+                assertNull(exchange.claim(),"Backoff must not be bypassed");
+            }
         }
-        assertEquals(1,count("exchange_issues"));
+        assertEquals("NEEDS_REVIEW",delivery(id));
+        assertEquals("PENDING",business(id));
         assertEquals("DELIVERY_DELAYED",jdbc.queryForObject("SELECT kind FROM exchange_issues",String.class));
-        dueNow();
-        var check=exchange.claim();
-        var state=ack(check).put("executions",0).putNull("result");
-        finish(exchange,check,new ExchangeReply(200,state,false));
-        assertEquals("ACKNOWLEDGED",delivery(id));
-        assertEquals(0,count("delivery_queue"));
-        assertEquals("RESOLVED",jdbc.queryForObject("SELECT status FROM exchange_issues",String.class));
-        consume(exchange,0,page(1,result(check,2,"SUCCEEDED")));
+        long history=count("task_history");
+        for (int n=0;n<8;n++) { dueNow();assertNull(exchange.claim()); }
+        assertEquals(5,count("delivery_attempts"));
+        assertEquals(history,count("task_history"));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE details->>'automaticAttemptLimit' IS NOT NULL",Integer.class));
+        UUID other=created(login("initiator.two"),UUID.randomUUID());
+        dueNow();var next=exchange.claim();assertNotNull(next);
+        assertEquals(jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?",UUID.class,other),next.operationId());
+    }
+
+    @Test
+    void successOnLastAttemptStillAcknowledgesAndAppliesItsResult() throws Exception {
+        UUID id=created(login("initiator.one"),UUID.randomUUID());
+        for (int n=1;n<5;n++) {
+            dueNow();var attempt=exchange.claim();finish(exchange,attempt,new ExchangeReply(503,null,false));
+        }
+        dueNow();var last=exchange.claim();assertEquals(5,last.automaticNumber());
+        finish(exchange,last,new ExchangeReply(200,ack(last).put("executions",0).putNull("result"),false));
+        assertEquals("ACKNOWLEDGED",delivery(id));assertEquals(0,count("delivery_queue"));
+        consume(exchange,0,page(1,result(last,2,"SUCCEEDED")));
         assertEquals("SUCCEEDED",business(id));
-        assertEquals(9,count("delivery_attempts"));
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE details->>'automaticAttemptLimit' IS NOT NULL",Integer.class));
+    }
+
+    @Test
+    void interruptedLastClaimPausesWithoutAnExtraGetAndIgnoresItsLateAck() throws Exception {
+        UUID id=created(login("initiator.one"),UUID.randomUUID());
+        for (int n=1;n<5;n++) { dueNow();finish(exchange,exchange.claim(),new ExchangeReply(503,null,false)); }
+        dueNow();var last=exchange.claim();
+        jdbc.update("UPDATE delivery_queue SET claimed_until=clock_timestamp()-interval '1 second'");
+        assertNull(exchange.claim());
+        assertEquals("NEEDS_REVIEW",delivery(id));
+        assertEquals("INTERRUPTED",jdbc.queryForObject("SELECT outcome FROM delivery_attempts WHERE id=?",String.class,last.attemptId()));
+        long pauses=jdbc.queryForObject("SELECT count(*) FROM task_history WHERE details->>'automaticAttemptLimit' IS NOT NULL",Long.class);
+        for (int n=0;n<4;n++) { dueNow();assertNull(exchange.claim()); }
+        finish(exchange,last,new ExchangeReply(200,ack(last).put("executions",0).putNull("result"),false));
+        assertEquals("NEEDS_REVIEW",delivery(id));
+        assertEquals(5,count("delivery_attempts"));assertEquals(1,pauses);
+        assertEquals(pauses,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE details->>'automaticAttemptLimit' IS NOT NULL",Long.class));
+    }
+
+    @Test
+    void historicalOverLimitQueueCannotAcquireAnotherNetworkAttempt() throws Exception {
+        UUID id=created(login("initiator.one"),UUID.randomUUID());
+        jdbc.update("UPDATE delivery_queue SET attempts=208,automatic_attempts=208");
+        assertNull(exchange.claim());
+        assertEquals("NEEDS_REVIEW",delivery(id));
+        assertEquals(0,count("delivery_attempts"));
+        assertEquals(208,jdbc.queryForObject("SELECT attempts FROM delivery_queue",Integer.class));
+        assertEquals(208,jdbc.queryForObject("SELECT automatic_attempts FROM delivery_queue",Integer.class));
+    }
+
+    @Test
+    void lateResultAfterExhaustionRemainsAnObservationForOperatorReview() throws Exception {
+        UUID id=created(login("initiator.one"),UUID.randomUUID());
+        DeliveryAttempt last=null;
+        for (int n=1;n<=5;n++) { dueNow();last=exchange.claim();finish(exchange,last,new ExchangeReply(503,null,false)); }
+        consume(exchange,0,page(1,result(last,2,"SUCCEEDED")));
+        assertEquals("NEEDS_REVIEW",delivery(id));assertEquals("PENDING",business(id));
+        assertEquals(1,exchange.cursor());
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='RESULT_APPLIED'",Integer.class));
+        assertEquals(1,count("delivery_queue"));
+    }
+
+    @Test
+    void failedPauseAuditRollsBackStateAndTheExpiredClaimStillCannotSendASixthAttempt() throws Exception {
+        UUID id=created(login("initiator.one"),UUID.randomUUID());
+        for (int n=1;n<5;n++) { dueNow();finish(exchange,exchange.claim(),new ExchangeReply(503,null,false)); }
+        dueNow();var last=exchange.claim();
+        jdbc.execute("ALTER TABLE task_history ADD CONSTRAINT si10_reject_pause CHECK (details->>'automaticAttemptLimit' IS NULL)");
+        try {
+            assertThrows(org.springframework.dao.DataAccessException.class,() -> finish(exchange,last,new ExchangeReply(503,null,false)));
+        } finally { jdbc.execute("ALTER TABLE task_history DROP CONSTRAINT si10_reject_pause"); }
+        assertEquals("UNKNOWN",delivery(id));
+        assertEquals(last.attemptId(),jdbc.queryForObject("SELECT claim_id FROM delivery_queue",UUID.class));
+        assertNull(jdbc.queryForObject("SELECT outcome FROM delivery_attempts WHERE id=?",String.class,last.attemptId()));
+        assertEquals("DELIVERY_UNCERTAIN",jdbc.queryForObject("SELECT kind FROM exchange_issues",String.class));
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE details->>'automaticAttemptLimit' IS NOT NULL",Integer.class));
+        jdbc.update("UPDATE delivery_queue SET claimed_until=clock_timestamp()-interval '1 second'");
+        assertNull(exchange.claim());assertEquals("NEEDS_REVIEW",delivery(id));
+        assertEquals(5,count("delivery_attempts"));
     }
 
     @Test

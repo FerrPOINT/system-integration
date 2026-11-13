@@ -40,7 +40,7 @@ public abstract class PostgresTest {
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> "jdbc:postgresql://127.0.0.1:19532/si_test");
+        registry.add("spring.datasource.url", () -> "jdbc:postgresql://127.0.0.1:19632/si_test");
         registry.add("spring.datasource.username", () -> "si_test");
         registry.add("spring.datasource.password", () -> System.getenv("SI_TEST_DB_PASSWORD"));
     }

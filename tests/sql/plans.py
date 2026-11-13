@@ -5,7 +5,7 @@ import datetime, hashlib, itertools, json, re, subprocess, textwrap
 ROOT=Path(__file__).resolve().parents[2]
 if Path.cwd().resolve()!=ROOT:raise RuntimeError('Run from the repository root')
 OUT=ROOT/'tests/results/sql-plans'
-CONTAINER='system-integration-postgres-1'
+CONTAINER='system-integration-load-postgres-1'
 def uid(n): return f'00000000-0000-0000-0000-{n:012d}'
 T,O,U,I,R,K,C=uid(1),uid(100001),uid(900001),uid(200001),uid(300001),uid(400001),uid(800001)
 NT,NO=uid(10001),uid(110001)
@@ -37,16 +37,16 @@ params={
 'TaskRepository.history/5:1':[uid(600001),T,O,'USER',U,'RENAMED','probe','{}'],'TaskRepository.countHistory/1:1':[T],'TaskRepository.history/2:1':[T,0],
 'TaskRepository.lockDueExchange/0:1':[],'TaskRepository.lockQueue/1:1':[O],'TaskRepository.startAttempt/4:1':[C,2,O],'TaskRepository.startAttempt/4:2':[C,O,2,'PUT'],
 'TaskRepository.finishAttempt/2:1':['ACK',uid(500002)],'TaskRepository.ownsClaim/2:1':[uid(100002),uid(500002)],
-'TaskRepository.scheduleAfterInterruptedClaim/3:1':['2026-01-01T00:00:00Z',5,O],'TaskRepository.scheduleRetry/3:1':['GET',5,O],'TaskRepository.pauseQueue/1:1':[O],
+'TaskRepository.scheduleAfterInterruptedClaim/3:1':['2026-01-01T00:00:00Z',5,O],'TaskRepository.scheduleRetry/3:1':['GET',5,O],'TaskRepository.pauseQueue/1:1':[O],'TaskRepository.resumeDelivery/1:1':[O],
 'TaskRepository.removeQueue/1:1':[O],'TaskRepository.delivery/2:1':['RETRY_WAIT',O,'RETRY_WAIT'],'TaskRepository.applyResult/1:1':[result,'SUCCEEDED',O],
 'TaskRepository.advanceCursor/1:1':[100],
 'ReviewRepository.open/6:1':[uid(210001),T,O,O,'new-fingerprint','PROTOCOL_ERROR','probe','{}'],
-'ReviewRepository.open/6:2':[O,'seed'],'ReviewRepository.temporary/1:1':[uid(2)],'ReviewRepository.delay/2:1':['probe',uid(200002)],'ReviewRepository.confirm/1:1':[uid(2)],
+'ReviewRepository.open/6:2':[O,'seed'],'ReviewRepository.temporary/1:1':[uid(2)],'ReviewRepository.delay/2:1':['probe',uid(200002),'probe'],'ReviewRepository.confirm/1:1':[uid(2)],
 'ReviewRepository.protocol/3:1':['probe','{}',uid(200002)],'ReviewRepository.observe/2:1':[T],
 'ReviewRepository.observe/2:2':[uid(600002),T,O,'{"resultVersion":2}',result,'observation'],
 'ReviewRepository.count/1:1':[],'ReviewRepository.count/1:2':['OPEN'],'ReviewRepository.assign/2:1':[uid(900003),I],
 'ReviewRepository.active/1:1':[T],'ReviewRepository.saveReconciliation/2:1':[uid(310001),T,1,'2026-01-01T00:00:00Z',uid(900003),'{}'],
-'ReviewRepository.saveReconciliation/2:2':[R,T],'ReviewRepository.reconciliation/2:1':[R,T],'ReviewRepository.resumeProtocol/1:1':[I],'ReviewRepository.advanceRevision/1:1':[I],
+'ReviewRepository.saveReconciliation/2:2':[R,T],'ReviewRepository.reconciliation/2:1':[R,T],'ReviewRepository.resumeDelivery/2:1':['probe',I],
 'ReviewRepository.resolve/2:1':['{"decision":"STOP","reason":"probe"}',I],
 'OperationRepository.get/1:1':[O],'OperationRepository.lockNext/0:1':[],'OperationRepository.events/2:1':[0,100],
 'OperationRepository.fault/1:1':[O],'OperationRepository.event/3:1':[O,1,1,result,False],

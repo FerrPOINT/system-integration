@@ -3,6 +3,7 @@ package com.azhukov.integration.application;
 import com.azhukov.integration.application.port.ReviewStore;
 import com.azhukov.integration.application.port.TaskStore;
 import com.azhukov.integration.domain.exchange.ExchangeState;
+import com.azhukov.integration.domain.exchange.DeliveryAttempt;
 import com.azhukov.integration.domain.exchange.LocalSnapshot;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.review.Evidence;
@@ -18,7 +19,8 @@ import java.util.UUID;
 @Service
 @Transactional(propagation=Propagation.MANDATORY)
 public class IssueService {
-    private static final String DELAYED="Доставка задерживается после четырёх попыток";
+    private static final String DELAYED="Автоматическая доставка приостановлена: исчерпан лимит "
+        + DeliveryAttempt.MAX_AUTOMATIC_ATTEMPTS + " попыток";
     private final ReviewStore issues;
     private final TaskStore tasks;
 
@@ -42,6 +44,15 @@ public class IssueService {
         String reason=delayed ? DELAYED : "Получение операции исполнителем пока не подтверждено";
         open(state,state.task().operationId(),delayed ? Issue.Kind.DELIVERY_DELAYED : Issue.Kind.DELIVERY_UNCERTAIN,
             reason,reason,null,null);
+    }
+
+    public void exhausted(ExchangeState state,int automaticAttempts,UUID lastAttempt) {
+        temporary(state,true);
+        var details=new java.util.LinkedHashMap<String,Object>();
+        details.put("automaticAttempts",automaticAttempts);
+        details.put("automaticAttemptLimit",DeliveryAttempt.MAX_AUTOMATIC_ATTEMPTS);
+        if (lastAttempt!=null) details.put("attemptId",lastAttempt);
+        tasks.history(state.task(),null,HistoryType.DELIVERY_ATTEMPT,DELAYED,details);
     }
 
     public void confirm(ExchangeState state) {

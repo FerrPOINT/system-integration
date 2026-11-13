@@ -34,11 +34,19 @@ public class ExchangeTasks {
         var queue = tasks.lockQueue(state.task().operationId());
         if (queue.claim() != null) {
             tasks.finishAttempt(queue.claim(),"INTERRUPTED");
-            tasks.scheduleAfterInterruptedClaim(state.task().operationId(),queue.until(),DeliveryAttempt.delay(queue.attempts()));
+            if (DeliveryAttempt.exhausted(queue.automaticAttempts())) {
+                pauseAutomaticSeries(state,queue.automaticAttempts(),queue.claim());
+                return null;
+            }
+            tasks.scheduleAfterInterruptedClaim(state.task().operationId(),queue.until(),DeliveryAttempt.delay(queue.automaticAttempts()));
             state = delivery(state, DeliveryStatus.UNKNOWN);
-            issues.temporary(state, queue.attempts() >= 4);
+            issues.temporary(state, false);
             tasks.history(state.task(), null, HistoryType.DELIVERY_UNCERTAIN,
                 "Прерванная попытка: следующее действие — уточняющий GET", Map.of("attemptId",queue.claim()));
+            return null;
+        }
+        if (DeliveryAttempt.exhausted(queue.automaticAttempts())) {
+            pauseAutomaticSeries(state,queue.automaticAttempts(),null);
             return null;
         }
         UUID claim = UUID.randomUUID();
@@ -46,7 +54,7 @@ public class ExchangeTasks {
         tasks.startAttempt(state.task().operationId(),claim,queue.step(),number);
         tasks.history(state.task(), null, HistoryType.DELIVERY_ATTEMPT,
             "Попытка " + number + ": " + queue.step(), Map.of("attemptId",claim));
-        return new DeliveryAttempt(state.task().operationId(), claim, queue.step(), number, state.task().request());
+        return new DeliveryAttempt(state.task().operationId(), claim, queue.step(), number, queue.automaticAttempts()+1, state.task().request());
     }
 
     @Transactional
@@ -65,6 +73,11 @@ public class ExchangeTasks {
             finishAttempt(claim,"ACKNOWLEDGED");
             return;
         }
+        if (decision.limitReached()) {
+            pauseAutomaticSeries(state,claim.automaticNumber(),claim.attemptId());
+            finishAttempt(claim,reply.outcome().name());
+            return;
+        }
         if (decision.status()==DeliveryStatus.NEEDS_REVIEW) {
             issues.protocol(state,reply.protocolFailure(),reply.evidence());
             state=delivery(state,DeliveryStatus.NEEDS_REVIEW);
@@ -74,7 +87,7 @@ public class ExchangeTasks {
         }
         state=delivery(state,decision.status());
         tasks.scheduleRetry(claim.operationId(),decision.nextStep(),decision.delaySeconds());
-        if (decision.temporaryIssue()) issues.temporary(state,claim.number()>=4);
+        if (decision.temporaryIssue()) issues.temporary(state,false);
         if (decision.uncertainHistory()) tasks.history(state.task(),null,HistoryType.DELIVERY_UNCERTAIN,
             "Исход доставки неизвестен; запланирован уточняющий GET",Map.of("attemptId",claim.attemptId()));
         finishAttempt(claim,reply.outcome().name());
@@ -140,6 +153,12 @@ public class ExchangeTasks {
         tasks.history(state.task(), actor, HistoryType.RESULT_APPLIED,
             "Принят внешний результат: " + result.status().name(), Map.of("resultVersion",result.version()));
         return state.withAppliedResult(result);
+    }
+
+    private void pauseAutomaticSeries(ExchangeState state,int automaticAttempts,UUID lastAttempt) {
+        state=delivery(state,DeliveryStatus.NEEDS_REVIEW);
+        tasks.pauseQueue(state.task().operationId());
+        issues.exhausted(state,automaticAttempts,lastAttempt);
     }
 
     private void acknowledge(ExchangeState state) {

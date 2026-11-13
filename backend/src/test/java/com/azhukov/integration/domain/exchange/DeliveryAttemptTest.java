@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class DeliveryAttemptTest {
     private DeliveryAttempt attempt(String step,int number) {
-        return new DeliveryAttempt(UUID.randomUUID(),UUID.randomUUID(),step,number,new TaskInput("REQ-000001",25));
+        return new DeliveryAttempt(UUID.randomUUID(),UUID.randomUUID(),step,number,number,new TaskInput("REQ-000001",25));
     }
 
     @Test
@@ -27,11 +27,34 @@ class DeliveryAttemptTest {
 
     @Test
     void delayAndEscalationRetainTheSameCounterAcrossGetAndPut() {
-        for (int n=1;n<=8;n++) {
-            assertEquals(new int[]{2,5,15,60,60,60,60,60}[n-1],attempt("PUT",n).decide(CONNECT_FAILED).delaySeconds());
-            assertEquals(n>=4,attempt("PUT",n).decide(CONNECT_FAILED).temporaryIssue());
+        for (int n=1;n<5;n++) {
+            assertEquals(new int[]{2,5,15,60}[n-1],attempt("PUT",n).decide(CONNECT_FAILED).delaySeconds());
+            assertFalse(attempt("PUT",n).decide(CONNECT_FAILED).temporaryIssue());
             assertTrue(attempt("GET",n).decide(TEMPORARY_FAILURE).temporaryIssue());
         }
+    }
+
+    @Test
+    void fifthFailureStopsTheSeriesButFifthSuccessStillConfirmsDelivery() {
+        for (var step:new String[]{"PUT","GET"}) {
+            for (var failure:new DeliveryAttempt.Outcome[]{CONNECT_FAILED,TEMPORARY_FAILURE,NOT_FOUND}) {
+                var last=attempt(step,5).decide(failure);
+                assertEquals(DeliveryStatus.NEEDS_REVIEW,last.status());
+                assertNull(last.nextStep());
+            }
+            assertEquals(DeliveryStatus.ACKNOWLEDGED,attempt(step,5).decide(ACKNOWLEDGED).status());
+        }
+        assertNotNull(attempt("PUT",4).decide(CONNECT_FAILED).nextStep());
+    }
+
+    @Test
+    void aNewSeriesUsesItsOwnCounterWithoutRenumberingHistory() {
+        var next=new DeliveryAttempt(UUID.randomUUID(),UUID.randomUUID(),"GET",201,1,new TaskInput("REQ-000001",25));
+        assertEquals(2,next.decide(TEMPORARY_FAILURE).delaySeconds());
+        assertFalse(next.decide(TEMPORARY_FAILURE).limitReached());
+        assertTrue(DeliveryAttempt.exhausted(5));
+        assertTrue(DeliveryAttempt.exhausted(200));
+        assertFalse(DeliveryAttempt.exhausted(4));
     }
 
     @Test

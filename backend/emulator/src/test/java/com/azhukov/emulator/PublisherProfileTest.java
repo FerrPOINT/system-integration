@@ -26,7 +26,7 @@ class PublisherProfileTest {
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry properties) {
-        properties.add("spring.datasource.url",() -> "jdbc:postgresql://127.0.0.1:19532/si_emulator_test");
+        properties.add("spring.datasource.url",() -> "jdbc:postgresql://127.0.0.1:19632/si_emulator_test");
         properties.add("spring.datasource.username",() -> "si_emulator_test");
         properties.add("spring.datasource.password",() -> System.getenv("SI_EMULATOR_TEST_DB_PASSWORD"));
     }

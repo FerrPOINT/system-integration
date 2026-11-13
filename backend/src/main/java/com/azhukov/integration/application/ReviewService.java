@@ -128,21 +128,18 @@ public class ReviewService {
         return commands.execute(user.id(),Command.RETRY_EXCHANGE,key,new Target(id,input),Issue.class,() -> {
             var context=loadContext(id,user,true);
             context.requireRevision(input.expectedIssueRevision());
-            boolean protocolError=context.issue().kind()==Issue.Kind.PROTOCOL_ERROR;
-            if (protocolError) context.requireFresh(input.reconciliationId());
+            context.requireFresh(input.reconciliationId());
             context.requireAction(user.id(),RETRY);
             var queue=tasks.lockQueue(context.state().task().operationId());
             if (queue.claim()!=null)
                 throw new RuleViolation(RuleViolation.Code.ACTION_NOT_ALLOWED,"Действие недоступно в текущем состоянии");
-            tasks.scheduleRetry(context.state().task().operationId(),protocolError ? "GET" : queue.step(),0);
-            if (protocolError) {
-                tasks.delivery(context.state().task().operationId(),DeliveryStatus.UNKNOWN);
-                issues.resumeProtocol(id);
-            } else issues.advanceRevision(id);
+            tasks.resumeDelivery(context.state().task().operationId());
+            tasks.delivery(context.state().task().operationId(),DeliveryStatus.UNKNOWN);
+            issues.resumeDelivery(id,"Продолжение доставки разрешено оператором");
             var details=new LinkedHashMap<String,Object>(); details.put("issueId",id);
             if (input.reconciliationId()!=null) details.put("reconciliationId",input.reconciliationId());
             tasks.history(context.state().task(),user.id(),HistoryType.RETRY_QUEUED,
-                "Повтор назначен оператором: "+input.reason(),details);
+                "Новая серия доставки разрешена оператором: "+input.reason(),details);
             return loadContext(id,user,false).view(user.id());
         });
     }
@@ -160,8 +157,7 @@ public class ReviewService {
             issues.resolve(id,resolution);
             if (input.action()==IssueResolution.Action.APPLY_EXTERNAL_RESULT)
                 exchange.apply(context.state(),context.external().result(),user.id());
-            else if (context.issue().kind()==Issue.Kind.PROTOCOL_ERROR &&
-                context.state().task().deliveryStatus()==DeliveryStatus.NEEDS_REVIEW) {
+            else if (context.pausedDelivery()) {
                 tasks.delivery(context.state().task().operationId(),DeliveryStatus.STOPPED);
                 tasks.removeQueue(context.state().task().operationId());
             }

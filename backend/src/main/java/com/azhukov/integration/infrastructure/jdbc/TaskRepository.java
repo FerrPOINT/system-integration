@@ -207,12 +207,12 @@ public class TaskRepository implements TaskStore {
 
     public Queue lockQueue(UUID id) {
         return jdbc.queryForObject("SELECT * FROM delivery_queue WHERE operation_id = ? FOR UPDATE",(rs,n) ->
-            new Queue(rs.getString("next_step"),rs.getInt("attempts"),rs.getObject("claim_id",UUID.class),
+            new Queue(rs.getString("next_step"),rs.getInt("attempts"),rs.getInt("automatic_attempts"),rs.getObject("claim_id",UUID.class),
                 rs.getObject("claimed_until",OffsetDateTime.class)),id);
     }
 
     public void startAttempt(UUID operation, UUID claim, String step, int number) {
-        jdbc.update("UPDATE delivery_queue SET claim_id = ?,claimed_until = clock_timestamp() + interval '15 seconds',attempts = ? WHERE operation_id = ?",claim,number,operation);
+        jdbc.update("UPDATE delivery_queue SET claim_id = ?,claimed_until = clock_timestamp() + interval '15 seconds',attempts = ?,automatic_attempts = automatic_attempts + 1 WHERE operation_id = ?",claim,number,operation);
         jdbc.update("INSERT INTO delivery_attempts(id,operation_id,number,step) VALUES (?,?,?,?)",claim,operation,number,step);
     }
 
@@ -230,6 +230,10 @@ public class TaskRepository implements TaskStore {
 
     public void scheduleRetry(UUID operation, String step, int seconds) {
         jdbc.update("UPDATE delivery_queue SET next_step = ?,due_at = clock_timestamp() + (? * interval '1 second'),claim_id = NULL,claimed_until = NULL WHERE operation_id = ?",step,seconds,operation);
+    }
+
+    public void resumeDelivery(UUID operation) {
+        jdbc.update("UPDATE delivery_queue SET automatic_attempts = 0,next_step = 'GET',due_at = clock_timestamp(),claim_id = NULL,claimed_until = NULL WHERE operation_id = ?",operation);
     }
 
     public void pauseQueue(UUID operation) {

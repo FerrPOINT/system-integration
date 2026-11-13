@@ -44,8 +44,8 @@ public class ReviewRepository implements ReviewStore {
     public void delay(UUID id,String reason) {
         jdbc.update("""
             UPDATE exchange_issues SET kind = 'DELIVERY_DELAYED',summary = ?,
-            issue_revision = issue_revision + 1 WHERE id = ? AND kind <> 'DELIVERY_DELAYED'
-            """,reason,id);
+            issue_revision = issue_revision + 1 WHERE id = ? AND (kind <> 'DELIVERY_DELAYED' OR summary IS DISTINCT FROM ?)
+            """,reason,id,reason);
     }
 
     public List<UUID> confirm(UUID task) {
@@ -62,7 +62,7 @@ public class ReviewRepository implements ReviewStore {
 
     public void observe(ExchangeState state,OperationResult result) {
         UUID issue=jdbc.queryForObject("""
-            SELECT id FROM exchange_issues WHERE task_id = ? AND status = 'OPEN' AND kind = 'PROTOCOL_ERROR'
+            SELECT id FROM exchange_issues WHERE task_id = ? AND status = 'OPEN' AND kind IN ('PROTOCOL_ERROR','DELIVERY_DELAYED')
             ORDER BY opened_at DESC LIMIT 1
             """,UUID.class,state.task().id());
         jdbc.update("""
@@ -141,12 +141,8 @@ public class ReviewRepository implements ReviewStore {
             .collect(java.util.stream.Collectors.toMap(row -> row.value().reconciliationId(),row -> row));
     }
 
-    public void resumeProtocol(UUID id) {
-        jdbc.update("UPDATE exchange_issues SET kind = 'DELIVERY_UNCERTAIN',issue_revision = issue_revision + 1 WHERE id = ?",id);
-    }
-
-    public void advanceRevision(UUID id) {
-        jdbc.update("UPDATE exchange_issues SET issue_revision = issue_revision + 1 WHERE id = ?",id);
+    public void resumeDelivery(UUID id,String summary) {
+        jdbc.update("UPDATE exchange_issues SET kind = 'DELIVERY_UNCERTAIN',summary = ?,issue_revision = issue_revision + 1 WHERE id = ?",summary,id);
     }
 
     public void resolve(UUID id,IssueResolution resolution) {

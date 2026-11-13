@@ -7,17 +7,17 @@ import { fileURLToPath } from 'node:url';
 
 // Diagnostic only: no load qualification, no application restart, no ordinary-DB mutations.
 assert.equal(process.cwd(),fileURLToPath(new URL('../..',import.meta.url)).replace(/\/$/,''),'Run from the repository root');
-const active=execFileSync('docker',['exec','system-integration-postgres-1','psql','-XqAt','-U','si_admin','-d','postgres','-c',"SELECT count(*) FROM pg_stat_activity WHERE datname IN ('si_test','si_emulator_test')"],{encoding:'utf8'}).trim();
+const active=execFileSync('docker',['exec','system-integration-load-postgres-1','psql','-XqAt','-U','si_admin','-d','postgres','-c',"SELECT count(*) FROM pg_stat_activity WHERE datname IN ('si_test','si_emulator_test')"],{encoding:'utf8'}).trim();
 assert.equal(active,'0','Test databases must have no active sessions');
-const services=['backend','postgres','emulator','frontend'];
+const services=['postgres'];
 const resources=services.map(service => {
- const [container]=JSON.parse(execFileSync('docker',['inspect','system-integration-'+service+'-1'],{encoding:'utf8'}));
- assert.equal(container.Config.Labels['com.docker.compose.project'],'system-integration');
+ const [container]=JSON.parse(execFileSync('docker',['inspect','system-integration-load-'+service+'-1'],{encoding:'utf8'}));
+ assert.equal(container.Config.Labels['com.docker.compose.project'],'system-integration-load');
  return {service,containerId:container.Id,startedAt:container.State.StartedAt};
 });
 const sessions=[];
 function session(label) {
- const child=spawn('docker',['exec','-i','system-integration-postgres-1','psql','-XqAt','-v','ON_ERROR_STOP=1','-U','si_test','-d','si_test'],{stdio:['pipe','pipe','pipe']});
+ const child=spawn('docker',['exec','-i','system-integration-load-postgres-1','psql','-XqAt','-v','ON_ERROR_STOP=1','-U','si_test','-d','si_test'],{stdio:['pipe','pipe','pipe']});
  sessions.push(child);
  let buffer='';
  const ready=new Promise((resolve,reject) => {

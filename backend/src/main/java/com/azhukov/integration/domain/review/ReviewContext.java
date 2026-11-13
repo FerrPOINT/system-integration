@@ -25,13 +25,15 @@ public record ReviewContext(Issue issue, boolean queueFree, ExchangeState state,
         var actions=new ArrayList<Issue.Action>();
         if (!operator.equals(issue.assignedTo())) actions.add(TAKE_OWNERSHIP);
         actions.add(RECONCILE);
-        if (issue.kind()==Issue.Kind.DELIVERY_DELAYED && queueFree) actions.add(RETRY);
         var external=fresh() ? external() : null;
         boolean protocolError=issue.kind()==Issue.Kind.PROTOCOL_ERROR;
-        if (protocolError && state.task().deliveryStatus()==DeliveryStatus.NEEDS_REVIEW && queueFree && fresh() &&
+        boolean delayed=issue.kind()==Issue.Kind.DELIVERY_DELAYED;
+        boolean retryable=pausedDelivery() || (delayed && (state.task().deliveryStatus()==DeliveryStatus.UNKNOWN
+            || state.task().deliveryStatus()==DeliveryStatus.RETRY_WAIT || state.task().deliveryStatus()==DeliveryStatus.QUEUED));
+        if (retryable && queueFree && fresh() &&
             reconciliation.externalAvailability()!=Reconciliation.Availability.UNAVAILABLE &&
             (external==null || (sameIdentity(state,external) && external.executions()==0))) actions.add(RETRY);
-        boolean reviewKind=protocolError || issue.kind()==Issue.Kind.RESULT_CONFLICT || issue.kind()==Issue.Kind.RECONCILIATION_DIFFERENCE;
+        boolean reviewKind=protocolError || pausedDelivery() || issue.kind()==Issue.Kind.RESULT_CONFLICT || issue.kind()==Issue.Kind.RECONCILIATION_DIFFERENCE;
         if (reviewKind && fresh() && reconciliation.outcome()!=Reconciliation.Outcome.UNAVAILABLE) {
             actions.add(ACKNOWLEDGE_DIFFERENCE);
             var result=external==null ? null : external.result();
@@ -39,6 +41,11 @@ public record ReviewContext(Issue issue, boolean queueFree, ExchangeState state,
                 (state.result()==null || result.version()>state.result().version())) actions.add(APPLY_EXTERNAL_RESULT);
         }
         return List.copyOf(actions);
+    }
+
+    public boolean pausedDelivery() {
+        return state!=null && state.task().deliveryStatus()==DeliveryStatus.NEEDS_REVIEW &&
+            (issue.kind()==Issue.Kind.PROTOCOL_ERROR || issue.kind()==Issue.Kind.DELIVERY_DELAYED);
     }
 
     public Issue view(UUID operator) { return issue.withActions(actions(operator)); }

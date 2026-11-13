@@ -471,13 +471,14 @@ paths:
       tags: [Operations]
       summary: Поставить разрешённый повтор в очередь
       description: |
-        Только оператор. DELIVERY_DELAYED переносит следующий шаг на текущее время.
-        Для PROTOCOL_ERROR требует актуальный reconciliationId и NEEDS_REVIEW,
-        сверка должна подтвердить отсутствие операции или тот же запрос и executions = 0.
+        Только оператор. Новая команда требует актуальный reconciliationId,
+        причину, версию проблемы и свободный захват.
+        Сверка подтверждает отсутствие операции либо тот же запрос и executions = 0.
         Готовый итог применяется через resolve с APPLY_EXTERNAL_RESULT.
-        Назначает GET и переводит проблему в DELIVERY_UNCERTAIN.
-        Проверяет свободный захват, сохраняет ID и счётчик попыток.
-        Повтор ключа возвращает исходное подтверждение команды.
+        Начинает новую серию из максимум пяти автоматических вызовов с GET,
+        переводит проблему в DELIVERY_UNCERTAIN. ID и общий номер попытки сохраняются.
+        Повтор исходного ключа и тела возвращает сохранённое подтверждение,
+        включая исторические команды, без нового сброса счётчика серии.
       parameters:
         - $ref: '#/components/parameters/Csrf'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -912,7 +913,7 @@ components:
         kind:
           type: string
           enum: [DELIVERY_UNCERTAIN, DELIVERY_DELAYED, PROTOCOL_ERROR, RESULT_CONFLICT, RECONCILIATION_DIFFERENCE]
-          description: DELIVERY_DELAYED означает длительную задержку после четвёртой попытки. Следующие попытки назначаются по общей очереди.
+          description: DELIVERY_DELAYED означает остановку после исчерпания пяти автоматических попыток серии. Для продолжения требуется решение оператора со свежей сверкой.
         status:
           $ref: '#/components/schemas/IssueStatus'
         openedAt:
@@ -1037,7 +1038,7 @@ components:
         reconciliationId:
           type: string
           format: uuid
-          description: Обязателен для возобновления после PROTOCOL_ERROR.
+          description: Обязателен для любой новой команды повтора. Отсутствие допускается только при replay ранее сохранённой команды с тем же исходным телом и ключом.
     ResolutionAction:
       type: string
       enum: [APPLY_EXTERNAL_RESULT, ACKNOWLEDGE_DIFFERENCE]

@@ -26,7 +26,6 @@ public interface ReviewStore {
     void saveReconciliation(Reconciliation value, long version);
     SavedReconciliation reconciliation(UUID task, UUID id);
     Map<UUID,SavedReconciliation> reconciliations(List<UUID> ids);
-    void resumeProtocol(UUID id);
-    void advanceRevision(UUID id);
+    void resumeDelivery(UUID id,String summary);
     void resolve(UUID id, IssueResolution resolution);
 }

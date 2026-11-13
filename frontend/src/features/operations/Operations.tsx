@@ -20,7 +20,7 @@ import { useCommandKey } from '../../app/use-command-key';
 import { Loading, Pagination } from '../../ui/Feedback';
 
 const kinds: Record<IssueKind, string> = {
-  DELIVERY_UNCERTAIN: 'Доставка не подтверждена', DELIVERY_DELAYED: 'Длительная задержка', PROTOCOL_ERROR: 'Ошибка протокола',
+  DELIVERY_UNCERTAIN: 'Доставка не подтверждена', DELIVERY_DELAYED: 'Лимит попыток исчерпан', PROTOCOL_ERROR: 'Ошибка протокола',
   RESULT_CONFLICT: 'Конфликт результата', RECONCILIATION_DIFFERENCE: 'Расхождение при сверке',
 };
 const outcomes = { MATCH: 'Состояния совпадают', DIFFERENCE: 'Обнаружено расхождение', UNAVAILABLE: 'Сверка недоступна' };
@@ -134,7 +134,7 @@ function IssueActions({ issue }: { issue: Issue }) {
     </ActionGroup>
     <ErrorMessage error={take.error} />
     {decisions.length > 0 ? <DecisionForm issue={issue} actions={decisions} /> :
-      issue.taskId && <p className="muted">Чтобы принять решение, выполните свежую сверку. Сетевые попытки продолжаются по расписанию, если отправка не приостановлена.</p>}
+      issue.taskId && <p className="muted">Чтобы принять решение, выполните свежую сверку. Автоматические попытки приостановленной доставки не возобновляются без решения оператора.</p>}
   </div>;
 }
 
@@ -148,8 +148,8 @@ function DecisionForm({ issue, actions }: { issue: Issue; actions: DecisionActio
       if (!action || !actions.includes(action)) throw new Error('Выберите доступное действие');
       const input = { expectedIssueRevision: issue.issueRevision, reason, reconciliationId: issue.latestReconciliationId };
       const headers = { ...await csrf(), 'Idempotency-Key': command.forInput({ id: issue.issueId, action, input }) };
-      if (action === 'RETRY') return data(retryExchange(issue.issueId, input, headers));
       if (!issue.latestReconciliationId) throw new Error('Сначала выполните сверку');
+      if (action === 'RETRY') return data(retryExchange(issue.issueId, input, headers));
       return data(resolveExchangeIssue(issue.issueId, { ...input, reconciliationId: issue.latestReconciliationId, action }, headers));
     },
     onSuccess: async () => { await refresh(); command.reset(); setReason(''); setAction(''); },
@@ -157,7 +157,7 @@ function DecisionForm({ issue, actions }: { issue: Issue; actions: DecisionActio
   return <form className="base-form edit-form" onSubmit={event => { event.preventDefault(); decide.mutate(); }}>
     <FormField id="decision-action" label="Действие" required>{attrs => <Select {...attrs} value={action} placeholder="Выберите действие"
       onValueChange={value => setAction(value as DecisionAction)} options={actions.map(value => ({ value, label: actionLabels[value] }))} />}</FormField>
-    {action === 'ACKNOWLEDGE_DIFFERENCE' && <Notice>Локальный результат сохранится. Приостановленная из-за ошибки протокола отправка будет окончательно остановлена.</Notice>}
+    {action === 'ACKNOWLEDGE_DIFFERENCE' && <Notice>Локальный результат сохранится. Приостановленная доставка будет окончательно остановлена.</Notice>}
     {issue.latestReconciliationId && issue.taskId && <Link to={'/tasks/' + issue.taskId + '/reconciliations/' + issue.latestReconciliationId}>Сверка для этого решения</Link>}
     <FormField id="decision-reason" label="Причина решения" required>{attrs => <Textarea {...attrs} value={reason} maxLength={500} rows={3} onChange={event => setReason(event.target.value)} />}</FormField>
     <ErrorMessage error={decide.error} />

@@ -7,7 +7,7 @@ python3 tests/sql/plans.py
 ~~~
 
 Скрипт использует Python standard library, Docker CLI и psql действующего
-контейнера system-integration-postgres-1. Не запускайте его параллельно с
+контейнера system-integration-load-postgres-1. Не запускайте его параллельно с
 интеграционными тестами, recovery или нагрузкой.
 
 Проверяет JDBC-вызовы исходников приложения/эмулятора и явно заданные варианты

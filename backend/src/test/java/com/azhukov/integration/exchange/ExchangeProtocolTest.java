@@ -132,7 +132,7 @@ class ExchangeProtocolTest {
             new Case("PUT",0,null,true,DeliveryAttempt.Outcome.CONNECT_FAILED),
             new Case("PUT",0,null,false,DeliveryAttempt.Outcome.TEMPORARY_FAILURE),
             new Case("PUT",503,null,false,DeliveryAttempt.Outcome.TEMPORARY_FAILURE))) {
-            var attempt=new DeliveryAttempt(identity.id(),UUID.randomUUID(),probe.step(),1,identity.request());
+            var attempt=new DeliveryAttempt(identity.id(),UUID.randomUUID(),probe.step(),1,1,identity.request());
             var decoded=protocol.delivery(attempt,new ExchangeReply(probe.status(),probe.body(),probe.failed()));
             assertEquals(probe.expected(),decoded.outcome(),probe.toString());
             assertEquals(probe.status(),decoded.httpStatus());

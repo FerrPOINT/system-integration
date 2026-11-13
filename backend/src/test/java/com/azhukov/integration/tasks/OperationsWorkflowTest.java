@@ -281,22 +281,116 @@ class OperationsWorkflowTest extends PostgresTest {
     }
 
     @Test
-    void delayedRetryAdvancesTheExistingQueueAndRejectsConcurrentStaleVersion() throws Exception {
+    void operatorStartsOneFreshSeriesWhileReplayAndStaleCommandsCannotResetItAgain() throws Exception {
         UUID task=created(login("initiator.one"),UUID.randomUUID());
         DeliveryAttempt claim=null;
-        for (int n=1;n<=4;n++) {
-            claim=exchange.claim(); assertEquals(n,claim.number());
+        for (int n=1;n<=5;n++) {
+            jdbc.update("UPDATE delivery_queue SET due_at=clock_timestamp()-interval '1 second'");
+            claim=exchange.claim();assertEquals(n,claim.number());
             finish(exchange,claim,new ExchangeReply(0,null,true));
-            if (n<4) jdbc.update("UPDATE delivery_queue SET due_at = clock_timestamp() - interval '1 second'");
         }
         var op=login("operator");
-        UUID id=jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id = ?",UUID.class,task);
+        UUID id=jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id=?",UUID.class,task);
         var before=body(issue(op,id));
         assertEquals("DELIVERY_DELAYED",before.get("kind").asString());
-        var input=Map.of("expectedIssueRevision",before.get("issueRevision").asLong(),"reason","Связь восстановлена");
-        status(200,command(op,"retry",id,UUID.randomUUID(),input));
+        status(409,command(op,"retry",id,UUID.randomUUID(),Map.of(
+            "expectedIssueRevision",before.get("issueRevision").asLong(),"reason","Связь восстановлена")));
+        when(client.get(claim.operationId())).thenReturn(missing());
+        var saved=reconcile(op,task,UUID.randomUUID());status(200,saved);
+        var current=body(issue(op,id));
+        var input=Map.of("expectedIssueRevision",current.get("issueRevision").asLong(),
+            "reason","Состояние проверено, разрешаю продолжение","reconciliationId",body(saved).get("reconciliationId").asString());
+        var key=UUID.randomUUID();
+        try (var pool=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var first=pool.submit(() -> command(op,"retry",id,key,input));
+            var second=pool.submit(() -> command(op,"retry",id,key,input));
+            var a=first.get();var b=second.get();
+            status(200,a);status(200,b);assertEquals(body(a),body(b));
+        }
+        assertEquals(0,jdbc.queryForObject("SELECT automatic_attempts FROM delivery_queue",Integer.class));
+        assertEquals(5,jdbc.queryForObject("SELECT attempts FROM delivery_queue",Integer.class));
+        var next=exchange.claim();assertEquals(6,next.number());assertEquals(1,next.automaticNumber());
+        assertEquals("GET",next.step());assertEquals(claim.operationId(),next.operationId());
+        status(200,command(op,"retry",id,key,input));
+        assertEquals(1,jdbc.queryForObject("SELECT automatic_attempts FROM delivery_queue",Integer.class));
+        assertEquals(next.attemptId(),jdbc.queryForObject("SELECT claim_id FROM delivery_queue",UUID.class));
         status(409,command(op,"retry",id,UUID.randomUUID(),input));
-        var next=exchange.claim(); assertEquals(5,next.number()); assertEquals(claim.operationId(),next.operationId());
+        status(403,command(login("initiator.one"),"retry",id,UUID.randomUUID(),input));
+        assertEquals(6,jdbc.queryForObject("SELECT attempts FROM delivery_queue",Integer.class));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='RETRY_QUEUED'",Integer.class));
+    }
+
+    @Test
+    void exhaustedDeliveryCanApplyAFreshCompletedResultOrExplicitlyStop() throws Exception {
+        UUID task=created(login("initiator.one"),UUID.randomUUID());
+        DeliveryAttempt claim=null;
+        for (int n=1;n<=5;n++) {
+            jdbc.update("UPDATE delivery_queue SET due_at=clock_timestamp()-interval '1 second'");
+            claim=exchange.claim();finish(exchange,claim,new ExchangeReply(503,null,false));
+        }
+        var op=login("operator");
+        UUID id=jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id=?",UUID.class,task);
+        when(client.get(claim.operationId())).thenReturn(external(claim,true,25));
+        var saved=reconcile(op,task,UUID.randomUUID());status(200,saved);
+        var current=body(issue(op,id));
+        assertTrue(current.get("allowedActions").toString().contains("APPLY_EXTERNAL_RESULT"));
+        status(200,command(op,"resolve",id,UUID.randomUUID(),Map.of(
+            "expectedIssueRevision",current.get("issueRevision").asLong(),
+            "reconciliationId",body(saved).get("reconciliationId").asString(),
+            "action","APPLY_EXTERNAL_RESULT","reason","Подтверждён фактический результат")));
+        assertEquals("SUCCEEDED",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?",String.class,task));
+        assertEquals(0,count("delivery_queue"));
+        assertEquals(5,count("delivery_attempts"));
+    }
+
+    @Test
+    void exhaustedDeliveryCanBeStoppedWithoutClaimingBusinessSuccess() throws Exception {
+        UUID task=created(login("initiator.one"),UUID.randomUUID());
+        DeliveryAttempt claim=null;
+        for (int n=1;n<=5;n++) {
+            jdbc.update("UPDATE delivery_queue SET due_at=clock_timestamp()-interval '1 second'");
+            claim=exchange.claim();finish(exchange,claim,new ExchangeReply(503,null,false));
+        }
+        var op=login("operator");
+        UUID id=jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id=?",UUID.class,task);
+        when(client.get(claim.operationId())).thenReturn(missing());
+        var saved=reconcile(op,task,UUID.randomUUID());status(200,saved);
+        var current=body(issue(op,id));
+        status(200,command(op,"resolve",id,UUID.randomUUID(),Map.of(
+            "expectedIssueRevision",current.get("issueRevision").asLong(),
+            "reconciliationId",body(saved).get("reconciliationId").asString(),
+            "action","ACKNOWLEDGE_DIFFERENCE","reason","Передача отменена после проверки")));
+        assertEquals("STOPPED",jdbc.queryForObject("SELECT delivery_status FROM tasks WHERE id=?",String.class,task));
+        assertEquals("PENDING",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?",String.class,task));
+        assertEquals(0,count("delivery_queue"));
+        assertNull(exchange.claim());
+    }
+
+    @Test
+    void concurrentIndependentResumeCommandsHaveOneWinner() throws Exception {
+        UUID task=created(login("initiator.one"),UUID.randomUUID());
+        DeliveryAttempt last=null;
+        for (int n=1;n<=5;n++) {
+            jdbc.update("UPDATE delivery_queue SET due_at=clock_timestamp()-interval '1 second'");
+            last=exchange.claim();finish(exchange,last,new ExchangeReply(503,null,false));
+        }
+        var op=login("operator");
+        UUID id=jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id=?",UUID.class,task);
+        when(client.get(last.operationId())).thenReturn(missing());
+        var saved=reconcile(op,task,UUID.randomUUID());status(200,saved);
+        var current=body(issue(op,id));
+        var input=Map.of("expectedIssueRevision",current.get("issueRevision").asLong(),
+            "reconciliationId",body(saved).get("reconciliationId").asString(),"reason","Подтверждаю новую серию");
+        try (var pool=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var a=pool.submit(() -> command(op,"retry",id,UUID.randomUUID(),input));
+            var b=pool.submit(() -> command(op,"retry",id,UUID.randomUUID(),input));
+            var outcomes=java.util.List.of(a.get().getResponse().getStatus(),b.get().getResponse().getStatus());
+            assertEquals(1,outcomes.stream().filter(code -> code==200).count());
+            assertEquals(1,outcomes.stream().filter(code -> code==409).count());
+        }
+        assertEquals(5,jdbc.queryForObject("SELECT attempts FROM delivery_queue",Integer.class));
+        assertEquals(0,jdbc.queryForObject("SELECT automatic_attempts FROM delivery_queue",Integer.class));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='RETRY_QUEUED'",Integer.class));
     }
 
     @Test

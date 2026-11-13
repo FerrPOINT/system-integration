@@ -47,7 +47,8 @@ if (command === 'fault') {
       title: item.title, request: { reference: item.reference, quantity: item.quantity },
     }, key)).taskId;
   }
-  const deadline = Date.now() + 60_000;
+  // Five calls plus 82 seconds of backoff and HTTP deadlines.
+  const deadline = Date.now() + 120_000;
   while (true) {
     let ready = true;
     for (const item of cases) {

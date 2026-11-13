@@ -35,9 +35,9 @@ async function waitFor(label, condition, milliseconds = 60_000) {
   }
   throw new Error('Timed out: ' + label);
 }
-async function login() {
+async function login(username = 'initiator.one') {
   if (!process.env.SI_DEMO_PASSWORD) throw new Error('SI_DEMO_PASSWORD is required');
-  const session = new ApiSession(origin, { Connection: 'close' }); await session.login('initiator.one', process.env.SI_DEMO_PASSWORD); return session;
+  const session = new ApiSession(origin, { Connection: 'close' }); await session.login(username, process.env.SI_DEMO_PASSWORD); return session;
 }
 async function fault(reference, mode) {
   const response = await fetch(external + '/test/faults/' + reference, { method: mode ? 'PUT' : 'DELETE',
@@ -250,6 +250,44 @@ try {
   assert.equal((await api.get('/api/tasks/' + task.taskId)).taskId, task.taskId);
   mark('HTTP pool exhaustion returns 503 and the same session recovers after release',
     { requests: outcomes.length, unavailable: outcomes.filter(result => result.status === 503).length });
+
+
+  const bounded = await create('REQ-830020', 'UNAVAILABLE');
+  const series = () => queryJson('app', "SELECT json_build_object('total',attempts,'series',automatic_attempts) FROM delivery_queue WHERE operation_id=" + sqlQuote(bounded.operationId));
+  const advance = () => query('app', "UPDATE delivery_queue SET due_at=clock_timestamp() WHERE operation_id=" + sqlQuote(bounded.operationId) + " AND claim_id IS NULL;");
+  await waitFor('second attempt persisted', () => { advance(); return series().total >= 2; });
+  composeRun(['restart', 'backend']); composeRun(['up', '-d', '--no-build', '--no-deps', '--wait', 'backend']); api = await login();
+  await waitFor('five attempts pause after restart', async () => {
+    advance(); return (await api.get('/api/tasks/' + bounded.taskId)).deliveryStatus === 'NEEDS_REVIEW';
+  });
+  assert.deepEqual(series(), { total: 5, series: 5 });
+  composeRun(['restart', 'backend']); composeRun(['up', '-d', '--no-build', '--no-deps', '--wait', 'backend']); api = await login();
+  await fault('REQ-830020'); advance();
+  const witness = await create('REQ-830021'); await completed(witness);
+  assert.equal((await api.get('/api/tasks/' + bounded.taskId)).deliveryStatus, 'NEEDS_REVIEW');
+  assert.deepEqual(series(), { total: 5, series: 5 });
+  mark('Automatic series survives restarts before and after exhaustion without a sixth call',
+    { taskId: bounded.taskId, operationId: bounded.operationId, attempts: series(), healthyWitness: witness.operationId });
+
+  const operator = await login('operator');
+  const snapshot = await operator.command('POST', '/api/tasks/' + bounded.taskId + '/reconciliations');
+  const issue = await operator.get('/api/exchange/issues/' + snapshot.issueId);
+  const retryInput = { expectedIssueRevision: issue.issueRevision, reconciliationId: snapshot.reconciliationId, reason: 'Recovery: connection restored and absence verified' };
+  const retryKey = randomUUID(), retryPath = '/api/exchange/issues/' + issue.issueId + '/retry';
+  const resumed = await operator.command('POST', retryPath, retryInput, retryKey);
+  await waitFor('new series first GET persisted', () => series().total >= 6);
+  const beforeReplay = series();
+  assert.deepEqual(await operator.command('POST', retryPath, retryInput, retryKey), resumed);
+  const afterReplay = series();
+  assert.ok(afterReplay.total >= beforeReplay.total);
+  assert.equal(afterReplay.total - afterReplay.series, 5, 'Replay must not reset the series again');
+  await completed(bounded);
+  const numbers = query('app', "SELECT string_agg(number::text,',' ORDER BY number) FROM delivery_attempts WHERE operation_id=" + sqlQuote(bounded.operationId));
+  assert.equal(numbers, '1,2,3,4,5,6,7');
+  assert.equal((await inspect(bounded.operationId)).executions, 1);
+  assert.equal(query('app', "SELECT count(*) FROM task_history WHERE task_id=" + sqlQuote(bounded.taskId) + " AND event_type='RETRY_QUEUED';"), '1');
+  mark('Fresh operator continuation and lost-response replay preserve one series and one execution',
+    { taskId: bounded.taskId, operationId: bounded.operationId, numbers, executions: 1 });
 
   receipt.passed = true;
 } catch (error) {

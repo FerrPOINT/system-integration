@@ -36,6 +36,7 @@ public interface TaskStore {
     boolean ownsClaim(UUID operation, UUID claim);
     void scheduleAfterInterruptedClaim(UUID operation, OffsetDateTime expiredAt, int seconds);
     void scheduleRetry(UUID operation, String step, int seconds);
+    void resumeDelivery(UUID operation);
     void pauseQueue(UUID operation);
     void removeQueue(UUID operation);
     void delivery(UUID operation, DeliveryStatus status);
@@ -43,5 +44,10 @@ public interface TaskStore {
     long cursor(boolean lock);
     void advanceCursor(long cursor);
 
-    record Queue(String step, int attempts, UUID claim, OffsetDateTime until) {}
+    record Queue(String step, int attempts, int automaticAttempts, UUID claim, OffsetDateTime until) {
+        public Queue {
+            if (attempts < 0 || automaticAttempts < 0 || automaticAttempts > attempts)
+                throw new IllegalArgumentException("Некорректный счётчик попыток доставки");
+        }
+    }
 }

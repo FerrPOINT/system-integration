@@ -47,10 +47,11 @@ class ReviewContextTest {
     }
 
     @Test
-    void delayedDeliveryCanRetryOnlyWhenQueueIsFreeAndOwnershipControlsOnlyTake() {
+    void delayedDeliveryRequiresFreshEvidenceAndOwnershipControlsOnlyTake() {
         var state=state(DeliveryStatus.RETRY_WAIT,null,10);
         var issue=issue(Issue.Kind.DELIVERY_DELAYED,Issue.Status.OPEN,operator,taskId);
-        assertEquals(List.of(RECONCILE,RETRY),context(issue,state,true,null,Reconciliation.Availability.UNAVAILABLE,10).actions(operator));
+        assertEquals(List.of(RECONCILE),context(issue,state,true,null,Reconciliation.Availability.UNAVAILABLE,10).actions(operator));
+        assertTrue(context(issue,state,true,null,Reconciliation.Availability.NOT_FOUND,10).actions(operator).contains(RETRY));
         assertEquals(List.of(TAKE_OWNERSHIP,RECONCILE),context(issue,state,false,null,Reconciliation.Availability.UNAVAILABLE,10).actions(UUID.randomUUID()));
     }
 
@@ -80,6 +81,19 @@ class ReviewContextTest {
         var completed=state(DeliveryStatus.ACKNOWLEDGED,external(true,input).result(),10);
         assertFalse(context(issue,completed,false,external(true,input),Reconciliation.Availability.PRESENT,10).actions(operator).contains(APPLY_EXTERNAL_RESULT));
         assertEquals(List.of(RECONCILE),context(issue,state,true,external(true,input),Reconciliation.Availability.PRESENT,9).actions(operator));
+    }
+
+    @Test
+    void exhaustedDeliveryRequiresFreshEvidenceAndCanApplyACompletedExternalResult() {
+        var state=state(DeliveryStatus.NEEDS_REVIEW,null,10);
+        var issue=issue(Issue.Kind.DELIVERY_DELAYED,Issue.Status.OPEN,operator,taskId);
+        assertFalse(context(issue,state,true,null,Reconciliation.Availability.UNAVAILABLE,10).actions(operator).contains(RETRY));
+        assertFalse(context(issue,state,true,null,Reconciliation.Availability.NOT_FOUND,9).actions(operator).contains(RETRY));
+        assertTrue(context(issue,state,true,null,Reconciliation.Availability.NOT_FOUND,10).actions(operator).contains(RETRY));
+        var completed=context(issue,state,true,external(true,input),Reconciliation.Availability.PRESENT,10);
+        assertFalse(completed.actions(operator).contains(RETRY));
+        assertTrue(completed.actions(operator).contains(APPLY_EXTERNAL_RESULT));
+        assertTrue(completed.actions(operator).contains(ACKNOWLEDGE_DIFFERENCE));
     }
 
     @Test
