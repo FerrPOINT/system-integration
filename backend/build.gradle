@@ -35,7 +35,10 @@ sourceSets.main.java {
     srcDir(externalApi.flatMap { it.outputDir.dir('src/main/java') })
 }
 
-tasks.named('bootJar') { archiveFileName = 'system-integration.jar' }
+tasks.named('bootJar') {
+    archiveFileName = 'system-integration.jar'
+    manifest.attributes('Implementation-Title': 'system-integration-backend')
+}
 
 tasks.register('integrationTest', Test) {
     description = 'HTTP and transaction tests against the isolated si_test PostgreSQL database'
