@@ -1,4 +1,6 @@
-package com.azhukov.emulator;
+package com.azhukov.emulator.web;
+
+import com.azhukov.emulator.domain.RuleViolation;
 
 import com.azhukov.integration.contract.external.model.Problem;
 import org.springframework.http.MediaType;
@@ -13,13 +15,19 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @RestControllerAdvice
 class ProblemHandler {
 
-    @ExceptionHandler(EmulatorProblem.class)
-    ResponseEntity<Problem> problem(EmulatorProblem problem) {
-        return ResponseEntity.status(problem.status).contentType(MediaType.APPLICATION_PROBLEM_JSON)
-            .body(new Problem(problem.code,problem.status,Problem.CodeEnum.fromValue(problem.code)));
+    @ExceptionHandler(RuleViolation.class)
+    ResponseEntity<Problem> problem(RuleViolation problem) {
+        int status=switch(problem.code()) {
+            case VALIDATION_FAILED -> 400;
+            case OPERATION_NOT_FOUND -> 404;
+            case OPERATION_CONFLICT, FAULT_ALREADY_BOUND -> 409;
+            case UNAVAILABLE -> 503;
+        };
+        return ResponseEntity.status(status).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(new Problem(problem.code().name(),status,Problem.CodeEnum.fromValue(problem.code().name())));
     }
 
     @ExceptionHandler({BindException.class, HttpMessageNotReadableException.class,
         HandlerMethodValidationException.class, MethodArgumentTypeMismatchException.class, jakarta.validation.ConstraintViolationException.class})
-    ResponseEntity<Problem> invalid(Exception error) { return problem(new EmulatorProblem(400, "VALIDATION_FAILED")); }
+    ResponseEntity<Problem> invalid(Exception error) { return problem(new RuleViolation(RuleViolation.Code.VALIDATION_FAILED)); }
 }

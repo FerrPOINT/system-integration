@@ -1,6 +1,8 @@
-package com.azhukov.emulator;
+package com.azhukov.emulator.infrastructure.jdbc;
 
-import com.azhukov.integration.contract.external.model.*;
+import com.azhukov.emulator.application.port.OperationStore;
+import com.azhukov.emulator.domain.*;
+
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -11,78 +13,74 @@ import java.util.List;
 import java.util.UUID;
 
 @Repository
-class OperationRepository {
+public class OperationRepository implements OperationStore {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
 
-    OperationRepository(JdbcTemplate jdbc, ObjectMapper json) { this.jdbc = jdbc; this.json = json; }
+    public OperationRepository(JdbcTemplate jdbc, ObjectMapper json) { this.jdbc = jdbc; this.json = json; }
 
-    private final RowMapper<OperationState> operationRow = this::mapOperation;
+    private final RowMapper<Operation> operationRow = this::mapOperation;
 
-    private OperationState mapOperation(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
-        return new OperationState()
-        .operationId(rs.getObject("id", UUID.class))
-        .request(new OperationInput(rs.getString("reference"), rs.getInt("quantity")))
-        .acceptedAt(rs.getObject("accepted_at", OffsetDateTime.class))
-        .executions(OperationState.ExecutionsEnum.fromValue(rs.getInt("executions")))
-        .result(rs.getString("result") == null ? null : json.readValue(rs.getString("result"), Result.class));
+    private Operation mapOperation(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
+        return new Operation(rs.getObject("id",UUID.class),
+            new OperationRequest(rs.getString("reference"),rs.getInt("quantity")),
+            rs.getObject("accepted_at",OffsetDateTime.class),rs.getInt("executions"),
+            rs.getString("result")==null ? null : json.readValue(rs.getString("result"),OperationResult.class));
     }
 
-    OperationState get(UUID id) {
+    public Operation get(UUID id) {
         return jdbc.query("SELECT * FROM operations WHERE id = ?", operationRow, id).stream().findFirst()
-            .orElseThrow(() -> new EmulatorProblem(404, "OPERATION_NOT_FOUND"));
+            .orElseThrow(() -> new RuleViolation(RuleViolation.Code.OPERATION_NOT_FOUND));
     }
 
-    List<OperationState> lockNext() {
+    public List<Operation> lockNext() {
         return jdbc.query("SELECT * FROM operations WHERE executions = 0 ORDER BY accepted_at,id LIMIT 1 FOR UPDATE SKIP LOCKED", operationRow);
     }
 
-    List<ResultEvent> events(long after, int limit) {
+    public List<ResultEvent> events(long after, int limit) {
         return jdbc.query("SELECT cursor,payload::text FROM result_events WHERE cursor > ? ORDER BY cursor LIMIT ?",
-            (rs,n) -> new ResultEvent(rs.getLong("cursor"), json.readValue(rs.getString("payload"), Result.class)), after, limit);
+            (rs,n) -> new ResultEvent(rs.getLong("cursor"), json.readValue(rs.getString("payload"), OperationResult.class)), after, limit);
     }
 
-    String fault(UUID id) {
-        return jdbc.query("SELECT mode FROM faults WHERE bound_operation_id = ? FOR UPDATE", (rs,n) -> rs.getString(1), id)
-            .stream().findFirst().orElse("");
+    public FaultMode fault(UUID id) {
+        return jdbc.query("SELECT mode FROM faults WHERE bound_operation_id = ? FOR UPDATE", (rs,n) -> FaultMode.valueOf(rs.getString(1)), id)
+            .stream().findFirst().orElse(FaultMode.NONE);
     }
 
-    void event(Result result, int copy, boolean held) {
+    public void event(OperationResult result, int copy, boolean held) {
         jdbc.update("""
             INSERT INTO result_events(operation_id,version,copy_number,payload,publish_after)
             VALUES (?,?,?,?::jsonb,CASE WHEN ? THEN NULL ELSE clock_timestamp() END)
-            """, result.getOperationId(), result.getVersion().getValue(), copy, json.writeValueAsString(result), held);
+            """, result.operationId(), result.version(), copy, json.writeValueAsString(result), held);
     }
 
-    void lockOperation(UUID id) {
+    public void lockOperation(UUID id) {
         jdbc.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))", rs -> {}, id.toString());
     }
 
-    boolean exists(UUID id) {
+    public boolean exists(UUID id) {
         return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM operations WHERE id = ?)",Boolean.class,id));
     }
 
-    record Fault(String mode, UUID bound) {}
-
-    Fault lockFault(String reference) {
+    public Fault lockFault(String reference) {
         return jdbc.query("SELECT mode,bound_operation_id FROM faults WHERE reference = ? FOR UPDATE",
-            (rs,n) -> new Fault(rs.getString(1),rs.getObject(2,UUID.class)),reference).stream().findFirst().orElse(null);
+            (rs,n) -> new Fault(FaultMode.valueOf(rs.getString(1)),rs.getObject(2,UUID.class)),reference).stream().findFirst().orElse(null);
     }
 
-    void insert(UUID id, OperationInput input) {
-        jdbc.update("INSERT INTO operations(id,reference,quantity) VALUES (?,?,?)",id,input.getReference(),input.getQuantity());
+    public void insert(UUID id, OperationRequest input) {
+        jdbc.update("INSERT INTO operations(id,reference,quantity) VALUES (?,?,?)",id,input.reference(),input.quantity());
     }
 
-    void bindFault(String reference, UUID id) {
+    public void bindFault(String reference, UUID id) {
         jdbc.update("UPDATE faults SET bound_operation_id = ? WHERE reference = ?",id,reference);
     }
 
-    void complete(Result result) {
+    public void complete(OperationResult result) {
         jdbc.update("UPDATE operations SET executions = 1,result = ?::jsonb,completed_at = ? WHERE id = ?",
-            json.writeValueAsString(result),result.getCompletedAt(),result.getOperationId());
+            json.writeValueAsString(result),result.completedAt(),result.operationId());
     }
 
-    boolean publishNext() {
+    public boolean publishNext() {
         // Holding the counter until commit makes cursor order equal commit order.
         long previous = jdbc.queryForObject("SELECT last_cursor FROM feed_position WHERE id = 1 FOR UPDATE",Long.class);
         var events = jdbc.query("""
@@ -101,18 +99,19 @@ class OperationRepository {
         return true;
     }
 
-    void lockFaultConfiguration(String reference) {
+    public void lockFaultConfiguration(String reference) {
         jdbc.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",rs -> {},"fault:" + reference);
     }
 
-    void configure(String reference, String mode) {
-        jdbc.update("INSERT INTO faults(reference,mode) VALUES (?,?) ON CONFLICT(reference) DO UPDATE SET mode = excluded.mode",reference,mode);
+    public void configure(String reference, FaultMode mode) {
+        jdbc.update("INSERT INTO faults(reference,mode) VALUES (?,?) ON CONFLICT(reference) DO UPDATE SET mode = excluded.mode",reference,mode.name());
     }
 
-    void clear(String reference) {
-        var fault = lockFault(reference);
-        if (fault != null && fault.bound() != null)
-            jdbc.update("UPDATE result_events SET publish_after = clock_timestamp() WHERE operation_id = ? AND cursor IS NULL",fault.bound());
+    public void releaseEvents(UUID operation) {
+        jdbc.update("UPDATE result_events SET publish_after = clock_timestamp() WHERE operation_id = ? AND cursor IS NULL",operation);
+    }
+
+    public void clearFault(String reference) {
         jdbc.update("DELETE FROM faults WHERE reference = ?",reference);
     }
 

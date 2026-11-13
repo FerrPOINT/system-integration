@@ -1,4 +1,6 @@
-package com.azhukov.emulator;
+package com.azhukov.emulator.infrastructure.scheduling;
+
+import com.azhukov.emulator.application.OperationService;
 
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

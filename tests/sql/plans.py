@@ -55,7 +55,7 @@ params={
 'OperationRepository.complete/1:1':[result,'2026-01-02T00:00:00Z',O],'OperationRepository.publishNext/0:1':[],
 'OperationRepository.publishNext/0:2':[],'OperationRepository.publishNext/0:3':[20001,O,1,0],'OperationRepository.publishNext/0:4':[20001],
 'OperationRepository.lockFaultConfiguration/1:1':['fault:REQ-100001'],'OperationRepository.configure/2:1':['REQ-100002','DELAY_RESULT'],
-'OperationRepository.clear/1:1':[O],'OperationRepository.clear/1:2':['REQ-100001']}
+'OperationRepository.releaseEvents/1:1':[O],'OperationRepository.clearFault/1:1':['REQ-100001']}
 for key,values in params.items():static(key,values)
 static('TaskRepository.ownsClaim/2:1',[uid(100006),uid(500006)],'active-lease-owned')
 static('ReviewRepository.temporary/1:1',[T],'no-temporary-issue')

@@ -1,6 +1,8 @@
 package com.azhukov.emulator;
 
-import com.azhukov.integration.contract.external.model.OperationInput;
+import com.azhukov.emulator.domain.*;
+import com.azhukov.emulator.application.OperationService;
+import com.azhukov.emulator.infrastructure.jdbc.OperationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -72,8 +74,11 @@ class EmulatorWorkflowTest {
         assertEquals("OPERATION_CONFLICT",json.readTree(conflict.getResponse().getContentAsString()).get("code").asString());
         assertTrue(service.executeNext());
         var completed = operations.get(id);
-        assertEquals(1,completed.getExecutions().getValue());
+        assertEquals(1,completed.executions());
         assertEquals("SUCCEEDED",json.valueToTree(completed).at("/result/status").asString());
+        var completedWire=mvc.perform(get("/operations/"+id)).andReturn();
+        assertEquals(200,completedWire.getResponse().getStatus());
+        assertEquals(json.valueToTree(completed),json.readTree(completedWire.getResponse().getContentAsString()));
         assertFalse(service.executeNext());
         assertEquals(2,jdbc.queryForObject("SELECT count(*) FROM result_events",Integer.class));
     }
@@ -81,7 +86,7 @@ class EmulatorWorkflowTest {
     @Test
     void concurrentPutsAndWorkersProduceOneExecution() throws Exception {
         UUID id = UUID.randomUUID();
-        var input = new OperationInput("REQ-000002",150);
+        var input = new OperationRequest("REQ-000002",150);
         try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
             var first = pool.submit(() -> service.accept(id,input));
             var second = pool.submit(() -> service.accept(id,input));
@@ -91,7 +96,7 @@ class EmulatorWorkflowTest {
             assertNotEquals(executeOne.get(),executeTwo.get());
         }
         var result = operations.get(id);
-        assertEquals(1,result.getExecutions().getValue());
+        assertEquals(1,result.executions());
         var snapshot = json.valueToTree(result);
         assertEquals("REJECTED",snapshot.at("/result/status").asString());
         assertEquals("QUANTITY_LIMIT_EXCEEDED",snapshot.at("/result/rejectionCode").asString());
@@ -102,21 +107,44 @@ class EmulatorWorkflowTest {
     @Test
     void unavailableIsBeforeWriteAndClearingItPreservesTheOperation() {
         var id = UUID.randomUUID();
-        var input = new OperationInput("REQ-000003",25);
-        service.configure(input.getReference(),"UNAVAILABLE");
-        assertEquals(503,assertThrows(EmulatorProblem.class,() -> service.accept(id,input)).status);
-        assertEquals(404,assertThrows(EmulatorProblem.class,() -> operations.get(id)).status);
-        service.clear(input.getReference());
+        var input = new OperationRequest("REQ-000003",25);
+        service.configure(input.reference(),FaultMode.UNAVAILABLE);
+        assertEquals(RuleViolation.Code.UNAVAILABLE,assertThrows(RuleViolation.class,() -> service.accept(id,input)).code());
+        assertEquals(RuleViolation.Code.OPERATION_NOT_FOUND,assertThrows(RuleViolation.class,() -> operations.get(id)).code());
+        service.clear(input.reference());
         assertTrue(service.accept(id,input).created());
-        service.clear(input.getReference());
+        service.clear(input.reference());
         assertNotNull(operations.get(id));
+    }
+
+    @Test
+    void faultHttpErrorsKeepTheirCodesAndBoundConfigurationIsImmutable() throws Exception {
+        UUID absent=UUID.randomUUID();
+        var notFound=mvc.perform(get("/operations/"+absent)).andReturn();
+        assertEquals(404,notFound.getResponse().getStatus());
+        assertEquals("OPERATION_NOT_FOUND",json.readTree(notFound.getResponse().getContentAsString()).get("code").asString());
+        var fault="/test/faults/REQ-000007";
+        assertEquals(204,mvc.perform(put(fault).contentType("application/json").content("{\"mode\":\"UNAVAILABLE\"}")).andReturn().getResponse().getStatus());
+        var unavailable=mvc.perform(put("/operations/"+absent).contentType("application/json")
+            .content("{\"reference\":\"REQ-000007\",\"quantity\":25}")).andReturn();
+        assertEquals(503,unavailable.getResponse().getStatus());
+        assertEquals("UNAVAILABLE",json.readTree(unavailable.getResponse().getContentAsString()).get("code").asString());
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM operations",Integer.class));
+        assertEquals(204,mvc.perform(delete(fault)).andReturn().getResponse().getStatus());
+        assertEquals(204,mvc.perform(put(fault).contentType("application/json").content("{\"mode\":\"DUPLICATE_RESULT\"}")).andReturn().getResponse().getStatus());
+        service.accept(absent,new OperationRequest("REQ-000007",25));
+        assertEquals(204,mvc.perform(put(fault).contentType("application/json").content("{\"mode\":\"DUPLICATE_RESULT\"}")).andReturn().getResponse().getStatus());
+        var conflict=mvc.perform(put(fault).contentType("application/json").content("{\"mode\":\"DELAY_RESULT\"}")).andReturn();
+        assertEquals(409,conflict.getResponse().getStatus());
+        assertEquals("FAULT_ALREADY_BOUND",json.readTree(conflict.getResponse().getContentAsString()).get("code").asString());
+        assertEquals("DUPLICATE_RESULT",jdbc.queryForObject("SELECT mode FROM faults WHERE reference='REQ-000007'",String.class));
     }
 
     @Test
     void droppedResponseHasCommittedResultAndHeldEventsUntilExplicitRelease() {
         var id = UUID.randomUUID();
-        var input = new OperationInput("REQ-000004",25);
-        service.configure(input.getReference(),"DROP_RESPONSE_AFTER_EXECUTION");
+        var input = new OperationRequest("REQ-000004",25);
+        service.configure(input.reference(),FaultMode.DROP_RESPONSE_AFTER_EXECUTION);
         assertTrue(service.accept(id,input).dropResponse());
         var before = json.valueToTree(operations.get(id));
         assertEquals(1,before.get("executions").asInt());
@@ -124,30 +152,34 @@ class EmulatorWorkflowTest {
         assertEquals(0,operations.events(0,100).size());
         assertFalse(service.accept(id,input).dropResponse());
         assertEquals(before,json.valueToTree(operations.get(id)));
-        service.clear(input.getReference());
+        service.clear(input.reference());
         while (service.publishNext()) { }
         assertEquals(2,operations.events(0,100).size());
     }
 
     @Test
-    void duplicateAndLateModesPublishDifferentCursorsWithoutReexecution() {
-        var duplicate = new OperationInput("REQ-000005",25);
-        var late = new OperationInput("REQ-000006",25);
-        service.configure(duplicate.getReference(),"DUPLICATE_RESULT");
-        service.configure(late.getReference(),"DELAY_RESULT");
+    void duplicateAndLateModesPublishDifferentCursorsWithoutReexecution() throws Exception {
+        var duplicate = new OperationRequest("REQ-000005",25);
+        var late = new OperationRequest("REQ-000006",25);
+        service.configure(duplicate.reference(),FaultMode.DUPLICATE_RESULT);
+        service.configure(late.reference(),FaultMode.DELAY_RESULT);
         UUID duplicateId = UUID.randomUUID(), lateId = UUID.randomUUID();
         service.accept(duplicateId,duplicate); service.accept(lateId,late);
         while (service.executeNext()) { }
         while (service.publishNext()) { }
         var events = operations.events(0,100);
         assertEquals(5,events.size());
-        var duplicates = events.stream().filter(e -> e.getResult().getOperationId().equals(duplicateId) && e.getResult().getVersion().getValue() == 2).toList();
+        var duplicates = events.stream().filter(e -> e.result().operationId().equals(duplicateId) && e.result().version() == 2).toList();
         assertEquals(2,duplicates.size());
-        assertEquals(duplicates.get(0).getResult(),duplicates.get(1).getResult());
-        assertNotEquals(duplicates.get(0).getCursor(),duplicates.get(1).getCursor());
-        var delayed = events.stream().filter(e -> e.getResult().getOperationId().equals(lateId)).toList();
-        assertEquals(2,delayed.get(0).getResult().getVersion().getValue());
-        assertEquals(1,delayed.get(1).getResult().getVersion().getValue());
-        assertEquals(1,operations.get(lateId).getExecutions().getValue());
+        assertEquals(duplicates.get(0).result(),duplicates.get(1).result());
+        assertNotEquals(duplicates.get(0).cursor(),duplicates.get(1).cursor());
+        var delayed = events.stream().filter(e -> e.result().operationId().equals(lateId)).toList();
+        assertEquals(2,delayed.get(0).result().version());
+        assertEquals(1,delayed.get(1).result().version());
+        assertEquals(1,operations.get(lateId).executions());
+        var wire=mvc.perform(get("/result-events").param("after","0").param("limit","100")).andReturn();
+        assertEquals(200,wire.getResponse().getStatus());
+        // Compare actual JSON; tree conversion keeps long cursors as LongNode while parsing uses IntNode.
+        assertEquals(json.readTree(json.writeValueAsString(events)),json.readTree(wire.getResponse().getContentAsString()));
     }
 }

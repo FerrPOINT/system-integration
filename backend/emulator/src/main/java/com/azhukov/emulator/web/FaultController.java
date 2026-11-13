@@ -1,4 +1,7 @@
-package com.azhukov.emulator;
+package com.azhukov.emulator.web;
+
+import com.azhukov.emulator.application.OperationService;
+import com.azhukov.emulator.domain.FaultMode;
 
 import com.azhukov.integration.contract.external.api.TestFaultsApi;
 import com.azhukov.integration.contract.external.model.FaultConfiguration;
@@ -14,7 +17,7 @@ class FaultController implements TestFaultsApi {
 
     @Override
     public ResponseEntity<Void> configureFault(String reference, FaultConfiguration input) {
-        operations.configure(reference, input.getMode().getValue());
+        operations.configure(reference, FaultMode.valueOf(input.getMode().getValue()));
         return ResponseEntity.noContent().build();
     }
 

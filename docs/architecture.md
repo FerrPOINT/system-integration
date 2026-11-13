@@ -671,7 +671,7 @@ Task — предметная сущность с неизменяемым ис�
 | CommandReceipts | Порт и JDBC-кодек квитанций с прежним каноническим входом и сохранённым ответом. |
 | ExchangeClient / ExchangeProtocol | Внешний HTTP-адаптер, строгая проверка контракта и преобразование во внутреннюю модель. |
 | ReconciliationService / ExchangeCoordinator / ExchangeScheduler | Прикладная координация через ExternalExchange без общей сетевой транзакции; тонкий scheduling-адаптер, ограниченный executor с четырьмя отправителями. |
-| OperationService / OperationRepository эмулятора | Предметные правила, прикладные транзакции и JDBC-адаптер вместо смешанного сервиса. |
+| Operation / Fault / OperationService / OperationRepository эмулятора | Предметное исполнение/режимы отказа, прикладные транзакции через OperationStore, отдельный JDBC-адаптер; generated-модели только в web. |
 | ApiProblem и generated DTO в бизнес-коде | Небольшая система смысловых ошибок/результатов; web отображает их в существующий HTTP-контракт. |
 
 Сохраняем Spring JDBC: операции интеграции уже требуют явных захватов,
