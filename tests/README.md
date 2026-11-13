@@ -41,10 +41,16 @@ corepack pnpm exec playwright install chromium
 corepack pnpm test:e2e
 ```
 
-На Firebat1 поднимите отдельный проект system-integration-load
-с compose.load.yml, как для восстановления и нагрузки.
-Его PostgreSQL и том отделены от демо. Прогон против обычных
-si_app/si_emulator не выполняется; публичный туннель продолжает работать.
+На локальном Windows-ПК используйте отдельный проект system-integration-load
+с compose.load.yml. Его PostgreSQL и том отделены от обычного Compose.
+Прогон против обычных si_app/si_emulator не выполняется.
+
+Для UI поверх native Vite на 19673 явно задайте
+`SI_UI_FRONTEND_RUNTIME=vite`. Проверка окружения продолжает требовать backend,
+эмулятор и PostgreSQL из изолированного Docker-проекта и сверяет их БД/порты.
+Без этой настройки требуется и frontend-контейнер. Load/recovery используют
+полный Compose; native Vite не заменяет их проверку контейнеров или бюджета.
+Полные тяжёлые прогоны соблюдают общий host execution slot из инструкций workspace.
 
 Runner использует `http://127.0.0.1:19673`, экраны 390 и 1440 px,
 учётки `initiator.one`, `initiator.two` и `operator`. `SI_FRONTEND_URL` переопределяет
