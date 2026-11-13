@@ -517,7 +517,7 @@ paths:
       description: |
         Только оператор. Проверяет версию проблемы, принадлежность и актуальность сверки.
         APPLY_EXTERNAL_RESULT требует тот же внешний запрос и допустимую новую версию.
-        ACKNOWLEDGE_DIFFERENCE для PROTOCOL_ERROR закрывает проблему и переводит
+        ACKNOWLEDGE_DIFFERENCE для приостановленных PROTOCOL_ERROR или DELIVERY_DELAYED закрывает проблему и переводит
         приостановленную доставку в STOPPED с сохранением бизнес-результата.
       parameters:
         - $ref: '#/components/parameters/Csrf'
@@ -733,7 +733,7 @@ components:
       enum: [QUEUED, RETRY_WAIT, UNKNOWN, ACKNOWLEDGED, NEEDS_REVIEW, STOPPED]
       description: |
         RETRY_WAIT и UNKNOWN сохраняются при отложенных попытках.
-        NEEDS_REVIEW означает приостановку из-за ошибки протокола.
+        NEEDS_REVIEW означает приостановку из-за ошибки протокола или исчерпания пяти автоматических вызовов серии.
         STOPPED означает явное решение оператора прекратить отправку.
     TaskResult:
       type: object
@@ -826,7 +826,7 @@ components:
         reconciliationId:
           type: string
           format: uuid
-          description: Ссылка на снимки сверки для события RECONCILED, решения или возобновления после ошибки протокола.
+          description: Ссылка на снимки сверки для события RECONCILED, решения или возобновления доставки.
         previousAssigneeId:
           type: string
           format: uuid
