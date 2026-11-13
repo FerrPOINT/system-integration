@@ -1,6 +1,6 @@
 package com.azhukov.integration.tasks;
 
-import com.azhukov.integration.auth.AppUser;
+import com.azhukov.integration.application.Actor;
 import com.azhukov.integration.contract.internal.model.*;
 import com.azhukov.integration.domain.RuleViolation;
 import com.azhukov.integration.domain.task.TaskTitle;
@@ -23,10 +23,10 @@ public class TaskService {
     }
 
     @Transactional(readOnly = true)
-    public Task get(AppUser user, UUID id) { return tasks.get(id, user, false); }
+    public Task get(Actor user, UUID id) { return tasks.get(id, user, false); }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public TaskPage list(AppUser user, int page, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
+    public TaskPage list(Actor user, int page, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
         checkPage(page);
         if ((from != null && !from.getOffset().equals(ZoneOffset.UTC)) ||
             (to != null && !to.getOffset().equals(ZoneOffset.UTC)) ||
@@ -39,7 +39,7 @@ public class TaskService {
     }
 
     @Transactional
-    public CreateTaskResult create(AppUser user, UUID key, CreateTaskRequest input) {
+    public CreateTaskResult create(Actor user, UUID key, CreateTaskRequest input) {
         requireInitiator(user);
         return commands.execute(user.id(), "CREATE_TASK", key, input, 201, CreateTaskResult.class, () -> {
             var task = tasks.insert(user.id(), input);
@@ -50,7 +50,7 @@ public class TaskService {
     }
 
     @Transactional
-    public RenameTaskResult rename(AppUser user, UUID key, UUID id, RenameTaskRequest input) {
+    public RenameTaskResult rename(Actor user, UUID key, UUID id, RenameTaskRequest input) {
         requireInitiator(user);
         // Check access even on receipt replay; a receipt must never expand visibility.
         tasks.get(id, user, false);
@@ -67,7 +67,7 @@ public class TaskService {
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public HistoryPage history(AppUser user, UUID id, int page) {
+    public HistoryPage history(Actor user, UUID id, int page) {
         checkPage(page);
         tasks.get(id, user, false);
         var rows = tasks.history(id, page);
@@ -76,7 +76,7 @@ public class TaskService {
         return new HistoryPage(rows, page, (long) page + 1 < pages, total, pages);
     }
 
-    private static void requireInitiator(AppUser user) {
+    private static void requireInitiator(Actor user) {
         if (user.isOperator()) throw new RuleViolation(RuleViolation.Code.ACCESS_DENIED, "Действие доступно инициатору");
     }
 

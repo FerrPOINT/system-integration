@@ -1,5 +1,7 @@
 package com.azhukov.integration.auth;
 
+import com.azhukov.integration.application.Actor;
+
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -19,7 +21,7 @@ public final class AppUser extends User {
 
     public UUID id() { return id; }
     public String role() { return role; }
-    public boolean isOperator() { return role.equals("OPERATOR"); }
+    public Actor actor() { return new Actor(id, Actor.Role.valueOf(role)); }
 
     public static AppUser current() {
         return (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();

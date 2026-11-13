@@ -1,4 +1,6 @@
-package com.azhukov.integration.auth;
+package com.azhukov.integration.web;
+
+import com.azhukov.integration.auth.AppUser;
 
 import com.azhukov.integration.contract.internal.api.SessionApi;
 import com.azhukov.integration.contract.internal.model.CsrfToken;

@@ -1,7 +1,7 @@
 package com.azhukov.integration.tasks;
 
 import com.azhukov.integration.contract.ExchangeReply;
-import com.azhukov.integration.auth.AppUser;
+import com.azhukov.integration.application.Actor;
 import com.azhukov.integration.contract.external.model.OperationState;
 import com.azhukov.integration.contract.external.model.Result;
 import com.azhukov.integration.contract.internal.model.*;
@@ -39,16 +39,16 @@ public class OperationsTransactions {
     }
 
     @Transactional(readOnly=true)
-    public TaskRepository.ExchangeTask snapshot(AppUser user,UUID task) {
+    public TaskRepository.ExchangeTask snapshot(Actor user,UUID task) {
         requireOperator(user);
         return tasks.exchange(tasks.get(task,user,false).getOperationId(),false);
     }
 
     @Transactional(readOnly=true)
-    public Issue get(AppUser user,UUID id) { requireOperator(user); return view(context(id,user,false),user); }
+    public Issue get(Actor user,UUID id) { requireOperator(user); return view(context(id,user,false),user); }
 
     @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
-    public IssuePage list(AppUser user,int page,IssueStatus status) {
+    public IssuePage list(Actor user,int page,IssueStatus status) {
         requireOperator(user);
         if (page < 0) throw RuleViolation.invalid("Номер страницы не может быть отрицательным");
         var rows=issues.list(page,status);
@@ -70,14 +70,14 @@ public class OperationsTransactions {
     }
 
     @Transactional(readOnly=true)
-    public Reconciliation reconciliation(AppUser user,UUID task,UUID id) {
+    public Reconciliation reconciliation(Actor user,UUID task,UUID id) {
         requireOperator(user);
         tasks.get(task,user,false);
         return issues.reconciliation(task,id).value();
     }
 
     @Transactional
-    public Reconciliation saveReconciliation(AppUser user,UUID key,TaskRepository.ExchangeTask before,ExchangeReply reply) {
+    public Reconciliation saveReconciliation(Actor user,UUID key,TaskRepository.ExchangeTask before,ExchangeReply reply) {
         requireOperator(user);
         return commands.execute(user.id(),"RECONCILE",key,before.task().getTaskId(),200,Reconciliation.class,() -> {
             var current=tasks.exchange(before.task().getOperationId(),true);
@@ -113,7 +113,7 @@ public class OperationsTransactions {
     }
 
     @Transactional
-    public Issue take(AppUser user,UUID key,UUID id,TakeIssueRequest input) {
+    public Issue take(Actor user,UUID key,UUID id,TakeIssueRequest input) {
         requireOperator(user);
         return commands.execute(user.id(),"TAKE_ISSUE",key,new Target(id,input),200,Issue.class,() -> {
             var context=context(id,user,true);
@@ -131,7 +131,7 @@ public class OperationsTransactions {
     }
 
     @Transactional
-    public Issue retry(AppUser user,UUID key,UUID id,RetryRequest input) {
+    public Issue retry(Actor user,UUID key,UUID id,RetryRequest input) {
         requireOperator(user);
         return commands.execute(user.id(),"RETRY_EXCHANGE",key,new Target(id,input),200,Issue.class,() -> {
             var context=context(id,user,true);
@@ -155,7 +155,7 @@ public class OperationsTransactions {
     }
 
     @Transactional
-    public IssueResolution resolve(AppUser user,UUID key,UUID id,ResolveIssueRequest input) {
+    public IssueResolution resolve(Actor user,UUID key,UUID id,ResolveIssueRequest input) {
         requireOperator(user);
         return commands.execute(user.id(),"RESOLVE_ISSUE",key,new Target(id,input),200,IssueResolution.class,() -> {
             var context=context(id,user,true);
@@ -181,9 +181,9 @@ public class OperationsTransactions {
     private record Context(ExchangeIssues.StoredIssue issue,TaskRepository.ExchangeTask state,ExchangeIssues.SavedReconciliation reconciliation) {}
     private record Target(UUID id,Object input) {}
 
-    private Context context(UUID id,AppUser user,boolean lock) { return context(issues.get(id,false),user,lock); }
+    private Context context(UUID id,Actor user,boolean lock) { return context(issues.get(id,false),user,lock); }
 
-    private Context context(ExchangeIssues.StoredIssue original,AppUser user,boolean lock) {
+    private Context context(ExchangeIssues.StoredIssue original,Actor user,boolean lock) {
         var task=original.value().getTaskId();
         if (task==null) return new Context(original,null,null);
         var record=tasks.get(task,user,lock);
@@ -193,9 +193,9 @@ public class OperationsTransactions {
         return new Context(row,state,reconciliation);
     }
 
-    private Issue view(Context context,AppUser user) { return context.issue().value().allowedActions(actions(context,user)); }
+    private Issue view(Context context,Actor user) { return context.issue().value().allowedActions(actions(context,user)); }
 
-    private List<Issue.AllowedActionsEnum> actions(Context context,AppUser user) {
+    private List<Issue.AllowedActionsEnum> actions(Context context,Actor user) {
         var issue=context.issue().value();
         if (issue.getStatus()!=IssueStatus.OPEN || context.state()==null) return List.of();
         var actions=new ArrayList<Issue.AllowedActionsEnum>();
@@ -238,14 +238,14 @@ public class OperationsTransactions {
     private void requireFresh(Context context,UUID id) {
         if (id==null || !id.equals(context.issue().value().getLatestReconciliationId()) || !fresh(context)) throw stale();
     }
-    private void requireAction(Context context,AppUser user,Issue.AllowedActionsEnum action) {
+    private void requireAction(Context context,Actor user,Issue.AllowedActionsEnum action) {
         if (!actions(context,user).contains(action)) throw notAllowed();
     }
     private static void version(Context context,long expected) {
         if (context.issue().value().getIssueRevision()!=expected)
             throw new RuleViolation(RuleViolation.Code.ISSUE_REVISION_CONFLICT,"Проблема уже изменена. Обновите карточку");
     }
-    private static void requireOperator(AppUser user) {
+    private static void requireOperator(Actor user) {
         if (!user.isOperator()) throw new RuleViolation(RuleViolation.Code.ACCESS_DENIED,"Действие доступно оператору");
     }
     private static RuleViolation stale() { return new RuleViolation(RuleViolation.Code.SNAPSHOT_STALE,"Сверка устарела. Выполните новую сверку"); }

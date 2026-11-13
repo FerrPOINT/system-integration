@@ -1,6 +1,6 @@
 package com.azhukov.integration.tasks;
 
-import com.azhukov.integration.auth.AppUser;
+import com.azhukov.integration.application.Actor;
 import com.azhukov.integration.contract.internal.model.*;
 import com.azhukov.integration.domain.RuleViolation;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -51,7 +51,7 @@ public class TaskRepository {
         return task;
     }
 
-    public Task get(UUID id, AppUser user, boolean lock) {
+    public Task get(UUID id, Actor user, boolean lock) {
         var rows = jdbc.query("SELECT * FROM tasks WHERE id = ?" +
             (user.isOperator() ? "" : " AND owner_id = ?") + (lock ? " FOR UPDATE" : ""),
             taskRow, user.isOperator() ? new Object[]{id} : new Object[]{id, user.id()});
@@ -79,7 +79,7 @@ public class TaskRepository {
             .stream().collect(java.util.stream.Collectors.toMap(row -> row.task().getTaskId(), row -> row));
     }
 
-    public List<Task> list(AppUser user, int page, BusinessStatus status,
+    public List<Task> list(Actor user, int page, BusinessStatus status,
                            OffsetDateTime from, OffsetDateTime to) {
         var args = new ArrayList<Object>();
         var sql = "SELECT * FROM tasks" + taskConditions(user, status, from, to, args)
@@ -88,13 +88,13 @@ public class TaskRepository {
         return jdbc.query(sql, taskRow, args.toArray());
     }
 
-    public long countTasks(AppUser user, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
+    public long countTasks(Actor user, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
         var args = new ArrayList<Object>();
         return jdbc.queryForObject("SELECT count(*) FROM tasks" + taskConditions(user, status, from, to, args),
             Long.class, args.toArray());
     }
 
-    private static String taskConditions(AppUser user, BusinessStatus status,
+    private static String taskConditions(Actor user, BusinessStatus status,
                                          OffsetDateTime from, OffsetDateTime to, List<Object> args) {
         var where = new StringBuilder(" WHERE true");
         if (!user.isOperator()) { where.append(" AND owner_id = ?"); args.add(user.id()); }

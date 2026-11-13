@@ -1,6 +1,6 @@
 package com.azhukov.integration.auth;
 
-import com.azhukov.integration.http.ProblemResponses;
+import com.azhukov.integration.web.ProblemResponses;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.ServletException;

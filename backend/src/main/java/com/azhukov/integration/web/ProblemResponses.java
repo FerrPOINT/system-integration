@@ -1,4 +1,4 @@
-package com.azhukov.integration.http;
+package com.azhukov.integration.web;
 
 import com.azhukov.integration.contract.internal.model.Problem;
 import com.azhukov.integration.domain.RuleViolation;
