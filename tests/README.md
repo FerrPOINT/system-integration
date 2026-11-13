@@ -181,7 +181,7 @@ UP-TO-DATE и инвалидацию потребителей внешнего �
 Из tests с проектным Node/Corepack и установленными браузерами:
 
 ~~~sh
-corepack pnpm exec playwright test --config choice.config.ts
+corepack pnpm exec playwright test --config components.config.ts
 ~~~
 
 Тестовая страница frontend/tests/choice-form.html доступна только через Vite
@@ -190,3 +190,13 @@ corepack pnpm exec playwright test --config choice.config.ts
 Шесть desktop/mobile-проверок покрывают required, controlled/uncontrolled reset,
 однократный FormData, disabled/fieldset, клавиатуру и недоступное значение.
 Основной playwright.config.ts эту fixture не запускает.
+
+## Измерение пагинации и навигация
+
+Из tests/: corepack pnpm exec playwright test -c components.config.ts.
+Десять проверок: шесть Select и четыре route/filter-сценария на 390/1440 px.
+Отдельный fixture использует настоящий usePagination и BrowserRouter,
+контролируя только доставку ResizeObserver/requestAnimationFrame. Измерение,
+уже поставленное в очередь, не должно возвращать старую страницу или стирать
+новый фильтр. Без проверки актуального адреса все четыре сценария падают;
+с ней проходят. Fixture не входит в production assets.

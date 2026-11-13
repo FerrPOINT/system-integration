@@ -5,10 +5,10 @@ import base from './playwright.config';
 const origin = 'http://127.0.0.1:19774';
 export default defineConfig({
   ...base,
-  testMatch: 'choice-fields.spec.ts',
+  testMatch: ['choice-fields.spec.ts', 'pagination-navigation.spec.ts'],
   testIgnore: [],
-  outputDir: './results/choice-fields',
-  reporter: [['list'], ['json', { outputFile: './results/choice-fields.json' }]],
+  outputDir: './results/components',
+  reporter: [['list'], ['json', { outputFile: './results/components.json' }]],
   use: { ...base.use, baseURL: origin },
   webServer: {
     command: 'corepack pnpm exec vite --host 127.0.0.1 --port 19774 --strictPort',
