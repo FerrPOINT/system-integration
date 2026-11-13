@@ -82,6 +82,11 @@ $env:PLAYWRIGHT_BROWSERS_PATH="$PWD/.local/browsers"
 
 ## Архитектурные принципы
 
+Перед переводом backend/emulator на явные controller/service/repository/mapper
+прочитайте [план Spring-слоёв](docs/spring-boot-refactoring-plan.md). Он задаёт
+целевые владельцы и проверки; текущие пакеты меняются только вместе с их
+реальными потребителями и архитектурными тестами.
+
 Текущая структура и правила описаны в [архитектуре](docs/architecture.md#границы-кода).
 Рефакторинг сохраняет runtime-контракты; это не заменяет квалификацию и проверку
 публичной версии по [текущей стадии](docs/current-stage.md).
