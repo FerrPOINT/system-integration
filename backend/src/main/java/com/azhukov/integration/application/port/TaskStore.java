@@ -28,7 +28,8 @@ public interface TaskStore {
     void history(Task task, UUID actorId, HistoryType type, String summary, Object details);
     ExchangeState exchange(UUID operationId, boolean lock);
     Map<UUID,ExchangeState> exchangeByTask(List<UUID> ids);
-    UUID lockDueOperation();
+    Map<UUID,ExchangeState> lockExchanges(List<UUID> operationIds);
+    ExchangeState lockDueExchange();
     Queue lockQueue(UUID id);
     void startAttempt(UUID operation, UUID claim, String step, int number);
     void finishAttempt(UUID id, String outcome);

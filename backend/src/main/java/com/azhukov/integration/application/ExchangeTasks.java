@@ -10,7 +10,6 @@ import java.util.List;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.DeliveryStatus;
 import com.azhukov.integration.domain.review.Issue;
-import com.azhukov.integration.domain.RuleViolation;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
@@ -30,9 +29,8 @@ public class ExchangeTasks {
     @Transactional
     public DeliveryAttempt claim() {
         // All writers lock the task before its queue/issue rows to keep a single lock order.
-        var due = tasks.lockDueOperation();
-        if (due == null) return null;
-        var state = tasks.exchange(due, true);
+        var state = tasks.lockDueExchange();
+        if (state == null) return null;
         var queue = tasks.lockQueue(state.task().operationId());
         if (queue.claim() != null) {
             tasks.finishAttempt(queue.claim(),"INTERRUPTED");
@@ -89,8 +87,11 @@ public class ExchangeTasks {
     public boolean consume(long expected, List<IncomingEvent> page) {
         long current = tasks.cursor(true);
         if (current != expected) return false;
+        var ids=page.stream().map(event -> event.result()==null ? event.operationId() : event.result().operationId())
+            .filter(java.util.Objects::nonNull).distinct().toList();
+        var states=new java.util.HashMap<>(tasks.lockExchanges(ids));
         for (var event : page) {
-            receive(event);
+            receive(event,states);
             current = event.cursor();
         }
         tasks.advanceCursor(current);
@@ -102,16 +103,16 @@ public class ExchangeTasks {
         issues.open(null, null, Issue.Kind.RESULT_CONFLICT, "Некорректная структура страницы или позиция ленты", page, null, null);
     }
 
-    private void receive(IncomingEvent event) {
+    private void receive(IncomingEvent event,Map<UUID,ExchangeState> states) {
         var received=event.result();
         long cursor=event.cursor();
         if (received==null) {
-            var state=find(event.operationId());
+            var state=states.get(event.operationId());
             issues.open(state,event.operationId(),Issue.Kind.RESULT_CONFLICT,
                 "Входящий снимок не соответствует контракту",event.evidence(),null,cursor);
             return;
         }
-        var state = find(received.operationId());
+        var state = states.get(received.operationId());
         if (state == null) {
             issues.open(null, received.operationId(), Issue.Kind.RESULT_CONFLICT, "Неизвестная внешняя операция", received, received, cursor);
             return;
@@ -127,17 +128,18 @@ public class ExchangeTasks {
                 "Внешний снимок после остановки отправки требует решения оператора", received, received, cursor);
             case CONFLICT -> issues.open(state, received.operationId(), Issue.Kind.RESULT_CONFLICT,
                 "Разное содержимое одной версии результата", received, received, cursor);
-            case APPLY -> apply(state, received, null);
+            case APPLY -> states.put(received.operationId(),apply(state, received, null));
         }
     }
 
     @Transactional(propagation=Propagation.MANDATORY)
-    public void apply(ExchangeState state, OperationResult result, UUID actor) {
+    public ExchangeState apply(ExchangeState state, OperationResult result, UUID actor) {
         tasks.applyResult(result);
         tasks.removeQueue(result.operationId());
         issues.confirm(state);
         tasks.history(state.task(), actor, HistoryType.RESULT_APPLIED,
             "Принят внешний результат: " + result.status().name(), Map.of("resultVersion",result.version()));
+        return state.withAppliedResult(result);
     }
 
     private void acknowledge(ExchangeState state) {
@@ -145,12 +147,6 @@ public class ExchangeTasks {
         tasks.removeQueue(state.task().operationId());
         issues.confirm(state);
         tasks.history(state.task(), null, HistoryType.DELIVERY_ACKNOWLEDGED, "Исполнитель подтвердил получение операции");
-    }
-
-    private ExchangeState find(UUID id) {
-        if (id == null) return null;
-        try { return tasks.exchange(id,true); }
-        catch (RuleViolation notFound) { if (notFound.code() == RuleViolation.Code.NOT_FOUND) return null; throw notFound; }
     }
 
     private void finishAttempt(DeliveryAttempt claim, String outcome) {

@@ -35,7 +35,7 @@ params={
 'DemoUsers.run/1:1':[uid(900004),'sql.probe','not-a-login-secret','INITIATOR'],'JdbcUserDetailsService.loadUserByUsername/1:1':['sql.owner.one'],
 'TaskRepository.insert/2:1':[NT,U,NO,'probe','REQ-110001',25],'TaskRepository.enqueue/1:1':[uid(105001)],'TaskRepository.rename/3:1':[ 'changed',2,T],
 'TaskRepository.history/5:1':[uid(600001),T,O,'USER',U,'RENAMED','probe','{}'],'TaskRepository.countHistory/1:1':[T],'TaskRepository.history/2:1':[T,0],
-'TaskRepository.lockDueOperation/0:1':[],'TaskRepository.lockQueue/1:1':[O],'TaskRepository.startAttempt/4:1':[C,2,O],'TaskRepository.startAttempt/4:2':[C,O,2,'PUT'],
+'TaskRepository.lockDueExchange/0:1':[],'TaskRepository.lockQueue/1:1':[O],'TaskRepository.startAttempt/4:1':[C,2,O],'TaskRepository.startAttempt/4:2':[C,O,2,'PUT'],
 'TaskRepository.finishAttempt/2:1':['ACK',uid(500002)],'TaskRepository.ownsClaim/2:1':[uid(100002),uid(500002)],
 'TaskRepository.scheduleAfterInterruptedClaim/3:1':['2026-01-01T00:00:00Z',5,O],'TaskRepository.scheduleRetry/3:1':['GET',5,O],'TaskRepository.pauseQueue/1:1':[O],
 'TaskRepository.removeQueue/1:1':[O],'TaskRepository.delivery/2:1':['RETRY_WAIT',O,'RETRY_WAIT'],'TaskRepository.applyResult/1:1':[result,'SUCCEEDED',O],
@@ -70,6 +70,9 @@ for locked in [False,True]:
 for n in [1,20,100]:
  add('TaskRepository.exchangeByTask/1:1','SELECT * FROM tasks WHERE id IN ('+','.join('?'*n)+')',[uid(i+1) for i in range(n)],f'ids={n}')
  add('ReviewRepository.reconciliations/1:1','SELECT snapshot::text,exchange_version FROM reconciliations WHERE id IN ('+','.join('?'*n)+')',[uid(i+300001) for i in range(n)],f'ids={n}')
+for n in [1,20,100]:
+ add('TaskRepository.lockExchanges/1:1','SELECT * FROM tasks WHERE operation_id IN ('+','.join('?'*n)+') ORDER BY id FOR UPDATE',
+     [uid(i+100001) for i in range(n)],f'ids={n}')
 for operator,status,lower,upper in itertools.product([False,True],[None,'PENDING','RUNNING','SUCCEEDED','REJECTED'],[False,True],[False,True]):
  conditions=' WHERE true'; values=[]
  if not operator: conditions+=' AND owner_id = ?';values.append(U)

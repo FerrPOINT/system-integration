@@ -99,6 +99,15 @@ public class TaskRepository implements TaskStore {
             .stream().collect(java.util.stream.Collectors.toMap(row -> row.task().id(), row -> row));
     }
 
+    public Map<UUID,ExchangeState> lockExchanges(List<UUID> operationIds) {
+        if (operationIds.isEmpty()) return Map.of();
+        if (operationIds.size()>100) throw new IllegalArgumentException("A feed page cannot exceed 100 operations");
+        var placeholders=String.join(",",java.util.Collections.nCopies(operationIds.size(),"?"));
+        return jdbc.query("SELECT * FROM tasks WHERE operation_id IN ("+placeholders+") ORDER BY id FOR UPDATE",
+            this::mapExchange,operationIds.toArray()).stream()
+            .collect(java.util.stream.Collectors.toMap(row -> row.task().operationId(),row -> row));
+    }
+
     public List<Task> list(Actor user, int page, BusinessStatus status,
                            OffsetDateTime from, OffsetDateTime to) {
         var args = new ArrayList<Object>();
@@ -187,13 +196,13 @@ public class TaskRepository implements TaskStore {
     private record HistoryDetails(UUID attemptId,Integer resultVersion,UUID issueId,UUID reconciliationId,
                                   UUID previousAssigneeId,UUID assignedTo) {}
 
-    public UUID lockDueOperation() {
+    public ExchangeState lockDueExchange() {
         return jdbc.query("""
-            SELECT t.operation_id FROM tasks t JOIN delivery_queue q ON q.operation_id = t.operation_id
+            SELECT t.* FROM tasks t JOIN delivery_queue q ON q.operation_id = t.operation_id
             WHERE t.delivery_status IN ('QUEUED','RETRY_WAIT','UNKNOWN') AND q.due_at <= statement_timestamp()
               AND (q.claim_id IS NULL OR q.claimed_until <= statement_timestamp())
             ORDER BY q.due_at,q.operation_id LIMIT 1 FOR UPDATE OF t SKIP LOCKED
-            """,(rs,n) -> rs.getObject(1,UUID.class)).stream().findFirst().orElse(null);
+            """,this::mapExchange).stream().findFirst().orElse(null);
     }
 
     public Queue lockQueue(UUID id) {

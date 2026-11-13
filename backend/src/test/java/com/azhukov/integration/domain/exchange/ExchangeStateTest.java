@@ -70,6 +70,30 @@ class ExchangeStateTest {
     }
 
     @Test
+    void applyingResultsAdvancesExchangeStateAndPreservesTaskIdentityAndTitle() {
+        var original=state(DeliveryStatus.QUEUED,null);
+        var running=original.withAppliedResult(running());
+        var finished=running.withAppliedResult(terminal());
+        assertEquals(8,running.version());
+        assertEquals(9,finished.version());
+        assertEquals(DeliveryStatus.ACKNOWLEDGED,finished.task().deliveryStatus());
+        assertEquals(BusinessStatus.RUNNING,running.task().businessStatus());
+        assertNull(running.task().outcome());
+        assertEquals(new TaskOutcome(BusinessStatus.SUCCEEDED,at,null),finished.task().outcome());
+        assertSame(original.task().title(),finished.task().title());
+        assertEquals(original.task().id(),finished.task().id());
+        assertEquals(original.task().ownerId(),finished.task().ownerId());
+        assertEquals(original.task().request(),finished.task().request());
+        assertEquals(original.task().createdAt(),finished.task().createdAt());
+        assertNull(original.result());
+        var rejected=new OperationResult(operation,input,2,BusinessStatus.REJECTED,at,"QUANTITY_LIMIT_EXCEEDED");
+        assertEquals(new TaskOutcome(BusinessStatus.REJECTED,at,"QUANTITY_LIMIT_EXCEEDED"),
+            running.withAppliedResult(rejected).task().outcome());
+        var wrong=new OperationResult(UUID.randomUUID(),input,2,BusinessStatus.SUCCEEDED,at,null);
+        assertThrows(IllegalArgumentException.class,() -> original.withAppliedResult(wrong));
+    }
+
+    @Test
     void invalidPersistedVersionsAreExplicitFailures() {
         var task = state(DeliveryStatus.QUEUED,null).task();
         assertThrows(IllegalArgumentException.class,() -> new ExchangeState(task,0,null));

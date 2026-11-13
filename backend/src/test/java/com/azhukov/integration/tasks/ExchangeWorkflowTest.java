@@ -229,6 +229,45 @@ class ExchangeWorkflowTest extends PostgresTest {
         } finally { logger.detachAppender(appender); appender.stop(); }
     }
 
+    @Test
+    void onePageKeepsItsUpdatedStateForDuplicateLateAndConflictingEvents() throws Exception {
+        UUID id=created(login("initiator.one"),UUID.randomUUID());
+        var claim=exchange.claim();
+        var page=json.createArrayNode();
+        var running=result(claim,1,"RUNNING");
+        var terminal=result(claim,2,"SUCCEEDED");
+        for (var item:java.util.List.of(running,terminal,terminal,running,result(claim,2,"REJECTED")))
+            page.add(json.createObjectNode().put("cursor",page.size()+1).set("result",item));
+        assertTrue(consume(exchange,0,page));
+        assertEquals("SUCCEEDED",business(id));
+        assertEquals("ACKNOWLEDGED",delivery(id));
+        assertEquals(3,jdbc.queryForObject("SELECT exchange_version FROM tasks WHERE id=?",Long.class,id));
+        assertEquals(1,jdbc.queryForObject("SELECT title_revision FROM tasks WHERE id=?",Long.class,id));
+        assertEquals(2,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='RESULT_APPLIED'",Integer.class));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='RESULT_IGNORED'",Integer.class));
+        assertEquals(1,count("exchange_issues"));
+        assertEquals(5,exchange.cursor());
+    }
+
+    @Test
+    void onePagePreservesDiagnosticAssociationForInvalidAndUnknownResults() throws Exception {
+        UUID id=created(login("initiator.one"),UUID.randomUUID());
+        var claim=exchange.claim();
+        var invalid=(tools.jackson.databind.node.ObjectNode)result(claim,1,"RUNNING");
+        invalid.put("version",3);
+        var unknown=(tools.jackson.databind.node.ObjectNode)result(claim,2,"SUCCEEDED");
+        unknown.put("operationId",UUID.randomUUID().toString());
+        var page=json.createArrayNode();
+        for (var item:java.util.List.of(invalid,unknown,result(claim,2,"SUCCEEDED")))
+            page.add(json.createObjectNode().put("cursor",page.size()+1).set("result",item));
+        assertTrue(consume(exchange,0,page));
+        assertEquals("SUCCEEDED",business(id));
+        assertEquals(3,exchange.cursor());
+        assertEquals(2,count("exchange_issues"));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM exchange_issues WHERE task_id=?",Integer.class,id));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM exchange_issues WHERE task_id IS NULL",Integer.class));
+    }
+
     private tools.jackson.databind.JsonNode page(long cursor, tools.jackson.databind.JsonNode result) {
         return json.createArrayNode().add(json.createObjectNode().put("cursor",cursor).set("result",result));
     }

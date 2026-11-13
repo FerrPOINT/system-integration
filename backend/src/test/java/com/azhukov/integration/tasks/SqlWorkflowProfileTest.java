@@ -76,6 +76,46 @@ class SqlWorkflowProfileTest extends PostgresTest {
         Files.writeString(output,json.writerWithDefaultPrettyPrinter().writeValueAsString(report));
     }
 
+    @Test
+    void claimReadsItsLockedTaskOnlyOnce() throws Exception {
+        created(login("initiator.one"),UUID.randomUUID());
+        TIMINGS.clear();
+        assertNotNull(exchange.claim());
+        assertEquals(1,taskReadCalls(),"The task selected and locked for a claim must not be loaded again");
+    }
+
+    @Test
+    void aHundredEventPageLoadsLockedStateOnceAndKeepsBothVersions() throws Exception {
+        var owner=login("initiator.one");
+        var page=json.createArrayNode();
+        for (int n=0;n<50;n++) {
+            created(owner,UUID.randomUUID());
+            var claim=exchange.claim();
+            for (int version=1;version<=2;version++) {
+                var result=json.createObjectNode().put("operationId",claim.operationId().toString())
+                    .set("request",json.valueToTree(claim.request())).put("version",version)
+                    .put("status",version==1 ? "RUNNING" : "SUCCEEDED");
+                if (version==2) result.put("completedAt","2026-01-01T00:00:01Z");
+                page.add(json.createObjectNode().put("cursor",page.size()+1).set("result",result));
+            }
+        }
+        TIMINGS.clear();
+        assertTrue(consume(exchange,0,page));
+        long reads=taskReadCalls();
+        assertEquals(100,exchange.cursor());
+        assertEquals(50,jdbc.queryForObject("SELECT count(*) FROM tasks WHERE business_status='SUCCEEDED' AND exchange_version=3",Integer.class));
+        assertEquals(100,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='RESULT_APPLIED'",Integer.class));
+        assertEquals(0,count("delivery_queue"));
+        assertEquals(1,reads,"Page state must be loaded by one bounded locking query, not once per result");
+    }
+
+    private long taskReadCalls() {
+        return TIMINGS.entrySet().stream().filter(entry -> {
+            String sql=entry.getKey().toUpperCase(java.util.Locale.ROOT);
+            return sql.startsWith("SELECT") && sql.contains("FROM TASKS");
+        }).mapToLong(entry -> entry.getValue().calls.sum()).sum();
+    }
+
     private <T> T step(String name,CheckedSupplier<T> operation) throws Exception {
         long before = TIMINGS.values().stream().mapToLong(t -> t.calls.sum()).sum();
         long started = System.nanoTime();

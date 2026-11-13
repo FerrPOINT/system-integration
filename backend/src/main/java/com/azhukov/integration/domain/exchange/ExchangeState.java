@@ -2,6 +2,7 @@ package com.azhukov.integration.domain.exchange;
 
 import com.azhukov.integration.domain.task.DeliveryStatus;
 import com.azhukov.integration.domain.task.Task;
+import com.azhukov.integration.domain.task.TaskOutcome;
 import java.util.Objects;
 
 public record ExchangeState(Task task, long version, OperationResult result) {
@@ -25,6 +26,15 @@ public record ExchangeState(Task task, long version, OperationResult result) {
         if (task.deliveryStatus() == DeliveryStatus.STOPPED) return IncomingDecision.STOPPED;
         if (result != null && result.version() == received.version()) return IncomingDecision.CONFLICT;
         return IncomingDecision.APPLY;
+    }
+
+    public ExchangeState withAppliedResult(OperationResult received) {
+        if (!identity().equals(received.identity())) throw new IllegalArgumentException("Result identity differs from the task");
+        var outcome=received.status().isTerminal()
+            ? new TaskOutcome(received.status(),received.completedAt(),received.rejectionCode()) : null;
+        var updated=new Task(task.id(),task.operationId(),task.ownerId(),task.title(),task.request(),
+            DeliveryStatus.ACKNOWLEDGED,received.status(),task.createdAt(),outcome);
+        return new ExchangeState(updated,Math.addExact(version,1),received);
     }
 
     public ExchangeState withDeliveryStatus(DeliveryStatus status) {
