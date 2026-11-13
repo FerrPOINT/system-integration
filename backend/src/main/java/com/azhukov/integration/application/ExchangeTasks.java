@@ -35,7 +35,7 @@ public class ExchangeTasks {
         if (queue.claim() != null) {
             tasks.finishAttempt(queue.claim(),"INTERRUPTED");
             if (DeliveryAttempt.exhausted(queue.automaticAttempts())) {
-                pauseAutomaticSeries(state,queue.automaticAttempts(),queue.claim());
+                pauseAutomaticSeries(state,queue.claim());
                 return null;
             }
             tasks.scheduleAfterInterruptedClaim(state.task().operationId(),queue.until(),DeliveryAttempt.delay(queue.automaticAttempts()));
@@ -46,7 +46,7 @@ public class ExchangeTasks {
             return null;
         }
         if (DeliveryAttempt.exhausted(queue.automaticAttempts())) {
-            pauseAutomaticSeries(state,queue.automaticAttempts(),null);
+            pauseAutomaticSeries(state,null);
             return null;
         }
         UUID claim = UUID.randomUUID();
@@ -74,7 +74,7 @@ public class ExchangeTasks {
             return;
         }
         if (decision.limitReached()) {
-            pauseAutomaticSeries(state,claim.automaticNumber(),claim.attemptId());
+            pauseAutomaticSeries(state,claim.attemptId());
             finishAttempt(claim,reply.outcome().name());
             return;
         }
@@ -155,10 +155,10 @@ public class ExchangeTasks {
         return state.withAppliedResult(result);
     }
 
-    private void pauseAutomaticSeries(ExchangeState state,int automaticAttempts,UUID lastAttempt) {
+    private void pauseAutomaticSeries(ExchangeState state,UUID lastAttempt) {
         state=delivery(state,DeliveryStatus.NEEDS_REVIEW);
         tasks.pauseQueue(state.task().operationId());
-        issues.exhausted(state,automaticAttempts,lastAttempt);
+        issues.exhausted(state,lastAttempt);
     }
 
     private void acknowledge(ExchangeState state) {

@@ -46,11 +46,9 @@ public class IssueService {
             reason,reason,null,null);
     }
 
-    public void exhausted(ExchangeState state,int automaticAttempts,UUID lastAttempt) {
+    public void exhausted(ExchangeState state,UUID lastAttempt) {
         temporary(state,true);
         var details=new java.util.LinkedHashMap<String,Object>();
-        details.put("automaticAttempts",automaticAttempts);
-        details.put("automaticAttemptLimit",DeliveryAttempt.MAX_AUTOMATIC_ATTEMPTS);
         if (lastAttempt!=null) details.put("attemptId",lastAttempt);
         tasks.history(state.task(),null,HistoryType.DELIVERY_ATTEMPT,DELAYED,details);
     }

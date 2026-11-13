@@ -94,7 +94,12 @@ class ExchangeWorkflowTest extends PostgresTest {
         for (int n=0;n<8;n++) { dueNow();assertNull(exchange.claim()); }
         assertEquals(5,count("delivery_attempts"));
         assertEquals(history,count("task_history"));
-        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE details->>'automaticAttemptLimit' IS NOT NULL",Integer.class));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='DELIVERY_ATTEMPT' AND summary LIKE 'Автоматическая доставка приостановлена:%'",Integer.class));
+        var owner=login("initiator.one");
+        var historyResponse=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+            .get("/api/tasks/"+id+"/history").session(owner.session())).andReturn();
+        status(200,historyResponse);
+        assertTrue(body(historyResponse).get("items").toString().contains("исчерпан лимит 5 попыток"));
         UUID other=created(login("initiator.two"),UUID.randomUUID());
         dueNow();var next=exchange.claim();assertNotNull(next);
         assertEquals(jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?",UUID.class,other),next.operationId());
@@ -111,7 +116,7 @@ class ExchangeWorkflowTest extends PostgresTest {
         assertEquals("ACKNOWLEDGED",delivery(id));assertEquals(0,count("delivery_queue"));
         consume(exchange,0,page(1,result(last,2,"SUCCEEDED")));
         assertEquals("SUCCEEDED",business(id));
-        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE details->>'automaticAttemptLimit' IS NOT NULL",Integer.class));
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='DELIVERY_ATTEMPT' AND summary LIKE 'Автоматическая доставка приостановлена:%'",Integer.class));
     }
 
     @Test
@@ -123,12 +128,12 @@ class ExchangeWorkflowTest extends PostgresTest {
         assertNull(exchange.claim());
         assertEquals("NEEDS_REVIEW",delivery(id));
         assertEquals("INTERRUPTED",jdbc.queryForObject("SELECT outcome FROM delivery_attempts WHERE id=?",String.class,last.attemptId()));
-        long pauses=jdbc.queryForObject("SELECT count(*) FROM task_history WHERE details->>'automaticAttemptLimit' IS NOT NULL",Long.class);
+        long pauses=jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='DELIVERY_ATTEMPT' AND summary LIKE 'Автоматическая доставка приостановлена:%'",Long.class);
         for (int n=0;n<4;n++) { dueNow();assertNull(exchange.claim()); }
         finish(exchange,last,new ExchangeReply(200,ack(last).put("executions",0).putNull("result"),false));
         assertEquals("NEEDS_REVIEW",delivery(id));
         assertEquals(5,count("delivery_attempts"));assertEquals(1,pauses);
-        assertEquals(pauses,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE details->>'automaticAttemptLimit' IS NOT NULL",Long.class));
+        assertEquals(pauses,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='DELIVERY_ATTEMPT' AND summary LIKE 'Автоматическая доставка приостановлена:%'",Long.class));
     }
 
     @Test
@@ -159,7 +164,7 @@ class ExchangeWorkflowTest extends PostgresTest {
         UUID id=created(login("initiator.one"),UUID.randomUUID());
         for (int n=1;n<5;n++) { dueNow();finish(exchange,exchange.claim(),new ExchangeReply(503,null,false)); }
         dueNow();var last=exchange.claim();
-        jdbc.execute("ALTER TABLE task_history ADD CONSTRAINT si10_reject_pause CHECK (details->>'automaticAttemptLimit' IS NULL)");
+        jdbc.execute("ALTER TABLE task_history ADD CONSTRAINT si10_reject_pause CHECK (summary NOT LIKE 'Автоматическая доставка приостановлена:%')");
         try {
             assertThrows(org.springframework.dao.DataAccessException.class,() -> finish(exchange,last,new ExchangeReply(503,null,false)));
         } finally { jdbc.execute("ALTER TABLE task_history DROP CONSTRAINT si10_reject_pause"); }
@@ -167,7 +172,7 @@ class ExchangeWorkflowTest extends PostgresTest {
         assertEquals(last.attemptId(),jdbc.queryForObject("SELECT claim_id FROM delivery_queue",UUID.class));
         assertNull(jdbc.queryForObject("SELECT outcome FROM delivery_attempts WHERE id=?",String.class,last.attemptId()));
         assertEquals("DELIVERY_UNCERTAIN",jdbc.queryForObject("SELECT kind FROM exchange_issues",String.class));
-        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE details->>'automaticAttemptLimit' IS NOT NULL",Integer.class));
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='DELIVERY_ATTEMPT' AND summary LIKE 'Автоматическая доставка приостановлена:%'",Integer.class));
         jdbc.update("UPDATE delivery_queue SET claimed_until=clock_timestamp()-interval '1 second'");
         assertNull(exchange.claim());assertEquals("NEEDS_REVIEW",delivery(id));
         assertEquals(5,count("delivery_attempts"));
