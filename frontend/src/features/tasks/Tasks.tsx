@@ -93,7 +93,7 @@ export function TaskList({ user }: { user: GetSession200 }) {
               <td><BusinessBadge status={task.businessStatus} /></td><td><time dateTime={task.createdAt}>{timestamp(task.createdAt, { showZone: false })}</time></td></tr>)}</tbody>
           </Table></Card>}
     </div>
-    <Pagination page={validPage ? page : 0} totalItems={tasks.data?.totalItems ?? 0} totalPages={tasks.data?.totalPages ?? 0} pending={tasks.isFetching || !valid} onChange={changePage} />
+    <Pagination page={validPage ? page : 0} size={size} totalItems={tasks.data?.totalItems} totalPages={tasks.data?.totalPages} pending={tasks.isFetching || !valid} onChange={changePage} />
     </section>
     <Outlet context={createTrigger} />
   </>;
@@ -240,6 +240,6 @@ function History({ id, canReview, refreshInterval }: { id: string; canReview: bo
       </TimelineContent></TimelineItem>)}</Timeline>
     </>}
     </div>
-    <Pagination page={valid ? page : 0} totalItems={history.data?.totalItems ?? 0} totalPages={history.data?.totalPages ?? 0} pending={history.isFetching || !valid} onChange={changePage} />
+    <Pagination page={valid ? page : 0} size={size} totalItems={history.data?.totalItems} totalPages={history.data?.totalPages} pending={history.isFetching || !valid} onChange={changePage} />
   </CardContent></section></Card></div>;
 }

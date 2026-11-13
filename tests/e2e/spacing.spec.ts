@@ -40,6 +40,7 @@ test('UI-07: exchange loading, error, empty and ready states keep the filter sep
     await expect(page.getByRole('combobox', { name: 'Состояние разбора', exact: true })).toBeVisible();
     const pending = page.getByRole('status').filter({ hasText: 'Загрузка…' });
     await expect(pending).toBeVisible();
+    await expect(page.locator('.pagination-footer')).toHaveText('');
     await expectGaps(page.locator('main'));
     await expect(pending).toHaveAttribute('aria-busy', 'true');
     await expect(pending.locator('.base-notice-icon')).toHaveCount(0);

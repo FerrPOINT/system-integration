@@ -17,10 +17,16 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
   async function expectSummary(current: number, total: number) {
     await expect.poll(async () => {
       const size=Number(new URL(page.url()).searchParams.get('size') || 20);
-      return await page.locator('.base-page-summary').innerText() === 'Страница ' + current + ' из ' + Math.ceil(total/size) + ' · Всего записей: ' + total;
+      const summary = total <= size ? 'Всего: ' + total : ((current - 1) * size + 1) + '–' + Math.min(current * size, total) + ' из ' + total;
+      return await page.locator('.base-page-summary').innerText() === summary;
     }).toBe(true);
   }
   await expectSummary(1,initial.totalItems);
+  for (const name of ['← Назад', 'Далее →']) {
+    const arrow = page.getByRole('button', { name, exact: true });
+    await expect(arrow).toHaveText('');
+    await expect(arrow.locator('svg')).toHaveCount(1);
+  }
   await page.getByRole('button', { name: 'Страница 2', exact: true }).click();
   await expect(page).toHaveURL(/page=1/);
   await expectSummary(2,initial.totalItems);
@@ -51,7 +57,7 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
   await expect(from).toHaveValue('');
   await expect(to).toHaveValue('');
   await page.goto('/tasks?page=999999');
-  await expect(page.getByText('Страница 1000000 не найдена · Всего страниц: ' + initial.totalPages, { exact: true })).toBeVisible();
+  await expect(page.getByText('Страница не найдена', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Страница 1', exact: true }).click();
   await expect(page).toHaveURL(/page=0/);
 });

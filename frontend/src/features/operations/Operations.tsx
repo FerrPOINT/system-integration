@@ -76,7 +76,7 @@ export function IssueList() {
           {issue.nextAttemptAt && <small>Следующая попытка: {timestamp(issue.nextAttemptAt)}</small>}</div>
         </CardContent></li></Card>)}</ul>}
     </>}
-    </div><Pagination page={validPage ? page : 0} totalItems={issues.data?.totalItems ?? 0} totalPages={issues.data?.totalPages ?? 0} pending={issues.isFetching || !valid} onChange={changePage} />
+    </div><Pagination page={validPage ? page : 0} size={size} totalItems={issues.data?.totalItems} totalPages={issues.data?.totalPages} pending={issues.isFetching || !valid} onChange={changePage} />
     </section>
   </>;
 }

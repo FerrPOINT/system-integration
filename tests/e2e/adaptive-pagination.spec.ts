@@ -1,7 +1,7 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { login } from './support';
-import { loadEnvironment } from '../load/environment.mjs';
+import { loadUiEnvironment } from '../load/environment.mjs';
 
 test.setTimeout(90_000);
 
@@ -48,7 +48,7 @@ async function collect(page: Page, region: Locator, links: string) {
       expect(ids.has(href)).toBe(false); ids.add(href);
     }
     const next=region.getByRole('button',{name:'Далее →',exact:true});
-    if (!(await next.isEnabled())) return ids;
+    if (!(await next.count()) || !(await next.isEnabled())) return ids;
     const previous=new URL(page.url()).searchParams.get('page') || '0';
     await next.click();
     await expect.poll(() => new URL(page.url()).searchParams.get('page')).not.toBe(previous);
@@ -57,7 +57,7 @@ async function collect(page: Page, region: Locator, links: string) {
 }
 
 test('UI-15: tasks fit the viewport, enumerate every record and keep filters through resize', async ({page}, info) => {
-  loadEnvironment();
+  loadUiEnvironment();
   await login(page);
   const from=new Date().toISOString();
   const ids=new Set<string>();
@@ -104,7 +104,7 @@ test('UI-15: tasks fit the viewport, enumerate every record and keep filters thr
 });
 
 test('UI-15: empty results retain navigation at the bottom including a short mobile viewport', async ({page}) => {
-  loadEnvironment();
+  loadUiEnvironment();
   await login(page);
   await page.goto('/tasks?createdFrom=2100-01-01T00%3A00%3A00Z');
   const region=page.locator('section.paged-list');
@@ -114,14 +114,15 @@ test('UI-15: empty results retain navigation at the bottom including a short mob
     await expect.poll(() => region.locator('.pagination-footer').evaluate(element => {
       const rect=element.getBoundingClientRect(); return innerHeight-rect.bottom;
     })).toBeLessThanOrEqual(25);
-    await expect(region.getByRole('button',{name:'← Назад',exact:true})).toBeDisabled();
-    await expect(region.getByRole('button',{name:'Далее →',exact:true})).toBeDisabled();
+    await expect(region.getByRole('navigation',{name:'Страницы',exact:true})).toHaveCount(0);
+    await expect(region.getByRole('button',{name:'← Назад',exact:true})).toHaveCount(0);
+    await expect(region.getByRole('button',{name:'Далее →',exact:true})).toHaveCount(0);
     await fits(page,region);
   }
 });
 
 test('UI-15: issue grid uses the same server window without losing entries', async ({page}, info) => {
-  const postgres=loadEnvironment().find(item => item.service==='postgres')!;
+  const postgres=loadUiEnvironment().find(item => item.service==='postgres')!;
   const ids=Array.from({length:8},() => crypto.randomUUID());
   const sql=(input: string) => execFileSync('docker',['exec','-i',postgres.containerId,'psql','-XqAt','-v','ON_ERROR_STOP=1','-U','si_admin','-d','si_test'],{input,encoding:'utf8'});
   sql(ids.map((id,index) => "INSERT INTO exchange_issues(id,scope,fingerprint,kind,summary,evidence) VALUES ('"+id+"','pagination:"+id+"','"+id+"','PROTOCOL_ERROR','E2E проверка отображения длинной диагностики обмена и решения оператора, запись "+index+"','{\"reason\":\"Изолированная UI-проверка\"}'::jsonb);").join('\n'));
@@ -137,7 +138,7 @@ test('UI-15: issue grid uses the same server window without losing entries', asy
 });
 
 test('UI-15: history fits its panel and exposes every saved event', async ({page}, info) => {
-  loadEnvironment();
+  loadUiEnvironment();
   await login(page);
   const id=await create(page,'E2E история с адаптивной пагинацией');
   const { token }=await (await page.request.get('/api/csrf')).json();
@@ -164,7 +165,7 @@ test('UI-15: history fits its panel and exposes every saved event', async ({page
       expect(seen.has(id)).toBe(false); seen.add(id);
     }
     const next=region.getByRole('button',{name:'Далее →',exact:true});
-    if (!(await next.isEnabled())) break;
+    if (!(await next.count()) || !(await next.isEnabled())) break;
     await next.click();
   }
   expect(seen).toEqual(new Set(expected));
