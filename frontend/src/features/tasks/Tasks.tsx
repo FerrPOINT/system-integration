@@ -173,10 +173,11 @@ export function TaskCard({ user }: { user: GetSession200 }) {
     <Button onClick={() => task.refetch()}>Повторить</Button></>;
   const item = task.data;
   return <>
-    <PageHeader back={<BackLink to="/tasks">К заданиям</BackLink>} title={item.title}
+    <PageHeader className="task-page-header" back={<BackLink to="/tasks">К заданиям</BackLink>} title={item.title}
       actions={<RefreshButton pending={task.isFetching} onClick={() => task.refetch()} />} />
     <ErrorMessage error={task.error} />
-    <Card asChild><section><CardContent className="base-page-stack"><CardTitle asChild><h2>Состояние задания</h2></CardTitle>
+    <div className="task-workspace">
+    <Card asChild><section className="task-summary" aria-labelledby="task-state-title"><CardContent className="base-page-stack"><CardTitle asChild><h2 id="task-state-title">Состояние задания</h2></CardTitle>
       <dl className="details"><dt>Доставка</dt><dd>{deliveryLabels[item.deliveryStatus]}</dd>
         <dt>Исполнение</dt><dd><BusinessBadge status={item.businessStatus} /></dd>
         <dt>Заявка</dt><dd>{item.request.reference}</dd><dt>Количество</dt><dd>{item.request.quantity}</dd>
@@ -185,11 +186,14 @@ export function TaskCard({ user }: { user: GetSession200 }) {
         {item.result && <><dt>Завершено</dt><dd>{timestamp(item.result.completedAt)}</dd>
           {item.result.rejectionCode && <><dt>Причина отказа</dt><dd>Количество превышает 100 единиц</dd></>}</>}
       </dl>
-      {user.role === 'INITIATOR' && (editing ? <RenameForm task={item} onClose={() => setEditing(false)} /> :
-        <Button onClick={() => setEditing(true)}>Изменить название</Button>)}
-      {user.role === 'OPERATOR' && <ReconcileButton taskId={id} />}
+      {user.role === 'INITIATOR' && editing ? <RenameForm task={item} onClose={() => setEditing(false)} /> :
+        <ActionGroup align="start">
+          {user.role === 'INITIATOR' && <Button onClick={() => setEditing(true)}>Изменить название</Button>}
+          {user.role === 'OPERATOR' && <ReconcileButton taskId={id} />}
+        </ActionGroup>}
     </CardContent></section></Card>
     <History id={id} canReview={user.role === 'OPERATOR'} refreshInterval={taskRefreshInterval(item)} />
+    </div>
   </>;
 }
 
@@ -222,8 +226,10 @@ function History({ id, canReview, refreshInterval }: { id: string; canReview: bo
   const { page, size, valid, viewportRef, changePage } = usePagination();
   const history = useQuery({ queryKey: keys.history(id, page, size), enabled: valid,
     queryFn: ({ signal }) => data(listTaskHistory(id, { page, size }, { signal })), refetchInterval: refreshInterval, placeholderData: keepPreviousData });
-  return <Card asChild><section className="history-panel"><CardContent className="paged-list base-page-stack" aria-busy={history.isFetching}><CardTitle asChild><h2>История</h2></CardTitle>
-    <div className="paged-viewport" ref={viewportRef}>
+  // Measure the available column, independent of the card's content height.
+  return <div className="task-history-viewport" ref={viewportRef}>
+    <Card asChild><section className="history-panel" aria-labelledby="task-history-title"><CardContent className="paged-list base-page-stack" aria-busy={history.isFetching}><CardTitle asChild><h2 id="task-history-title">История</h2></CardTitle>
+    <div className="paged-viewport">
     {!valid ? <Notice role="alert" tone="danger">Некорректные параметры страницы.</Notice> : history.isPending ? <Loading /> : history.isError ? <><ErrorMessage error={history.error} />
       <Button onClick={() => history.refetch()}>Повторить</Button></> : <>
       <Timeline data-page-items>{history.data.items.slice(0, size).map(event => <TimelineItem key={event.eventId} data-page-item data-event-id={event.eventId}><TimelineMarker /><TimelineContent>
@@ -235,5 +241,5 @@ function History({ id, canReview, refreshInterval }: { id: string; canReview: bo
     </>}
     </div>
     <Pagination page={valid ? page : 0} totalItems={history.data?.totalItems ?? 0} totalPages={history.data?.totalPages ?? 0} pending={history.isFetching || !valid} onChange={changePage} />
-  </CardContent></section></Card>;
+  </CardContent></section></Card></div>;
 }

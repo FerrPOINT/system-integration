@@ -22,6 +22,25 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
   await expect(page.getByRole('heading', { name: name + ' обновлено', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'История', exact: true })).toBeVisible();
   await expect(page.getByText(/Название изменено:/)).toBeVisible();
+  const history = page.getByRole('region', { name: 'История', exact: true });
+  const historyViewport = page.locator('.task-history-viewport');
+  await expect.poll(async () => {
+    const state = await page.getByRole('region', { name: 'Состояние задания', exact: true }).boundingBox();
+    const events = await history.boundingBox();
+    return state && events && (testInfo.project.name === 'desktop'
+      ? events.x >= state.x + state.width && Math.abs(events.y - state.y) < 1
+      : events.y >= state.y + state.height);
+  }).toBe(true);
+  await expect.poll(() => new URL(page.url()).searchParams.get('size')).not.toBeNull();
+  const historySize = Number(new URL(page.url()).searchParams.get('size'));
+  await page.setViewportSize({ width: testInfo.project.name === 'desktop' ? 1440 : 390, height: 550 });
+  await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeLessThan(historySize);
+  await expect.poll(async () => {
+    const card = await history.boundingBox();
+    const viewport = await historyViewport.boundingBox();
+    return card && viewport && card.y + card.height <= viewport.y + viewport.height + 1;
+  }).toBe(true);
+  await page.setViewportSize({ width: testInfo.project.name === 'desktop' ? 1440 : 390, height: 1000 });
   await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
   await expect(page.getByRole('link', { name: name + ' обновлено', exact: true })).toBeVisible();
   if (testInfo.project.name === 'mobile') {
