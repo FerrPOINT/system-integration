@@ -1,3 +1,4 @@
+import { ErrorMessage } from '../../app/error-message';
 import { BackLink } from '../../ui/back-link';
 import { Notice } from '../../ui/notice';
 import { EmptyState } from '../../ui/empty-state';
@@ -16,7 +17,7 @@ import type { Issue, IssueKind, IssueStatus, LocalSnapshot, OperationState, Reso
 import { csrf, data, keys } from '../../app/api';
 import { businessLabels, deliveryLabels, timestamp } from '../../app/format';
 import { useCommandKey } from '../../app/use-command-key';
-import { ErrorMessage, Loading, Pagination } from '../../ui/Feedback';
+import { Loading, Pagination } from '../../ui/Feedback';
 
 const kinds: Record<IssueKind, string> = {
   DELIVERY_UNCERTAIN: 'Доставка не подтверждена', DELIVERY_DELAYED: 'Длительная задержка', PROTOCOL_ERROR: 'Ошибка протокола',

@@ -50,7 +50,7 @@ public class ReviewService {
     }
 
     @Transactional(readOnly=true)
-    public Issue get(Actor user,UUID id) { requireOperator(user); return context(id,user,false).view(user.id()); }
+    public Issue get(Actor user,UUID id) { requireOperator(user); return loadContext(id,user,false).view(user.id()); }
 
     @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
     public Page<Issue> list(Actor user,int page,Issue.Status status) {
@@ -67,7 +67,7 @@ public class ReviewService {
             var saved=snapshotId==null ? null : snapshots.get(snapshotId);
             if ((taskId!=null && state==null) || (snapshotId!=null && saved==null) ||
                 (saved!=null && !saved.value().taskId().equals(taskId))) throw RuleViolation.notFound();
-            return context(row,state,saved).view(user.id());
+            return toContext(row,state,saved).view(user.id());
         }).toList();
         return new Page<>(items,page,total);
     }
@@ -108,7 +108,7 @@ public class ReviewService {
     public Issue take(Actor user,UUID key,UUID id,IssueCommands.Take input) {
         requireOperator(user);
         return commands.execute(user.id(),Command.TAKE_ISSUE,key,new Target(id,input),Issue.class,() -> {
-            var context=context(id,user,true);
+            var context=loadContext(id,user,true);
             context.requireRevision(input.expectedIssueRevision());
             context.requireAction(user.id(),TAKE_OWNERSHIP);
             UUID previous=context.issue().assignedTo();
@@ -118,7 +118,7 @@ public class ReviewService {
             if (previous!=null) details.put("previousAssigneeId",previous);
             tasks.history(context.state().task(),user.id(),HistoryType.RESPONSIBILITY_CHANGED,
                 previous==null ? "Оператор взял разбор на себя" : "Разбор передан другому оператору",details);
-            return context(id,user,false).view(user.id());
+            return loadContext(id,user,false).view(user.id());
         });
     }
 
@@ -126,7 +126,7 @@ public class ReviewService {
     public Issue retry(Actor user,UUID key,UUID id,IssueCommands.Retry input) {
         requireOperator(user);
         return commands.execute(user.id(),Command.RETRY_EXCHANGE,key,new Target(id,input),Issue.class,() -> {
-            var context=context(id,user,true);
+            var context=loadContext(id,user,true);
             context.requireRevision(input.expectedIssueRevision());
             boolean protocolError=context.issue().kind()==Issue.Kind.PROTOCOL_ERROR;
             if (protocolError) context.requireFresh(input.reconciliationId());
@@ -143,7 +143,7 @@ public class ReviewService {
             if (input.reconciliationId()!=null) details.put("reconciliationId",input.reconciliationId());
             tasks.history(context.state().task(),user.id(),HistoryType.RETRY_QUEUED,
                 "Повтор назначен оператором: "+input.reason(),details);
-            return context(id,user,false).view(user.id());
+            return loadContext(id,user,false).view(user.id());
         });
     }
 
@@ -151,7 +151,7 @@ public class ReviewService {
     public IssueResolution resolve(Actor user,UUID key,UUID id,IssueCommands.Resolve input) {
         requireOperator(user);
         return commands.execute(user.id(),Command.RESOLVE_ISSUE,key,new Target(id,input),IssueResolution.class,() -> {
-            var context=context(id,user,true);
+            var context=loadContext(id,user,true);
             context.requireRevision(input.expectedIssueRevision());
             context.requireFresh(input.reconciliationId());
             context.requireAction(user.id(),Issue.Action.valueOf(input.action().name()));
@@ -173,18 +173,18 @@ public class ReviewService {
 
     private record Target(UUID id,Object input) {}
 
-    private ReviewContext context(UUID id,Actor user,boolean lock) {
+    private ReviewContext loadContext(UUID id,Actor user,boolean lock) {
         var original=issues.get(id,false);
         var task=original.value().taskId();
-        if (task==null) return context(original,null,null);
+        if (task==null) return toContext(original,null,null);
         var record=tasks.get(task,user,lock);
         var state=tasks.exchange(record.operationId(),false);
         var row=lock ? issues.get(id,true) : original;
         var saved=row.value().latestReconciliationId()==null ? null : issues.reconciliation(task,row.value().latestReconciliationId());
-        return context(row,state,saved);
+        return toContext(row,state,saved);
     }
 
-    private static ReviewContext context(ReviewStore.StoredIssue issue,ExchangeState state,ReviewStore.SavedReconciliation saved) {
+    private static ReviewContext toContext(ReviewStore.StoredIssue issue,ExchangeState state,ReviewStore.SavedReconciliation saved) {
         return new ReviewContext(issue.value(),issue.queueFree(),state,saved==null ? null : saved.value(),saved==null ? null : saved.exchangeVersion());
     }
 

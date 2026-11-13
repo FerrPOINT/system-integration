@@ -18,18 +18,55 @@ public class OperationsController implements OperationsApi {
     public OperationsController(ReviewService operations,ReconciliationService reconciliation) {
         this.operations=operations; this.reconciliation=reconciliation;
     }
-    @Override public ResponseEntity<Issue> getExchangeIssue(UUID id) { return ResponseEntity.ok(ReviewViews.issue(operations.get(AppUser.current().actor(),id))); }
-    @Override public ResponseEntity<IssuePage> listExchangeIssues(Integer page,IssueStatus status) { return ResponseEntity.ok(list(page,status)); }
-    @Override public ResponseEntity<Reconciliation> getTaskReconciliation(UUID task,UUID id) { return ResponseEntity.ok(ReviewViews.reconciliation(operations.reconciliation(AppUser.current().actor(),task,id))); }
-    @Override public ResponseEntity<Reconciliation> reconcileTask(String csrf,UUID key,UUID task) { return ResponseEntity.ok(ReviewViews.reconciliation(reconciliation.reconcile(AppUser.current().actor(),task,key))); }
-    @Override public ResponseEntity<Issue> takeExchangeIssue(String csrf,UUID key,UUID id,TakeIssueRequest input) { return ResponseEntity.ok(ReviewViews.issue(operations.take(AppUser.current().actor(),key,id,new IssueCommands.Take(input.getExpectedIssueRevision())))); }
-    @Override public ResponseEntity<Issue> retryExchange(String csrf,UUID key,UUID id,RetryRequest input) { return ResponseEntity.ok(ReviewViews.issue(operations.retry(AppUser.current().actor(),key,id,new IssueCommands.Retry(input.getExpectedIssueRevision(),input.getReason(),input.getReconciliationId())))); }
-    @Override public ResponseEntity<IssueResolution> resolveExchangeIssue(String csrf,UUID key,UUID id,ResolveIssueRequest input) { return ResponseEntity.ok(ReviewViews.resolution(operations.resolve(AppUser.current().actor(),key,id,new IssueCommands.Resolve(input.getExpectedIssueRevision(),input.getReconciliationId(),
-        com.azhukov.integration.domain.review.IssueResolution.Action.valueOf(input.getAction().name()),input.getReason())))); }
+    @Override
+    public ResponseEntity<Issue> getExchangeIssue(UUID id) {
+        var result = operations.get(AppUser.current().actor(), id);
+        return ResponseEntity.ok(ReviewViews.issue(result));
+    }
 
-    private IssuePage list(int page,IssueStatus status) {
-        var result=operations.list(AppUser.current().actor(),page,status==null ? null :
-            com.azhukov.integration.domain.review.Issue.Status.valueOf(status.getValue()));
-        return new IssuePage(result.items().stream().map(ReviewViews::issue).toList(),result.page(),result.hasNext(),result.totalItems(),result.totalPages());
+    @Override
+    public ResponseEntity<IssuePage> listExchangeIssues(Integer page, IssueStatus status) {
+        var filter = status == null ? null :
+            com.azhukov.integration.domain.review.Issue.Status.valueOf(status.getValue());
+        var result = operations.list(AppUser.current().actor(), page, filter);
+        return ResponseEntity.ok(new IssuePage(
+            result.items().stream().map(ReviewViews::issue).toList(),
+            result.page(), result.hasNext(), result.totalItems(), result.totalPages()));
+    }
+
+    @Override
+    public ResponseEntity<Reconciliation> getTaskReconciliation(UUID task, UUID id) {
+        var result = operations.reconciliation(AppUser.current().actor(), task, id);
+        return ResponseEntity.ok(ReviewViews.reconciliation(result));
+    }
+
+    @Override
+    public ResponseEntity<Reconciliation> reconcileTask(String csrf, UUID key, UUID task) {
+        var result = reconciliation.reconcile(AppUser.current().actor(), task, key);
+        return ResponseEntity.ok(ReviewViews.reconciliation(result));
+    }
+
+    @Override
+    public ResponseEntity<Issue> takeExchangeIssue(String csrf, UUID key, UUID id, TakeIssueRequest input) {
+        var command = new IssueCommands.Take(input.getExpectedIssueRevision());
+        var result = operations.take(AppUser.current().actor(), key, id, command);
+        return ResponseEntity.ok(ReviewViews.issue(result));
+    }
+
+    @Override
+    public ResponseEntity<Issue> retryExchange(String csrf, UUID key, UUID id, RetryRequest input) {
+        var command = new IssueCommands.Retry(
+            input.getExpectedIssueRevision(), input.getReason(), input.getReconciliationId());
+        var result = operations.retry(AppUser.current().actor(), key, id, command);
+        return ResponseEntity.ok(ReviewViews.issue(result));
+    }
+
+    @Override
+    public ResponseEntity<IssueResolution> resolveExchangeIssue(String csrf, UUID key, UUID id, ResolveIssueRequest input) {
+        var action = com.azhukov.integration.domain.review.IssueResolution.Action.valueOf(input.getAction().name());
+        var command = new IssueCommands.Resolve(
+            input.getExpectedIssueRevision(), input.getReconciliationId(), action, input.getReason());
+        var result = operations.resolve(AppUser.current().actor(), key, id, command);
+        return ResponseEntity.ok(ReviewViews.resolution(result));
     }
 }

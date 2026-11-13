@@ -1,3 +1,4 @@
+import { ErrorMessage } from './error-message';
 import { PageHeader } from '../ui/page-header';
 import { Card, CardContent } from '../ui/card';
 import { FormField } from '../ui/form-field';
@@ -11,7 +12,7 @@ import { Link, Navigate, NavLink, Route, Routes } from 'react-router-dom';
 import { clearSession, readSession, csrf, data, keys } from './api';
 import { logIn, logOut } from '../../build/generated/openapi/client';
 import type { GetSession200 } from '../../build/generated/openapi/client';
-import { ErrorMessage, Loading } from '../ui/Feedback';
+import { Loading } from '../ui/Feedback';
 import { TaskList, NewTask, TaskCard } from '../features/tasks/Tasks';
 import { IssueList, IssueCard, ReconciliationCard } from '../features/operations/Operations';
 

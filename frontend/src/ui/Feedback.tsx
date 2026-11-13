@@ -1,13 +1,5 @@
 import { PageNavigation } from './page-navigation';
 import { useMediaQuery } from './use-media-query';
-import { Notice } from './notice';
-import { ApiError } from '../app/api';
-
-export function ErrorMessage({ error }: { error: Error | null }) {
-  if (!error) return null;
-  return <Notice tone="danger" role="alert">{error instanceof ApiError ? error.message : 'Не удалось выполнить запрос. Повторите попытку.'}</Notice>;
-}
-
 export function Loading() {
   return <div className="base-loading-state" role="status" aria-label="Загрузка…" aria-busy="true" data-scope="page">Загрузка…</div>;
 }

@@ -1,3 +1,4 @@
+import { ErrorMessage } from '../../app/error-message';
 import { Notice } from '../../ui/notice';
 import { BackLink } from '../../ui/back-link';
 import { Timeline, TimelineItem, TimelineMarker, TimelineContent } from '../../ui/timeline';
@@ -18,7 +19,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { createTask, getTask, listTaskHistory, listTasks, renameTask } from '../../../build/generated/openapi/client';
 import type { BusinessStatus, GetSession200, Task } from '../../../build/generated/openapi/client';
 import { ApiError, csrf, data, keys } from '../../app/api';
-import { ErrorMessage, Loading, Pagination } from '../../ui/Feedback';
+import { Loading, Pagination } from '../../ui/Feedback';
 import { useMediaQuery } from '../../ui/use-media-query';
 import { useCommandKey } from '../../app/use-command-key';
 import { businessLabels, deliveryLabels, timestamp } from '../../app/format';
@@ -33,11 +34,13 @@ export function TaskList({ user }: { user: GetSession200 }) {
   const [search, setSearch] = useSearchParams();
   const page = Number(search.get('page') || 0);
   const status = search.get('businessStatus') || undefined;
-  const validPage = Number.isSafeInteger(page) && page >= 0 && (!status || status in businessLabels);
   const params = { page, businessStatus: status as BusinessStatus | undefined,
     createdFrom: search.get('createdFrom') || undefined, createdTo: search.get('createdTo') || undefined };
+  const validParameters = Number.isSafeInteger(page) && page >= 0 &&
+    (!status || Object.hasOwn(businessLabels, status)) &&
+    [params.createdFrom, params.createdTo].every(value => !value || Number.isFinite(Date.parse(value)));
   const validPeriod = !params.createdFrom || !params.createdTo || Date.parse(params.createdFrom) < Date.parse(params.createdTo);
-  const valid = validPage && validPeriod;
+  const valid = validParameters && validPeriod;
   function changeFilters(changes: Record<string, string | undefined>) {
     const updated = new URLSearchParams(search);
     updated.delete('page');
@@ -67,7 +70,7 @@ export function TaskList({ user }: { user: GetSession200 }) {
         onChange={event => changeFilters({ createdTo: event.target.value ? event.target.value + ':00Z' : undefined })} />}</FormField>
       <Button type="button" onClick={() => setSearch({}, { replace: true })}>Сбросить</Button>
     </div></Disclosure>
-    {!valid ? <Notice role="alert" tone="danger">{validPage ? 'Начало периода должно быть раньше конца.' : 'Некорректные параметры страницы. Сбросьте фильтры.'}</Notice> : tasks.isPending ? <Loading /> :
+    {!valid ? <Notice role="alert" tone="danger">{validParameters ? 'Начало периода должно быть раньше конца.' : 'Некорректные параметры страницы. Сбросьте фильтры.'}</Notice> : tasks.isPending ? <Loading /> :
       tasks.isError ? <><ErrorMessage error={tasks.error} /><Button onClick={() => tasks.refetch()}>Повторить</Button></> :
       <><div className="list-heading"><span>{tasks.isFetching ? 'Обновляем…' : 'Сохранённые задания'}</span>
         <Button type="button" onClick={() => tasks.refetch()} disabled={tasks.isFetching}>Обновить</Button></div>

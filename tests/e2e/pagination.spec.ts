@@ -50,6 +50,33 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
   await expect(page).toHaveURL(/page=0/);
 });
 
+test('UI-09: invalid URL filters stay local and valid filters still load', async ({ page }) => {
+  await login(page);
+  const invalid = ['businessStatus=toString', 'businessStatus=constructor', 'createdFrom=not-a-date', 'createdTo=not-a-date'];
+  const requests: URL[] = [];
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (url.pathname === '/api/tasks') requests.push(url);
+  });
+  for (const query of invalid) {
+    await page.goto('/tasks?' + query);
+    await expect(page.getByText('Некорректные параметры страницы. Сбросьте фильтры.', { exact: true })).toBeVisible();
+  }
+  expect(requests.filter(url => invalid.some(query => {
+    const [name, value] = query.split('=');
+    return url.searchParams.get(name) === value;
+  }))).toHaveLength(0);
+  const loaded = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/tasks' && url.searchParams.get('businessStatus') === 'SUCCEEDED' &&
+      url.searchParams.has('createdFrom') && response.status() === 200;
+  });
+  await page.goto('/tasks?businessStatus=SUCCEEDED&createdFrom=2020-01-01T00%3A00%3A00Z');
+  await loaded;
+  await expect(page.getByLabel('Создано с (UTC, включительно)', { exact: true })).toHaveValue('2020-01-01T00:00');
+  await expect(page.getByText('Некорректные параметры страницы. Сбросьте фильтры.', { exact: true })).toHaveCount(0);
+});
+
 test('UI-10: lost create response keeps the command key and invalidates the cached registry', async ({ page }) => {
   await login(page);
   const before = await (await page.request.get('/api/tasks')).json();
