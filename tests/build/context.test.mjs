@@ -12,7 +12,9 @@ test('Docker COPY excludes private env variants at every depth and retains templ
   const fixture = mkdtempSync(join(root, '.local', 'context-check-'));
   const context = join(fixture, 'context'), output = join(fixture, 'output');
   const excluded = ['.env', '.env.local', '.env.production', 'frontend/.env', 'frontend/.env.production',
-    'backend/.env.test', 'nested/deep/.env', 'nested/deep/.env.staging'];
+    'backend/.env.test', 'nested/deep/.env', 'nested/deep/.env.staging',
+    '.local/.env.example', '.git/.env.example', 'frontend/node_modules/vendor/.env.example',
+    'backend/build/.env.example', 'backend/.gradle/.env.example'];
   const retained = ['.env.example', 'frontend/.env.example', 'nested/deep/.env.example',
     'frontend/src/probe.ts', 'backend/src/Probe.java'];
   try {

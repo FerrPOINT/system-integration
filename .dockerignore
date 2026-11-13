@@ -1,8 +1,8 @@
-.git
-.local
 **/.env
 **/.env.*
 !**/.env.example
+.git
+.local
 **/node_modules
 **/build
 **/.gradle
