@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { hostname, freemem, totalmem, loadavg } from 'node:os';
 
 const execute = promisify(execFile);
 const root = fileURLToPath(new URL('../..', import.meta.url));
@@ -14,6 +15,8 @@ const appSql = [
   "'lastCursor',(SELECT last_cursor FROM incoming_position WHERE id=1),",
   "'activeClaims',(SELECT count(*) FROM delivery_queue WHERE claimed_until > statement_timestamp()),",
   "'waits',(SELECT coalesce(json_agg(w),'[]'::json) FROM (SELECT datname,wait_event_type,count(*) FROM pg_stat_activity WHERE datname IN ('si_test','si_emulator_test') AND pid<>pg_backend_pid() AND state='active' GROUP BY datname,wait_event_type) w),",
+  "'blocked',(SELECT coalesce(json_agg(b),'[]'::json) FROM (SELECT pid,datname,wait_event_type,wait_event,pg_blocking_pids(pid) AS blockers,extract(epoch FROM clock_timestamp()-xact_start) AS transaction_age_seconds FROM pg_stat_activity WHERE datname IN ('si_test','si_emulator_test') AND pid<>pg_backend_pid() AND cardinality(pg_blocking_pids(pid))>0) b),",
+  "'transactions',(SELECT json_build_object('active',count(*) FILTER (WHERE state='active'),'idleInTransaction',count(*) FILTER (WHERE state='idle in transaction'),'oldestSeconds',coalesce(max(extract(epoch FROM clock_timestamp()-xact_start)),0)) FROM pg_stat_activity WHERE datname IN ('si_test','si_emulator_test') AND pid<>pg_backend_pid() AND xact_start IS NOT NULL),",
   "'database',(SELECT json_agg(d) FROM (SELECT datname,xact_commit,xact_rollback,blks_hit,blks_read,deadlocks,temp_bytes FROM pg_stat_database WHERE datname IN ('si_test','si_emulator_test')) d),",
   "'settings',(SELECT json_object_agg(name,json_build_object('value',setting,'unit',unit)) FROM pg_settings WHERE name IN ('shared_buffers','effective_cache_size','work_mem','max_connections')));",
 ].join('\n');
@@ -49,7 +52,11 @@ export async function loadSnapshot(resources) {
     return { service: resources[index].service, running: state.Running, oom: state.OOMKilled,
       restarted: state.StartedAt !== resources[index].startedAt };
   });
-  return { at, app, emulator, containers, usage: stats.stdout.trim().split('\n').map(line => {
+  return { at, app, emulator, containers,
+    runnerProcess: { host: hostname(), pid: process.pid, cpuMicros: process.cpuUsage(),
+      rssBytes: process.memoryUsage().rss, uptimeSeconds: process.uptime() },
+    host: { totalMemoryBytes: totalmem(), freeMemoryBytes: freemem(), loadAverage: loadavg() },
+    usage: stats.stdout.trim().split('\n').map(line => {
     const item = JSON.parse(line);
     return { name: item.Name, cpu: item.CPUPerc, memory: item.MemUsage, memoryPercent: item.MemPerc };
   }) };
