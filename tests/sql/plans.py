@@ -32,7 +32,7 @@ def static(key,params=(),variant='default'):
 result=json.dumps({'operationId':O,'request':{'reference':'REQ-100001','quantity':25},'version':2,'status':'SUCCEEDED','completedAt':'2026-01-02T00:00:00Z'})
 params={
 'CommandReceipts.execute/6:1':['actor:command:key'],'CommandReceipts.execute/6:2':[U,'CREATE_TASK',K],'CommandReceipts.execute/6:3':[U,'NEW_COMMAND',K,'probe',201,'{}'],
-'DemoUsers.run/1:1':[uid(900004),'sql.probe','not-a-login-secret','INITIATOR'],'SecurityConfiguration.userDetailsService/1:1':['sql.owner.one'],
+'DemoUsers.run/1:1':[uid(900004),'sql.probe','not-a-login-secret','INITIATOR'],'JdbcUserDetailsService.loadUserByUsername/1:1':['sql.owner.one'],
 'TaskRepository.insert/2:1':[NT,U,NO,'probe','REQ-110001',25],'TaskRepository.enqueue/1:1':[uid(105001)],'TaskRepository.rename/3:1':[ 'changed',2,T],
 'TaskRepository.history/5:1':[uid(600001),T,O,'USER',U,'RENAMED','probe','{}'],'TaskRepository.countHistory/1:1':[T],'TaskRepository.history/2:1':[T,0],
 'TaskRepository.lockDueOperation/0:1':[],'TaskRepository.lockQueue/1:1':[O],'TaskRepository.startAttempt/4:1':[C,2,O],'TaskRepository.startAttempt/4:2':[C,O,2,'PUT'],

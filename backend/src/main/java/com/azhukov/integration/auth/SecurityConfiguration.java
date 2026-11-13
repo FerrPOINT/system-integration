@@ -9,12 +9,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.authentication.AuthenticationServiceException;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -23,21 +20,11 @@ import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Locale;
-import java.util.UUID;
 
 @Configuration
 public class SecurityConfiguration {
     @Bean
     PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
-
-    @Bean
-    UserDetailsService userDetailsService(JdbcTemplate jdbc) {
-        return username -> jdbc.query("SELECT * FROM users WHERE username = ?", (rs, row) ->
-            new AppUser(rs.getObject("id", UUID.class), rs.getString("username"),
-                rs.getString("password_hash"), rs.getString("role")), username.toLowerCase(Locale.ROOT))
-            .stream().findFirst().orElseThrow(() -> new UsernameNotFoundException("Unknown user"));
-    }
 
     @Bean
     SecurityFilterChain security(HttpSecurity http, ProblemResponses problems) throws Exception {

@@ -1,4 +1,4 @@
-package com.azhukov.integration.auth;
+package com.azhukov.integration.infrastructure.jdbc;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
