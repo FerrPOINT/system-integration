@@ -14,6 +14,9 @@ export function usePageSize(page: number) {
     metrics.current = { width: 0, rowHeight: 0 };
     let frame = 0;
     function measure() {
+      // An error notice changes the inset, but cannot define a new server window.
+      // Retain the successful window until its owner permits measurement again.
+      if (viewport!.dataset.pageMeasurement === 'paused') return;
       const list = viewport!.querySelector<HTMLElement>('[data-page-items]');
       const items = list?.querySelectorAll<HTMLElement>('[data-page-item]');
       if (!list || !items?.length || viewport!.clientHeight === 0) return;
@@ -39,7 +42,8 @@ export function usePageSize(page: number) {
       schedule();
     }
     const changes = new MutationObserver(observe);
-    changes.observe(viewport, { childList: true, subtree: true, characterData: true });
+    changes.observe(viewport, { childList: true, subtree: true, characterData: true,
+      attributes: true, attributeFilter: ['data-page-measurement'] });
     observe();
     return () => { cancelAnimationFrame(frame); resize.disconnect(); changes.disconnect(); };
   }, [viewport]);

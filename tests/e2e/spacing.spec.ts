@@ -59,9 +59,15 @@ test('UI-07: exchange loading, error, empty and ready states keep the filter sep
     else await expect(page.getByRole('table')).toHaveCount(0);
     await expectGaps(page.locator('main'));
     await expectCards(page);
+    await waitForRegistry(page);
+    const readySize = new URL(page.url()).searchParams.get('size');
+    const readyLinks = await page.locator('[data-issue-link]').evaluateAll(links => links.map(link => link.getAttribute('href')));
     mode = 'error';
     await page.getByRole('button', { name: 'Обновить', exact: true }).click();
     await expect(page.getByRole('alert')).toBeVisible();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect(new URL(page.url()).searchParams.get('size')).toBe(readySize);
+    expect(await page.locator('[data-issue-link]').evaluateAll(links => links.map(link => link.getAttribute('href')))).toEqual(readyLinks);
     await expect(page.locator('[data-issue-link]').first()).toBeVisible();
     await expectGaps(page.locator('main'));
     mode = 'ready';
