@@ -47,12 +47,13 @@ test('UI-02: theme survives navigation and logout, synchronizes tabs and preserv
     expect(brand!.height).toBeLessThan(80);
   }
   const filters = page.locator('.filter-panel');
-  await expect(filters).toHaveJSProperty('open', info.project.name !== 'mobile');
-  if (info.project.name === 'mobile') await filters.locator('summary').click();
+  if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Фильтры заданий', exact: true }).click();
+  else await expect(filters).toHaveJSProperty('open', true);
   await selectChoice(page, 'Результат', 'Выполнено');
   await expect(page).toHaveURL(/businessStatus=SUCCEEDED/);
   await selectChoice(page, 'Результат', 'Все результаты');
   await expect(page).not.toHaveURL(/businessStatus=/);
+  if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Готово', exact: true }).click();
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
   await page.getByLabel('Название *', { exact: true }).fill('Черновик сохраняется при смене темы');
   const other = await context.newPage();

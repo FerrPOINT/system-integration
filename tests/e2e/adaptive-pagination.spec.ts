@@ -74,13 +74,18 @@ test('UI-15: tasks fit the viewport, enumerate every record and keep filters thr
   await page.setViewportSize({width:page.viewportSize()!.width,height:1000});
   await settled(page,region);
   const expandedSize=Number(new URL(page.url()).searchParams.get('size'));
-  const filters=page.locator('.filter-panel');
-  await filters.locator('summary').click();
-  await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeGreaterThan(expandedSize);
-  await settled(page,region);
-  await fits(page,region);
+  await page.getByLabel('Фильтры заданий', { exact: true }).click();
+  if (info.project.name === 'mobile') {
+    await expect(page.getByRole('dialog', { name: 'Фильтры заданий', exact: true })).toBeVisible();
+    expect(Number(new URL(page.url()).searchParams.get('size'))).toBe(expandedSize);
+    await page.getByRole('button', { name: 'Готово', exact: true }).click();
+  } else {
+    await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeGreaterThan(expandedSize);
+    await settled(page,region);
+    await fits(page,region);
+    await page.getByLabel('Фильтры заданий', { exact: true }).click();
+  }
   expect(new URL(page.url()).searchParams.get('createdFrom')).toBe(from);
-  await filters.locator('summary').click();
   await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBe(expandedSize);
   await settled(page,region);
   await fits(page,region);

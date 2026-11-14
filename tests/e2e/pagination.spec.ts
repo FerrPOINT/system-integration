@@ -34,8 +34,7 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
     await expect(page.getByRole('navigation', { name: 'Страницы', exact: true }).getByRole('button')).toHaveCount(3);
     await expect(page.getByRole('button', { name: 'Страница 2', exact: true })).toHaveAttribute('aria-current', 'page');
   }
-  const filters = page.locator('.filter-panel');
-  if (info.project.name === 'mobile') await filters.locator('summary').click();
+  if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Фильтры заданий', exact: true }).click();
   const filtered = page.waitForResponse(response => response.url().includes('/api/tasks?') && response.url().includes('businessStatus=SUCCEEDED') && response.status() === 200);
   await selectChoice(page, 'Результат', 'Выполнено');
   const result = await (await filtered).json();
@@ -54,12 +53,14 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
   await expect(page).toHaveURL(/createdFrom=/);
   await expect(from).toBeFocused();
   await to.fill('2026-10-01T00:00');
-  await expect(page.getByText('Начало периода должно быть раньше конца.', { exact: true })).toBeVisible();
+  const filterRegion = info.project.name === 'mobile' ? page.getByRole('dialog', { name: 'Фильтры заданий', exact: true }) : page;
+  await expect(filterRegion.getByText('Начало периода должно быть раньше конца.', { exact: true })).toBeVisible();
   await to.fill('2026-12-01T00:00');
-  await expect(page.getByText('Начало периода должно быть раньше конца.', { exact: true })).toHaveCount(0);
+  await expect(filterRegion.getByText('Начало периода должно быть раньше конца.', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
   await expect(from).toHaveValue('');
   await expect(to).toHaveValue('');
+  if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Готово', exact: true }).click();
   await page.goto('/tasks?page=999999');
   await expect(page.getByText('Страница не найдена', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Страница 1', exact: true }).click();

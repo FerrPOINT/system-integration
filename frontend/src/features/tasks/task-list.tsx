@@ -9,7 +9,9 @@ import { FormField } from '../../ui/form-field';
 import { Select } from '../../ui/select';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
-import { useRef, useState } from 'react';
+import { Dialog } from '../../ui/dialog';
+import { SlidersHorizontal } from 'lucide-react';
+import { useRef, useState, type ReactNode } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link, Outlet, useSearchParams } from 'react-router-dom';
 import { listTasks } from '../../../build/generated/openapi/client';
@@ -43,14 +45,9 @@ export function TaskList({ user }: { user: GetSession200 }) {
   }
   const tasks = useQuery({ queryKey: [...keys.tasks, 'list', params], queryFn: ({ signal }) => data(listTasks(params, { signal })), enabled: valid, placeholderData: keepPreviousData });
   const mobile = useMediaQuery('(max-width: 760px)');
-  const [filtersOpen, setFiltersOpen] = useState(!mobile || Boolean(status || params.createdFrom || params.createdTo));
-  return <>
-    <div className="list-tools base-page-stack"><PageHeader title={user.role === 'OPERATOR' ? 'Все задания' : 'Мои задания'}
-      context="Приём задания, доставка и результат исполнения показаны отдельно."
-      actions={<>{user.role === 'INITIATOR' && <Button asChild variant="default"><Link ref={createTrigger} to={{ pathname: "/tasks/new", search: search.toString() }}>Создать задание</Link></Button>}
-        <RefreshButton pending={tasks.isFetching} disabled={!valid} onClick={() => tasks.refetch()} /></>} />
-    <Disclosure className="filter-panel" open={filtersOpen} onToggle={event => setFiltersOpen(event.currentTarget.open)} summary={<>Фильтры <span className="muted">{status || params.createdFrom || params.createdTo ? 'Заданы условия' : 'Результат и период'}</span></>}>
-    <div className="base-form filters">
+  const [filtersOpen, setFiltersOpen] = useState(true);
+  const hasFilters = Boolean(status || params.createdFrom || params.createdTo);
+  const filterFields = <div className="base-form filters">
       <FormField id="business-status" label="Результат">{attrs => <Select {...attrs} value={status || 'ALL'}
         onValueChange={value => changeFilters({ businessStatus: value === 'ALL' ? undefined : value })}
         options={[{ value: 'ALL', label: 'Все результаты' }, ...Object.entries(businessLabels).map(([value, label]) => ({ value, label }))]} />}</FormField>
@@ -59,7 +56,18 @@ export function TaskList({ user }: { user: GetSession200 }) {
       <FormField id="field-createdTo" label="Создано до (UTC, не включая)">{attrs => <Input {...attrs} type="datetime-local" name="createdTo" value={params.createdTo?.slice(0,16) || ''}
         onChange={event => changeFilters({ createdTo: event.target.value ? event.target.value + ':00Z' : undefined })} />}</FormField>
       <Button type="button" onClick={() => setSearch({}, { replace: true })}>Сбросить</Button>
-    </div></Disclosure>
+      {mobile && !validPeriod && <Notice role="alert" tone="danger">Начало периода должно быть раньше конца.</Notice>}
+    </div>;
+  return <>
+    <div className="list-tools base-page-stack"><PageHeader title={user.role === 'OPERATOR' ? 'Все задания' : 'Мои задания'}
+      context="Приём задания, доставка и результат исполнения показаны отдельно."
+      actions={<>{user.role === 'INITIATOR' && <Button asChild variant="default"><Link ref={createTrigger} to={{ pathname: "/tasks/new", search: search.toString() }}>Создать задание</Link></Button>}
+        <RefreshButton pending={tasks.isFetching} disabled={!valid} onClick={() => tasks.refetch()} /></>} />
+    {mobile ? <MobileTaskFilters active={hasFilters}>{filterFields}</MobileTaskFilters> :
+      <Disclosure className="filter-panel" open={filtersOpen} onToggle={event => setFiltersOpen(event.currentTarget.open)}
+        summaryProps={{ 'aria-label': 'Фильтры заданий' }} summary={<>Фильтры <span className="muted">{hasFilters ? 'Заданы условия' : 'Результат и период'}</span></>}>
+        {filterFields}
+      </Disclosure>}
     </div>
     <section className="paged-list base-page-stack" aria-busy={tasks.isFetching}>
     <div className="paged-viewport" ref={viewportRef}>
@@ -85,5 +93,23 @@ export function TaskList({ user }: { user: GetSession200 }) {
     <Pagination page={validPage ? page : 0} size={size} totalItems={tasks.data?.totalItems} totalPages={tasks.data?.totalPages} pending={tasks.isFetching || !valid} onChange={changePage} />
     </section>
     <Outlet context={createTrigger} />
+  </>;
+}
+
+function MobileTaskFilters({ active, children }: { active: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  return <>
+    <Button ref={trigger} type="button" className="filter-panel mobile-filter-trigger" aria-label="Фильтры заданий"
+      aria-haspopup="dialog" aria-expanded={open}
+      onClick={() => setOpen(true)}><SlidersHorizontal size={18} aria-hidden="true" />Фильтры
+      <span className="muted">{active ? 'Заданы условия' : 'Результат и период'}</span></Button>
+    <Dialog open={open} title="Фильтры заданий" description="Изменения применяются сразу."
+      onClose={() => setOpen(false)} returnFocusRef={trigger}>
+      <div className="base-dialog-form">
+        <div className="base-dialog-body">{children}</div>
+        <div className="base-dialog-footer"><Button type="button" variant="default" onClick={() => setOpen(false)}>Готово</Button></div>
+      </div>
+    </Dialog>
   </>;
 }

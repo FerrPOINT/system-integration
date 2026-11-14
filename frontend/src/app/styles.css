@@ -123,8 +123,10 @@ main { max-width: 1280px; padding: 26px 24px 56px; margin: 0 auto; }
 .app-shell > main { flex: 1; min-height: 0; width: 100%; overflow: auto; padding-bottom: 24px; }
 .app-shell > main > * { flex-shrink: 0; }
 .app-shell > main > .paged-list { flex-shrink: 1; }
-.list-tools { flex-shrink: 0; max-height: 45%; overflow: auto; }
+.list-tools { flex-shrink: 0; }
 .list-tools > * { flex-shrink: 0; }
+.mobile-filter-trigger { justify-content: flex-start; }
+.mobile-filter-trigger > .muted { margin-inline-start: auto; font-size: 12px; }
 .task-cards, .issue-cards { align-content: start; }
 .app-shell > main > .task-workspace { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); gap: var(--shell-page-block-gap); flex: 1; min-height: 0; }
 .task-summary { align-self: start; min-width: 0; }
