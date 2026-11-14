@@ -11,10 +11,10 @@ a { color: var(--color-accent); text-underline-offset: 3px; overflow-wrap: anywh
   display: flex; align-items: center; gap: 26px; min-height: 80px;
   padding: 14px max(24px, calc((100vw - 1280px)/2)); background: var(--color-surface); border-bottom: 1px solid var(--color-border);
 }
-.main-nav { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-.main-nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 9px 12px; border-radius: 7px; text-decoration: none; color: var(--color-text-muted); font-weight: 550; }
+.main-nav { display: flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--color-border-strong); border-radius: 11px; background: var(--color-background); white-space: nowrap; }
+.main-nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 9px 12px; border: 1px solid transparent; border-radius: 7px; text-decoration: none; color: var(--color-text-muted); font-weight: 550; }
 .main-nav a:hover { background: var(--color-surface-raised); color: var(--color-text-primary); }
-.main-nav a[aria-current="page"] { background: var(--color-selection); color: var(--color-accent); }
+.main-nav a[aria-current="page"] { background: var(--color-selection); border-color: var(--color-accent); color: var(--color-accent); }
 .header-controls { display: flex; gap: 20px; align-items: center; margin-left: auto; }
 .account { display: flex; gap: 12px; align-items: center; white-space: nowrap; font-size: 13px; }
 .account small { font-size: 11px; }
@@ -33,7 +33,6 @@ main { max-width: 1280px; padding: 26px 24px 56px; margin: 0 auto; }
 .task-table th:nth-child(3) { width: 176px; }
 .task-table th:nth-child(4) { width: 210px; }
 .task-table td:first-child > a, .issue-table td:first-child > a { color: var(--color-text-primary); font-weight: 600; text-decoration: none; }
-.task-table td:first-child > a:hover, .issue-table td:first-child > a:hover { color: var(--color-accent); text-decoration: underline; }
 .task-table td small, .issue-table td small { margin-top: 5px; }
 .task-cards { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--base-control-padding-inline); }
 .task-card h2 a { color: var(--color-text-primary); text-decoration: none; }
@@ -91,9 +90,9 @@ main { max-width: 1280px; padding: 26px 24px 56px; margin: 0 auto; }
   .header-controls { display: contents; }
   .theme-picker { order: 1; }
   .theme-control .base-choice-trigger { width: 128px; }
-  .main-nav { order: 2; flex: 1; }
-  .main-nav a { padding-inline: 8px; font-size: 13px; }
-  .account { order: 3; gap: 8px; font-size: 12px; }
+  .main-nav { order: 2; flex: none; }
+  .main-nav a { padding-inline: 4px; font-size: 13px; }
+  .account { order: 3; gap: 8px; margin-left: auto; font-size: 12px; }
 
   .account small { font-size: 10px; }
   .filters { grid-template-columns: 1fr; }
