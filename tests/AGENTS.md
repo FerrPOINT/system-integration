@@ -15,3 +15,9 @@ system-integration-load (compose.load.yml), его БД и loopback-порты 1
 Не останавливайте обычный стенд и system-integration-tunnel.service.
 Тестовые контейнеры и завершённые fixtures удаляются после сверки;
 обычные контейнеры, сеть и том system-integration сохраняются.
+
+Изолированные свойства UI-компонентов проверяет components.config.ts через собственный
+loopback Vite 19774 без API/БД: шесть Select-проверок и четыре регрессии
+навигации/фильтров при отложенном измерении пагинации. Fixtures не входят
+в production build.
+Приложение, recovery и нагрузка по-прежнему используют только тестовый Compose.

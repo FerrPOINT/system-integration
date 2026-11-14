@@ -48,10 +48,10 @@ tests/results/sql-baseline/report.json. Одиночный замер — не p
 
 ## Профиль JDBC по сценарию
 
-С загруженным окружением тестовой БД и GRADLE_USER_HOME, из backend:
+С загруженным окружением тестовой БД и GRADLE_USER_HOME, из корня репозитория:
 
 ~~~sh
-sh ./gradlew --no-daemon --max-workers=2 :integrationTest --tests '*SqlWorkflowProfileTest'
+sh ./gradlew --no-daemon --max-workers=2 :backend:integrationTest --tests '*SqlWorkflowProfileTest'
 ~~~
 
 Профиль проходит настоящий API/транзакции PostgreSQL и прикладные обработчики:
@@ -71,7 +71,7 @@ N+1, не лимит числа запросов в рабочем API. Сост
 
 ## Профиль пакетной публикации
 
-С окружением тестовых БД и GRADLE_USER_HOME, из backend:
+С окружением тестовых БД и GRADLE_USER_HOME, из корня репозитория:
 
 ~~~sh
 sh ./gradlew --no-daemon --max-workers=2 :emulator:integrationTest --tests '*PublisherProfileTest'

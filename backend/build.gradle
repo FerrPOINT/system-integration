@@ -1,22 +1,8 @@
 import org.openapitools.generator.gradle.plugin.tasks.GenerateTask
 
 plugins {
-    id 'java'
-    id 'org.springframework.boot' version '4.1.2'
-    id 'org.openapi.generator' version '7.27.0'
-}
-
-group = 'com.azhukov.integration'
-version = '0.1.0-SNAPSHOT'
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
-    }
-}
-
-repositories {
-    mavenCentral()
+    id 'org.springframework.boot'
+    id 'org.openapi.generator'
 }
 
 dependencies {
@@ -37,39 +23,11 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-def configureContract = { GenerateTask task, String contract, String boundary ->
-    def namespace = "com.azhukov.integration.contract.${boundary}"
-    task.inputSpec.set(layout.projectDirectory.file("../contracts/${contract}.openapi.yaml"))
-    task.outputDir.set(layout.buildDirectory.dir("generated/openapi/${boundary}"))
-    task.generatorName.set('spring')
-    task.library.set('spring-boot')
-    task.apiPackage.set("${namespace}.api")
-    task.modelPackage.set("${namespace}.model")
-    task.validateSpec.set(true)
-    task.cleanupOutput.set(true)
-    task.globalProperties.set([
-        apis: '', models: '',
-        apiDocs: 'false', apiTests: 'false', modelDocs: 'false', modelTests: 'false'
-    ])
-    task.configOptions.set([
-        interfaceOnly: 'true',
-        skipDefaultInterface: 'true',
-        useSpringBoot4: 'true',
-        useTags: 'true',
-        documentationProvider: 'none',
-        annotationLibrary: 'none',
-        openApiNullable: 'false',
-        generateJsonIncludeAnnotations: 'true',
-        generateJsonSetterNullsAnnotations: 'false',
-        hideGenerationTimestamp: 'true'
-    ])
-}
-
 def internalApi = tasks.named('openApiGenerate', GenerateTask) {
-    configureContract(delegate, 'internal-api', 'internal')
+    rootProject.configureContract(delegate, 'internal-api', 'internal')
 }
 def externalApi = tasks.register('generateExchangeApi', GenerateTask) {
-    configureContract(delegate, 'external-exchange', 'external')
+    rootProject.configureContract(delegate, 'external-exchange', 'external')
 }
 
 sourceSets.main.java {
@@ -77,11 +35,10 @@ sourceSets.main.java {
     srcDir(externalApi.flatMap { it.outputDir.dir('src/main/java') })
 }
 
-tasks.named('test') {
-    useJUnitPlatform { excludeTags 'postgres' }
+tasks.named('bootJar') {
+    archiveFileName = 'system-integration.jar'
+    manifest.attributes('Implementation-Title': 'system-integration-backend')
 }
-
-tasks.named('bootJar') { archiveFileName = 'system-integration.jar' }
 
 tasks.register('integrationTest', Test) {
     description = 'HTTP and transaction tests against the isolated si_test PostgreSQL database'

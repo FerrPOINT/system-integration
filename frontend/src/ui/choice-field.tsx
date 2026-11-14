@@ -38,22 +38,20 @@ export function useChoiceState<T>(value: T | undefined, defaultValue: T) {
 
 /** Only this bridge owns native submission, constraint validation and reset. */
 export function ChoiceFormBridge({
-  values,
+  value,
   options,
-  multiple = false,
   name,
   form,
   required,
   disabled,
   trigger,
   onReset,
-  resetValues,
+  resetValue,
   onInvalid,
 }: {
-  values: readonly string[];
-  resetValues: readonly string[];
+  value: string;
+  resetValue: string;
   options: readonly ChoiceOption[];
-  multiple?: boolean;
   name?: string;
   form?: string;
   required?: boolean;
@@ -64,36 +62,36 @@ export function ChoiceFormBridge({
 }) {
   const ui = useUiLabels();
   const ref = useRef<HTMLSelectElement>(null);
-  const reset = useRef({ onReset, resetValues });
+  const reset = useRef({ onReset, resetValue });
   useLayoutEffect(() => {
-    reset.current = { onReset, resetValues };
+    reset.current = { onReset, resetValue };
   });
   useEffect(() => {
     const control = ref.current;
     const owner = control?.form;
     if (!control || !owner) return;
+    let pending: ReturnType<typeof setTimeout>;
     const handler = (event: Event) => {
-      queueMicrotask(() => {
+      clearTimeout(pending);
+      pending = setTimeout(() => {
         if (event.defaultPrevented) return;
         reset.current.onReset();
-        // Native reset happens after the event; restore controlled values too.
-        for (const option of control.options)
-          option.selected = reset.current.resetValues.includes(option.value);
+        // Restore after the native reset default action has finished.
+        control.value = reset.current.resetValue;
       });
     };
     owner.addEventListener("reset", handler);
-    return () => owner.removeEventListener("reset", handler);
+    return () => {
+      owner.removeEventListener("reset", handler);
+      clearTimeout(pending);
+    };
   }, [form, trigger]);
   // Native required single-selects treat only the first empty option as a placeholder.
-  const formOptions = multiple
-    ? options
-    : [
-        ...options.filter((option) => option.value === ""),
-        ...options.filter((option) => option.value !== ""),
-      ];
-  const missing = values.filter(
-    (value) => !options.some((option) => option.value === value),
-  );
+  const formOptions = [
+    ...options.filter((option) => option.value === ""),
+    ...options.filter((option) => option.value !== ""),
+  ];
+  const missing = value !== "" && !options.some((option) => option.value === value);
   return (
     <select
       ref={ref}
@@ -105,8 +103,7 @@ export function ChoiceFormBridge({
       form={form}
       required={required}
       disabled={disabled}
-      multiple={multiple}
-      value={multiple ? [...values] : (values[0] ?? "")}
+      value={value}
       onChange={() => {}}
       onInvalid={(event) => {
         event.preventDefault();
@@ -114,7 +111,7 @@ export function ChoiceFormBridge({
         trigger?.focus();
       }}
     >
-      {!multiple && !options.some((option) => option.value === "") && (
+      {!options.some((option) => option.value === "") && (
         <option value="" />
       )}
       {formOptions.map((option) => (
@@ -126,11 +123,7 @@ export function ChoiceFormBridge({
           {option.label}
         </option>
       ))}
-      {missing.map((value) => (
-        <option key={value} value={value}>
-          {value} — {ui.unavailableValue}
-        </option>
-      ))}
+      {missing && <option value={value}>{value} — {ui.unavailableValue}</option>}
     </select>
   );
 }
@@ -220,10 +213,9 @@ export function useChoiceDisabled(
 }
 
 export function useChoiceValidation(
-  values: readonly string[],
+  value: string,
   required: boolean | undefined,
   disabled: boolean | undefined,
-  multiple = false,
 ) {
   const labels = useUiLabels();
   const [attempted, setAttempted] = useState(false);
@@ -232,12 +224,12 @@ export function useChoiceValidation(
     attempted &&
     required &&
     !disabled &&
-    (multiple ? values.length === 0 : !values[0]);
+    !value;
   return {
     invalid,
     errorId,
     onInvalid: () => setAttempted(true),
     reset: () => setAttempted(false),
-    message: multiple ? labels.chooseAtLeastOne : labels.chooseOne,
+    message: labels.chooseOne,
   };
 }

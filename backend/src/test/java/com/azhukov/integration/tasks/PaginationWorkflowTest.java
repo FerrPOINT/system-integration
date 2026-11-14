@@ -1,18 +1,19 @@
 package com.azhukov.integration.tasks;
 
-import com.azhukov.integration.support.PostgresTest;
-import com.azhukov.integration.application.port.ReviewStore;
 import com.azhukov.integration.domain.review.Evidence;
 import com.azhukov.integration.domain.review.Issue;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.azhukov.integration.repository.ReviewRepository;
+import com.azhukov.integration.support.PostgresTest;
 import java.util.HashSet;
 import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 
 class PaginationWorkflowTest extends PostgresTest {
-    @Autowired ReviewStore issues;
+    @Autowired ReviewRepository issues;
 
     @Test void taskPagesUseSizeWithoutChangingOwnershipOrTheDefault() throws Exception {
         var owner=login("initiator.one");

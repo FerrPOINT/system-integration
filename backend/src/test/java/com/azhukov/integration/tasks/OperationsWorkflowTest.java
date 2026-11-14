@@ -1,37 +1,32 @@
 package com.azhukov.integration.tasks;
 
-import static com.azhukov.integration.support.ExchangeTestData.*;
-
-import com.azhukov.integration.application.ExchangeTasks;
-
+import com.azhukov.integration.client.http.ExchangeReply;
+import com.azhukov.integration.client.http.HttpExternalExchangeClient;
 import com.azhukov.integration.domain.exchange.DeliveryAttempt;
-
-import com.azhukov.integration.infrastructure.http.ExchangeReply;
-import com.azhukov.integration.infrastructure.http.ExchangeClient;
+import com.azhukov.integration.service.ExchangeService;
 import com.azhukov.integration.support.PostgresTest;
-import org.junit.jupiter.api.Test;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import tools.jackson.databind.JsonNode;
 
-import java.util.Map;
-import java.util.UUID;
-
+import static com.azhukov.integration.support.ExchangeTestData.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 
 class OperationsWorkflowTest extends PostgresTest {
-    @MockitoBean ExchangeClient client;
-    @Autowired ExchangeTasks exchange;
+    @MockitoBean HttpExternalExchangeClient client;
+    @Autowired ExchangeService exchange;
     @Autowired PlatformTransactionManager transactions;
     @MockitoSpyBean JdbcTemplate observedSql;
 
