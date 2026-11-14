@@ -1,6 +1,7 @@
 package com.azhukov.integration.repository.jdbc;
 
 import com.azhukov.integration.domain.exchange.ExchangeState;
+import com.azhukov.integration.repository.mapping.TaskResultReader;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.BusinessStatus;
 import com.azhukov.integration.domain.task.DeliveryStatus;
@@ -19,19 +20,13 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class TaskRowMapper implements RowMapper<Task> {
     private final ObjectMapper json;
+    private final TaskResultReader results;
 
     @Override
     public Task mapRow(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
         var business = BusinessStatus.valueOf(rs.getString("business_status"));
         var stored = rs.getString("accepted_result");
-        TaskOutcome outcome = null;
-        if (stored != null && business.isTerminal()) {
-            var result = json.readTree(stored);
-            outcome = new TaskOutcome(BusinessStatus.valueOf(result.get("status").asString()),
-                OffsetDateTime.parse(result.get("completedAt").asString()),
-                result.has("rejectionCode") ? result.get("rejectionCode").asString() : null);
-        }
-        return mapTask(rs,business,outcome);
+        return mapTask(rs,business,results.outcome(business,stored));
     }
 
     private OperationResult storedResult(java.sql.ResultSet rs) throws java.sql.SQLException {

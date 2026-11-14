@@ -13,7 +13,9 @@ class ServiceArchitectureTest {
     private static final ArchRule BOUNDARY = noClasses().that()
         .resideInAPackage("com.azhukov.integration.service..")
         .should().dependOnClassesThat().resideInAnyPackage(
-            "com.azhukov.integration.controller..","com.azhukov.integration.repository.jdbc..","com.azhukov.integration.client.http..",
+            "com.azhukov.integration.controller..","com.azhukov.integration.repository.jdbc..",
+            "com.azhukov.integration.repository.springdata..","com.azhukov.integration.repository.mapping..",
+            "org.springframework.data..","com.azhukov.integration.client.http..",
             "com.azhukov.integration.tasks..","com.azhukov.integration.exchange..",
             "com.azhukov.integration.contract..","com.azhukov.integration.security..",
             "org.springframework.jdbc..","org.springframework.security..","org.springframework.web..",

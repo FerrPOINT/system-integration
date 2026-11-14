@@ -3,6 +3,7 @@ package com.azhukov.integration.tasks;
 import com.azhukov.integration.client.http.ExchangeReply;
 import com.azhukov.integration.service.ExchangeService;
 import com.azhukov.integration.support.PostgresTest;
+import com.azhukov.integration.support.ReadSqlCapture;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -27,11 +28,12 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 /** Real JDBC-call frequency and elapsed time for a fixed workflow, not a load benchmark. */
-@Import(SqlWorkflowProfileTest.SqlObservation.class)
+@Import({SqlWorkflowProfileTest.SqlObservation.class,ReadSqlCapture.class})
 class SqlWorkflowProfileTest extends PostgresTest {
     private static final Map<String,Timing> TIMINGS = new ConcurrentHashMap<>();
     @Autowired ExchangeService exchange;
     private final List<Map<String,Object>> steps = new java.util.ArrayList<>();
+    private final List<ReadSqlCapture.Statement> generatedReads = new java.util.ArrayList<>();
 
     @Test
     void recordsTheWholeSuccessfulWorkflowWithoutCapturingParameters() throws Exception {
@@ -66,8 +68,10 @@ class SqlWorkflowProfileTest extends PostgresTest {
             "elapsedNanos",entry.getValue().elapsed.sum(),"maxNanos",entry.getValue().maximum.get())).toList();
         assertFalse(measured.isEmpty());
         var report = Map.of("recordedAt",Instant.now().toString(),"workflow","create/replay/rename/replay/list/card/claim/ack/two-results/history/card",
-            "scope","single native PostgreSQL workflow; JDBC elapsed includes mapping, excludes commit and connection acquisition",
-            "parametersCaptured",false,"queries",measured,"steps",steps);
+            "scope","single PostgreSQL workflow; manual JDBC timings plus driver-observed generated reads; no commit/connection acquisition timing",
+            "parametersCaptured",false,"queries",measured,"steps",steps,
+            "generatedReadSql",generatedReads.stream().map(ReadSqlCapture.Statement::sql).toList());
+        assertFalse(generatedReads.isEmpty(),"Driver observation must cover Spring Data reads as well as manual JDBC");
         var output = Path.of("../tests/results/sql-workflow.json");
         Files.createDirectories(output.getParent());
         Files.writeString(output,json.writerWithDefaultPrettyPrinter().writeValueAsString(report));
@@ -116,7 +120,12 @@ class SqlWorkflowProfileTest extends PostgresTest {
     private <T> T step(String name,CheckedSupplier<T> operation) throws Exception {
         long before = TIMINGS.values().stream().mapToLong(t -> t.calls.sum()).sum();
         long started = System.nanoTime();
-        try { return operation.get(); }
+        try {
+            var observed=ReadSqlCapture.record(operation::get);
+            generatedReads.addAll(observed.statements().stream().filter(s -> s.sql().contains("FROM \"tasks\"")
+                || s.sql().contains("FROM \"task_history\"")).toList());
+            return observed.value();
+        }
         finally {
             long after = TIMINGS.values().stream().mapToLong(t -> t.calls.sum()).sum();
             steps.add(Map.of("name",name,"jdbcCalls",after-before,"elapsedNanos",System.nanoTime()-started));

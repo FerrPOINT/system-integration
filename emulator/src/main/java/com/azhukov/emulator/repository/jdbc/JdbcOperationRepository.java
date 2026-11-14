@@ -14,6 +14,11 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
 
+/**
+ * Explicit PostgreSQL execution/feed SQL. Row/advisory locks ensure one execution;
+ * bounded publication assigns cursors in commit order. Fault-held events remain
+ * unpublished until their explicit release condition.
+ */
 @Repository
 @RequiredArgsConstructor
 public class JdbcOperationRepository implements OperationRepository {
@@ -81,6 +86,11 @@ public class JdbcOperationRepository implements OperationRepository {
             json.writeValueAsString(result),result.completedAt(),result.operationId());
     }
 
+    /**
+     * Publishes up to limit eligible events in the caller's transaction.
+     * The feed-position row serializes cursor assignment until commit, preventing
+     * a later committed cursor from hiding earlier uncommitted events.
+     */
     public int publish(int limit) {
         // Counter lock is held until commit: higher cursors can never become visible first.
         long previous=jdbc.queryForObject("SELECT last_cursor FROM feed_position WHERE id = 1 FOR UPDATE",Long.class);

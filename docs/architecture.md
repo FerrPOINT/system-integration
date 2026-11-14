@@ -223,7 +223,9 @@ com.azhukov.integration
   service/          сценарии, права, транзакции и координация
     idempotency/    квитанции команд и координация
   repository/       контракты хранения
-    jdbc/           SQL и row mapping
+    jdbc/           ручной SQL команд, обмена и сложных проекций
+    springdata/     UI-чтение: плоские records, узкие репозитории и Query/Criteria
+    mapping/        общая интерпретация результата для обоих read-потребителей
   domain/           task, exchange, review: состояние и правила
   dto/              внутренние команды, результаты и страницы
   mapper/           MapStruct HTTP-проекции
@@ -264,13 +266,15 @@ Task владеет неизменяемым исходным запросом �
 Spring MVC принимает запросы, Spring Security
 проверяет сессию и роль. Прикладные операции проверяют права на конкретную
 запись, применяют бизнес-правила и определяют границы транзакций.
-Репозитории выполняют SQL через Spring JDBC.
+Репозитории используют Spring Data JDBC для чтения заданий и Spring JDBC
+для команд/обмена. DataSource и менеджер транзакций общие.
 
 ## Правила разработки
 
 | Компонент | Ответственность |
 | --- | --- |
-| TaskRepository / JdbcTaskRepository | Задания, страницы и история. |
+| TaskReadRepository / SpringDataTaskReadRepository | Карточка, counted-реестр и история через Spring Data JDBC; records остаются внутри адаптера. |
+| TaskRepository / JdbcTaskRepository | Командное чтение/блокировка, изменения задания и единственная запись истории. |
 | ExchangeRepository / JdbcExchangeRepository | Состояние обмена, очередь, попытки и курсор. TaskRowMapper читает общие проекции; SQL не дублируется. |
 | TaskService | Создание/чтение/переименование, права и атомарное задание/outbox/история/квитанция. |
 | ExchangeService | Захват/фиксация попытки/применение страницы; чистые переходы в domain, SQL в репозитории. |
@@ -542,6 +546,23 @@ AbortSignal сгенерированного клиента. Общее числ
 REPEATABLE READ с общими предикатами. UI-09 проверяет поведение на двух ширинах.
 
 ## Чтение, кэш и повтор команд
+
+TaskService использует TaskReadRepository для карточки, истории и реестра.
+SpringDataTaskReadRepository объединяет узкие generated TaskRows/HistoryRows
+и штатный Query/Criteria для optional-фильтров; COUNT получает те же предикаты
+без пагинации. Отдельной read-БД, JPA, Hibernate и ORM-связей нет.
+Плоские TaskReadRow/HistoryReadRow описывают существующие таблицы.
+ReadMappingConfiguration добавляет чтение PostgreSQL json/jsonb как текста,
+сохраняя стандартные и dialect-конвертеры. TaskResultReader — общий владелец
+расшифровки outcome; промежуточный внешний snapshot для UI не декодируется.
+
+Команды, блокировки, batch и сложные проекции сохраняют ручной SQL.
+Причина — конкретные гарантии запроса и атомарности, а не признак «для UI».
+Согласованный counted snapshot остаётся в read-only REPEATABLE_READ сервиса,
+HTTP DTO и страницы API прежние. Read-интерфейсы не предоставляют save/delete,
+но это не заменяет проверку прав и ограничения БД.
+[План и квалификация](spring-data-read-plan.md) связывают выбор с проверками;
+не заявляем сравнительного выигрыша над JPA без измерения.
 
 PostgreSQL — источник бизнес-состояния. Кэш не определяет права, статус задания
 или факт исполнения. Владелец клиентского кэша — один QueryClient в

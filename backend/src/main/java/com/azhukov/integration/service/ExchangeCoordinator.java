@@ -10,6 +10,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+/**
+ * Runs HTTP between claim/finish transactions: four in-flight requests and at most
+ * 32 claims per pass. This bean owns/closes the per-task virtual executor.
+ * These bounds protect resources; they are not a throughput promise.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j

@@ -453,6 +453,17 @@ tests/results/deadline-regression.json.
   Проверки: task-modal.spec.ts, обновлённые tasks/spacing/themes/pagination.
 
 
+## Приёмка Spring Data JDBC
+
+Проверки следующей итерации заданы в
+[SD-00–SD-06](spring-data-read-plan.md#7-проверки-риски-и-финальный-аудит).
+Ключевые регрессии: ownership и 404, прежние JSON/UTC-поля, согласованный
+COUNT, стабильные страницы, mapping jsonb, отсутствие N+1 и записи через
+read-репозитории; реальные generated SQL входят в EXPLAIN и NF08.
+Read/architecture, полный Java/UI/recovery gate, SQL-планы, demo и NF08 прошли.
+Подтверждённые версии и границы доказательств находятся в current-stage.md;
+результаты ниже относятся к прежним этапам.
+
 ## Приёмка Spring-слоёв
 
 [Регрессии SP-08](spring-boot-refactoring-plan.md#9-регрессии-и-итоговый-gate)

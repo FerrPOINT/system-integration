@@ -5,15 +5,21 @@
 эмулятор. Разработка идёт по [декомпозиции](docs/decomposition.md).
 Проверенные возможности и оставшаяся приёмка указаны в [текущей стадии](docs/current-stage.md).
 
-## Текущий локальный запуск
+## Рабочая среда
 
-По указанию пользователя разработка и preview работают на этом Windows-ПК,
-из `C:/git/azhukov/mini-crm/system-integration`. Интерфейс:
-[127.0.0.1:19673](http://127.0.0.1:19673/), локальный Vite с HMR.
-API, эмулятор и отдельная БД работают в Docker Desktop, проект
-`system-integration-load`, порты 19680/19681/19632. SSH-туннель не используется.
-Старая локальная БД обычного Compose сохранена.
+Текущая разработка и проверки выполняются на Firebat1 по SSH.
+Исходники и выбранный checkout определяются по [AGENTS.md](AGENTS.md);
+публичная демонстрация — [demo.azhukov-dev.ru](https://demo.azhukov-dev.ru/).
+Демонстрационный runtime и изолированный тестовый system-integration-load —
+разные окружения: тесты и нагрузку не направляем на публичную БД.
+Точная версия и результаты приёмки указаны в [текущей стадии](docs/current-stage.md).
 
+### Локальный Windows preview
+
+Команды ниже — необязательный способ локального preview на Windows,
+а не описание текущего запуска на Firebat1. Отдельные API, эмулятор и БД
+используют проект system-integration-load и порты 19680/19681/19632;
+Vite с HMR — [127.0.0.1:19673](http://127.0.0.1:19673/).
 После настройки Node/Corepack по [AGENTS.md](AGENTS.md):
 
 ```powershell
@@ -25,6 +31,16 @@ node .local/toolchains/corepack/node_modules/corepack/dist/corepack.js pnpm --di
 требует их локальной сборки через общий host execution slot. Для полного
 Compose/UI-прогона Vite освобождает порт 19673 frontend-контейнеру.
 Приведённые ниже порты 195xx относятся к обычному Compose и публикации.
+
+## Доступ к данным
+
+Карточка, реестр и история заданий читаются через Spring Data JDBC.
+Изменения, outbox, квитанции, блокировки и сложные проекции выполняются
+явным SQL через JdbcTemplate. Оба механизма используют один DataSource и
+менеджер транзакций; Hibernate/JPA не подключены. API не отдаёт persistence
+records или Spring Page. Причины и владельцы — в
+[архитектуре](docs/architecture.md#чтение-кэш-и-повтор-команд),
+план проверки — [SD-00–SD-06](docs/spring-data-read-plan.md).
 
 ## Интерфейс
 

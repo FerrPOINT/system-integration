@@ -5,6 +5,13 @@ import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.unit.DataSize;
 
+/**
+ * Limits for the reused external transport.
+ * @param baseUrl absolute HTTP origin without credentials, query or path
+ * @param connectTimeout positive connection limit within responseTimeout; default 1s
+ * @param responseTimeout whole-response deadline, at most 10s within the 15s lease; default 2s
+ * @param maxResponseSize actual response bytes, 1B through 1MiB; default 256KiB
+ */
 @ConfigurationProperties("si.exchange.http")
 public record ExchangeHttpProperties(URI baseUrl, Duration connectTimeout, Duration responseTimeout,
                                      DataSize maxResponseSize) {

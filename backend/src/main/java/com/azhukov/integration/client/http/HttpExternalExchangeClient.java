@@ -19,6 +19,11 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+/**
+ * Uses a Spring-owned HttpClient with a deadline covering headers and the full body.
+ * Oversize is a typed protocol outcome. Ambiguous PUT outcomes require lookup of
+ * the same operation, never creation of a new execution identity.
+ */
 @Component
 public class HttpExternalExchangeClient implements ExternalExchangeClient {
     private final HttpClient http;
