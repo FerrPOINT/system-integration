@@ -1,7 +1,12 @@
 # План доработки архитектуры frontend
 
 Статус: **FR-00–FR-12 и FA-01–FA-11 выполнены и проверены**.
-Исходники — [PR #8](https://github.com/FerrPOINT/system-integration/pull/8); квалифицированный код `9b81bdc`.
+Повторное ревью 15 ноября выявило дополнительные переходы состояния, которые
+не покрывал первый gate. В `86edc6f` исправлены потеря draft при session 502,
+повтор неопределённого create, валидация create receipt и новый вход в глубокую
+историю. Component gate расширен до 110 проверок; свежая квалификация приведена
+в [текущей стадии](current-stage.md).
+Исходники — [PR #8](https://github.com/FerrPOINT/system-integration/pull/8); актуальный квалифицированный код `86edc6f`.
 Основание — [аудит от 14 ноября 2026](frontend-architecture-audit-2026-11-14.md).
 Исходный main — `6c335b65c82e35d5bfc95cb5c4d07ac4895618f8`;
 в ветку `feat/frontend-foundation` включён актуальный main `5aa1c06`.
@@ -22,7 +27,7 @@ Backend/OpenAPI в этой работе не изменяются. Среда �
 | FR-09 | Одно типизированное дерево маршрутов, React.lazy и Suspense | Direct URL, role/not-found/chunk recovery; build создаёт отдельные chunks экранов. |
 | FR-10 | React/Query/import/cycle gates, strict TS и StrictMode | Десять lint probes, обычный build и все component fixtures под StrictMode. |
 | FR-11 | maxPages=5, до 100 записей, previous pages и record anchor | collection-window.spec.ts, feed-position.test.mjs и collection-projection.test.mjs. |
-| FR-12 | Итоговый gate, runtime/source parity, IAB, документация и PR | 85 component / 74 E2E / 56 unit / 2 assets и IAB; результаты в current-stage. |
+| FR-12 | Итоговый gate, runtime/source parity, IAB, документация и PR | 110 component / 74 E2E / 56 unit / 2 assets и IAB; отдельные прогоны описаны в current-stage. |
 
 Итоговый код дополнительно устраняет два воспроизведённых при IAB-приёмке случая:
 жёсткий body min-width при классическом scrollbar на 320 px и отсутствие
