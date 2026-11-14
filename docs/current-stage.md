@@ -4,8 +4,8 @@
 
 Ветка `feat/frontend-foundation`, база main `5aa1c06`, квалифицированный код —
 `9b81bdc`. Выполнены FR-00–FR-11 [плана](frontend-refactoring-plan.md);
-исходники подготовлены в [PR #8](https://github.com/FerrPOINT/system-integration/pull/8), FR-12 закрыт. Последующие изменения документации не меняют
-квалифицированные runtime inputs. Merge и public deployment не выполнялись.
+исходники подготовлены в [PR #8](https://github.com/FerrPOINT/system-integration/pull/8), FR-12 закрыт. После gate изменены Markdown и удалена одна пустая строка EOF в login-form;
+поток TSX-токенов идентичен, квалифицированные runtime inputs сохранены. Merge и public deployment не выполнялись.
 
 | Проверка | Свежий результат финального кода |
 | --- | --- |

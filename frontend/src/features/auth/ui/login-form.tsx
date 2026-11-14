@@ -25,4 +25,3 @@ export function LoginForm({ appearance, brand }: { appearance: ReactNode; brand:
     </div>
   </main>;
 }
-
