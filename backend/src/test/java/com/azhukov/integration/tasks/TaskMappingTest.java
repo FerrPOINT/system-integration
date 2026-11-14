@@ -4,7 +4,7 @@ import com.azhukov.integration.domain.Actor;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.BusinessStatus;
 import com.azhukov.integration.repository.jdbc.JdbcExchangeRepository;
-import com.azhukov.integration.repository.jdbc.JdbcTaskRepository;
+import com.azhukov.integration.service.TaskService;
 import com.azhukov.integration.support.PostgresTest;
 import java.util.Map;
 import java.util.UUID;
@@ -19,7 +19,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 class TaskMappingTest extends PostgresTest {
-    @Autowired JdbcTaskRepository store;
+    @Autowired TaskService reads;
     @Autowired JdbcExchangeRepository exchanges;
     @MockitoSpyBean ObjectMapper observedJson;
 
@@ -27,7 +27,7 @@ class TaskMappingTest extends PostgresTest {
     void runningCardDoesNotDecodeAnExternalResultItDoesNotExpose() throws Exception {
         var task = running();
         clearInvocations(observedJson);
-        var card = store.get(task.id(),new Actor(first,Actor.Role.INITIATOR),false);
+        var card = reads.get(new Actor(first,Actor.Role.INITIATOR),task.id());
         assertEquals(BusinessStatus.RUNNING,card.businessStatus());
         assertNull(card.outcome());
         verify(observedJson,never()).readValue(anyString(),eq(OperationResult.class));
@@ -53,7 +53,7 @@ class TaskMappingTest extends PostgresTest {
         jdbc.update("UPDATE tasks SET business_status='SUCCEEDED',accepted_result=?::jsonb WHERE id=?",
             json.writeValueAsString(result),task.id());
         clearInvocations(observedJson);
-        var card = store.get(task.id(),new Actor(first,Actor.Role.INITIATOR),false);
+        var card = reads.get(new Actor(first,Actor.Role.INITIATOR),task.id());
         assertEquals(BusinessStatus.SUCCEEDED,card.outcome().status());
         assertEquals("2026-01-01T00:00:01Z",card.outcome().completedAt().toString());
         verify(observedJson,never()).readValue(anyString(),eq(OperationResult.class));

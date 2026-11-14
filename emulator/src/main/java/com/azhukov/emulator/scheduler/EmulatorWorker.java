@@ -6,6 +6,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/**
+ * Independent execution/publication triggers on the explicit platform scheduler.
+ * Publication defaults to 25 (valid 1..100), with at most 100 events per pass;
+ * execution handles at most 50 operations, without starving publication.
+ */
 @Component
 @ConditionalOnProperty(name = "si.emulator.worker.enabled", havingValue = "true", matchIfMissing = true)
 class EmulatorWorker {

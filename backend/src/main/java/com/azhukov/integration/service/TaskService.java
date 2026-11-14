@@ -12,6 +12,7 @@ import com.azhukov.integration.dto.task.HistoryEntry;
 import com.azhukov.integration.dto.task.RenameTask;
 import com.azhukov.integration.repository.ExchangeRepository;
 import com.azhukov.integration.repository.TaskRepository;
+import com.azhukov.integration.repository.TaskReadRepository;
 import com.azhukov.integration.service.idempotency.IdempotencyService;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -25,11 +26,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class TaskService {
     private final TaskRepository tasks;
+    private final TaskReadRepository reads;
     private final ExchangeRepository exchange;
     private final IdempotencyService commands;
 
     @Transactional(readOnly = true)
-    public Task get(Actor user, UUID id) { return tasks.get(id, user, false); }
+    public Task get(Actor user, UUID id) { return reads.get(id, user); }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Page<Task> list(Actor user, int page, int size, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
@@ -38,9 +40,7 @@ public class TaskService {
             (to != null && !to.getOffset().equals(ZoneOffset.UTC)) ||
             (from != null && to != null && !to.isAfter(from)))
             throw RuleViolation.invalid("Укажите корректный период в UTC: начало включено, конец исключён");
-        var rows = tasks.list(user, page, size, status, from, to);
-        long total = tasks.countTasks(user, status, from, to);
-        return new Page<>(rows,page,size,total);
+        return reads.page(user,page,size,status,from,to);
     }
 
     @Transactional
@@ -73,10 +73,7 @@ public class TaskService {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Page<HistoryEntry> history(Actor user, UUID id, int page, int size) {
         Page.requireValid(page,size);
-        tasks.get(id, user, false);
-        var rows = tasks.history(id, page, size);
-        long total = tasks.countHistory(id);
-        return new Page<>(rows,page,size,total);
+        return reads.history(user,id,page,size);
     }
 
     private static void requireInitiator(Actor user) {

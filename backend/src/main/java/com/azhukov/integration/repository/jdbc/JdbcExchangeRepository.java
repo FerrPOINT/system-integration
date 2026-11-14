@@ -14,6 +14,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
 
+/**
+ * Explicit queue/lease and result SQL. SKIP LOCKED claims commit before HTTP;
+ * finish verifies the unexpired claim. Ordered locks preserve atomic result/cursor
+ * changes. See ExchangeRepository for caller transaction obligations.
+ */
 @Repository
 @RequiredArgsConstructor
 public class JdbcExchangeRepository implements ExchangeRepository {

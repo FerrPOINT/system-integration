@@ -5,6 +5,12 @@ Java 25 и Spring Boot. Текущая структура пакетов опи�
 квалификации — в [SI-09](../docs/decomposition.md#si-09-архитектура-и-оптимизация).
 Следующие правила применяются к текущему и новому коду.
 
+Перед изменением механизма чтения заданий прочитайте
+[план Spring Data JDBC](../docs/spring-data-read-plan.md).
+Чтение карточки, истории и реестра отделено от командного SQL.
+План задаёт границы read/command, Javadoc и итоговую квалификацию;
+подтверждённая стадия и версия публикуются в current-stage.md.
+
 ## Слои и модель
 
 - domain — обычная Java-модель и предметные правила. Без Spring, Jackson,
@@ -15,11 +21,15 @@ Java 25 и Spring Boot. Текущая структура пакетов опи�
   MapStruct; права, допустимые действия и переходы определяет domain/service.
 - service — сценарии, права, координация и транзакции. Зависит от domain, dto,
   контрактов repository/client. Не импортирует controller, generated DTO,
-  repository/jdbc или client/http. Интерфейс для каждого service не нужен.
-- repository — действующие контракты хранения. repository/jdbc — единственный
-  владелец SQL. TaskRepository хранит задания/историю; ExchangeRepository —
-  состояние обмена, очередь, попытки и курсор. У каждого свой JDBC-адаптер,
-  TaskRowMapper общий только для реальных проекций состояния задания.
+  repository/jdbc, repository/springdata, repository/mapping или client/http. Интерфейс для каждого service не нужен.
+- repository — прикладные контракты хранения. TaskReadRepository и его
+  repository/springdata адаптер читают карточку, counted-реестр и историю.
+  Плоские persistence records и Pageable не покидают адаптер; узкие Spring Data
+  интерфейсы не имеют save/delete/findAll. Domain остаётся без аннотаций хранения.
+  repository/jdbc владеет ручным SQL команд, обмена и сложных проекций.
+  TaskRepository хранит команды/историю; ExchangeRepository — очередь, попытки
+  и курсор. repository/mapping содержит общий TaskResultReader без SQL.
+  Spring Data и JdbcTemplate используют один DataSource/transaction manager.
 - client/http — HTTP и строгая проверка внешнего протокола; scheduler — тонкие
   триггеры; security — Spring Security; config — конфигурация;
   exception — единый HTTP-формат ошибок. DTO команд и страниц находятся в dto.

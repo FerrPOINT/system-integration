@@ -10,6 +10,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Owns atomic accept/execute/publish transactions. Completion and result events
+ * commit together; a reused operation ID must retain its original request.
+ * Publication is bounded by MAX_PUBLICATION_BATCH.
+ */
 @Service
 @RequiredArgsConstructor
 public class OperationService {

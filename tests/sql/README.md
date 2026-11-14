@@ -46,6 +46,25 @@ tests/results/sql-baseline/report.json. Одиночный замер — не p
 объясняет конкурентное ожидание и не доказывает причину насыщения CPU.
 Под нагрузкой отдельно нужны частота SQL и время транзакций/блокировок.
 
+## Сгенерированные чтения Spring Data JDBC
+
+Перед plans.py выполнить адресный backend integrationTest
+с --tests '*SpringDataReadsTest' на выделенной тестовой БД.
+ReadSqlCapture наблюдает prepare/bind/executeQuery у test DataSource:
+сохраняет только SELECT tasks/task_history в явно включённом синтетическом
+сценарии, включая имена типов PostgreSQL. Это test-only код, без production
+наблюдателя и без записи аутентификации/паролей.
+Файл tests/results/spring-data-read/generated-sql.json содержит запросы,
+параметры fixtures и SHA-256 исходников репозиториев.
+
+plans.py проверяет соответствие hash текущим исходникам и добавляет эти запросы
+в EXPLAIN вместе с ручным JDBC inventory. Prepared generated запросы имеют
+явные фактически наблюдённые PostgreSQL parameter types. Сканер ручных JDBC
+вызовов сам по себе не доказывает покрытие generated SQL.
+Сравнительные baseline/ пробы фиксируют прежний read-SQL версии 319067e на
+тех же fixtures; они не являются действующим вторым путём приложения.
+Количество source sites не интерпретируется как число запросов или ускорение.
+
 ## Профиль JDBC по сценарию
 
 С загруженным окружением тестовой БД и GRADLE_USER_HOME, из корня репозитория:
