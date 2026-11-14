@@ -14,6 +14,11 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
+/**
+ * Commits the business callback and receipt together. MANDATORY requires the owning
+ * use-case transaction. Replay decodes the stored result without repeating effects;
+ * task visibility remains the responsibility of the calling use case.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional(propagation = Propagation.MANDATORY)

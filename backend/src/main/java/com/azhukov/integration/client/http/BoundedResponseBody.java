@@ -7,7 +7,11 @@ import java.util.List;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow;
 
-/** Checks actual bytes before forwarding them to the accumulating string subscriber. */
+/**
+ * Checks actual bytes before the accumulating string subscriber; Content-Length
+ * cannot bound chunked or dishonest responses. Typed TooLarge keeps a protocol
+ * size violation distinct from generic transport IOException.
+ */
 final class BoundedResponseBody implements HttpResponse.BodySubscriber<String> {
     private final HttpResponse.BodySubscriber<String> delegate;
     private final int status;

@@ -1,12 +1,14 @@
 # Текущая стадия
 
-## Следующая доработка — план чтения через Spring Data JDBC
+## Spring Data JDBC — реализация, квалификация впереди
 
-Подготовлен [план SD-00–SD-06](spring-data-read-plan.md): простое чтение
-заданий через Spring Data JDBC, сохранение явного SQL для команд/обмена,
-Javadoc контрактов, проверка SQL и повторная квалификация.
-Реализация не начата: оба приложения пока используют JdbcTemplate.
-Это уточнение архитектуры по поручению владельца, а не новое требование ТЗ.
+[План SD-00–SD-06](spring-data-read-plan.md) выполняется на Firebat1.
+Карточка, история и реестр заданий используют отдельный TaskReadRepository;
+команды и обмен сохраняют явный JDBC. Старые UI list/count/history-read удалены.
+Добавлены Javadoc, metadata processor и архитектурные ограничения.
+Адресно прошли прежние TaskMapping/TaskWorkflow, новые read/boundary проверки
+и перехват generated SQL с типами PostgreSQL. Это не итоговая квалификация:
+общие Java/UI/recovery/build/Javadoc, EXPLAIN и NF08 ещё предстоят.
 Публичный runtime и результаты завершённого выпуска ниже не изменились.
 
 ## Spring Boot hardening — выполнено

@@ -13,6 +13,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
 
+/**
+ * Review JOINs and bounded snapshot batches retain queueFree/nextAt without N+1.
+ * Locking projections and exchange revisions protect operator decisions; a blind
+ * aggregate save must not overwrite these independently changing facts.
+ */
 @Repository
 @RequiredArgsConstructor
 public class JdbcReviewRepository implements ReviewRepository {

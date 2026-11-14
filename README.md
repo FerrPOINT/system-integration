@@ -32,6 +32,16 @@ node .local/toolchains/corepack/node_modules/corepack/dist/corepack.js pnpm --di
 Compose/UI-прогона Vite освобождает порт 19673 frontend-контейнеру.
 Приведённые ниже порты 195xx относятся к обычному Compose и публикации.
 
+## Доступ к данным
+
+Карточка, реестр и история заданий читаются через Spring Data JDBC.
+Изменения, outbox, квитанции, блокировки и сложные проекции выполняются
+явным SQL через JdbcTemplate. Оба механизма используют один DataSource и
+менеджер транзакций; Hibernate/JPA не подключены. API не отдаёт persistence
+records или Spring Page. Причины и владельцы — в
+[архитектуре](docs/architecture.md#чтение-кэш-и-повтор-команд),
+план проверки — [SD-00–SD-06](docs/spring-data-read-plan.md).
+
 ## Интерфейс
 
 В шапке и на экране входа доступны тёмная, светлая и серая темы.

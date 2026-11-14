@@ -4,15 +4,10 @@ import com.azhukov.integration.domain.Actor;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.json.ContentFingerprint;
 import com.azhukov.integration.domain.RuleViolation;
-import com.azhukov.integration.domain.task.BusinessStatus;
 import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.domain.task.Task;
 import com.azhukov.integration.dto.task.CreateTask;
-import com.azhukov.integration.dto.task.HistoryEntry;
 import com.azhukov.integration.repository.TaskRepository;
-import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +20,11 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.ObjectMapper;
 
+/**
+ * Command SQL and the sole append-only history writer. History requires the service
+ * transaction; deduplicated observations audit only after a real insert commits.
+ * UI reads are owned by SpringDataTaskReadRepository.
+ */
 @Repository
 @RequiredArgsConstructor
 @Slf4j
@@ -38,32 +38,6 @@ public class JdbcTaskRepository implements TaskRepository {
             (user.isOperator() ? "" : " AND owner_id = ?") + (lock ? " FOR UPDATE" : ""),
             rowMapper, user.isOperator() ? new Object[]{id} : new Object[]{id, user.id()});
         return rows.stream().findFirst().orElseThrow(RuleViolation::notFound);
-    }
-
-    public List<Task> list(Actor user, int page, int size, BusinessStatus status,
-                           OffsetDateTime from, OffsetDateTime to) {
-        var args = new ArrayList<Object>();
-        var sql = "SELECT * FROM tasks" + taskConditions(user, status, from, to, args)
-            + " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?";
-        args.add(size);
-        args.add((long) page * size);
-        return jdbc.query(sql, rowMapper, args.toArray());
-    }
-
-    public long countTasks(Actor user, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
-        var args = new ArrayList<Object>();
-        return jdbc.queryForObject("SELECT count(*) FROM tasks" + taskConditions(user, status, from, to, args),
-            Long.class, args.toArray());
-    }
-
-    private static String taskConditions(Actor user, BusinessStatus status,
-                                         OffsetDateTime from, OffsetDateTime to, List<Object> args) {
-        var where = new StringBuilder(" WHERE true");
-        if (!user.isOperator()) { where.append(" AND owner_id = ?"); args.add(user.id()); }
-        if (status != null) { where.append(" AND business_status = ?"); args.add(status.name()); }
-        if (from != null) { where.append(" AND created_at >= ?"); args.add(from); }
-        if (to != null) { where.append(" AND created_at < ?"); args.add(to); }
-        return where.toString();
     }
 
     public Task insert(UUID owner, CreateTask input) {
@@ -121,24 +95,4 @@ public class JdbcTaskRepository implements TaskRepository {
         });
     }
 
-    public long countHistory(UUID id) {
-        return jdbc.queryForObject("SELECT count(*) FROM task_history WHERE task_id = ?", Long.class, id);
-    }
-
-    public List<HistoryEntry> history(UUID id, int page, int size) {
-        return jdbc.query("""
-            SELECT * FROM task_history WHERE task_id = ?
-            ORDER BY occurred_at DESC, id DESC LIMIT ? OFFSET ?
-            """, (rs, row) -> {
-                var details = json.readValue(rs.getString("details"),HistoryDetails.class);
-                return new HistoryEntry(rs.getObject("id",UUID.class),id,rs.getObject("operation_id",UUID.class),
-                    rs.getObject("occurred_at",OffsetDateTime.class),HistoryEntry.Actor.valueOf(rs.getString("actor")),
-                    rs.getObject("actor_user_id",UUID.class),HistoryType.valueOf(rs.getString("event_type")),rs.getString("summary"),
-                    details.attemptId(),details.resultVersion(),details.issueId(),details.reconciliationId(),
-                    details.previousAssigneeId(),details.assignedTo());
-            }, id, size, (long) page * size);
-    }
-
-    private record HistoryDetails(UUID attemptId,Integer resultVersion,UUID issueId,UUID reconciliationId,
-                                  UUID previousAssigneeId,UUID assignedTo) {}
 }

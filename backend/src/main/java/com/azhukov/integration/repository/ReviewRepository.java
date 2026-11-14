@@ -5,6 +5,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Review JOIN projections include queue availability and saved reconciliation state.
+ * Bounded snapshot batches avoid N+1. Locking methods join the service transaction;
+ * stored JSON and exchange revisions preserve the meaning of past observations.
+ */
 public interface ReviewRepository {
     record Opened(UUID id, boolean created) {}
     record StoredIssue(Issue value, boolean queueFree) {}
