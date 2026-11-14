@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Select } from '../src/shared/ui/select';
+import '../src/shared/styles/layout.css';
 import '../src/app/shell/shell.css';
 
 const options = [{ value: 'A', label: 'Alpha' }, { value: 'B', label: 'Beta' }, { value: 'C', label: 'Disabled', disabled: true }];

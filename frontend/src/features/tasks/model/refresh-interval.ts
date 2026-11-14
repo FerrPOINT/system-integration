@@ -1,4 +1,4 @@
-import type { Task } from '../../../build/generated/openapi/client';
+import type { Task } from '../../../../build/generated/openapi/client';
 
 export function taskRefreshInterval(task: Pick<Task, 'businessStatus' | 'deliveryStatus'> | undefined): number | false {
   if (!task) return false;

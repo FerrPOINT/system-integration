@@ -1,18 +1,14 @@
-import { ErrorMessage } from '../../shared/ui/error-message';
-import { FormField } from '../../shared/ui/form-field';
-import { Input } from '../../shared/ui/input';
-import { Button } from '../../shared/ui/button';
-import { CommandRefresh } from '../../shared/ui/command-refresh';
+import './tasks.css';
+import { ErrorMessage } from '../../../shared/ui/error-message';
+import { FormField } from '../../../shared/ui/form-field';
+import { Input } from '../../../shared/ui/input';
+import { Button } from '../../../shared/ui/button';
+import { CommandRefresh } from '../../../shared/ui/command-refresh';
 import { useRef, useState, type RefObject } from 'react';
-import { Dialog, DiscardDialog } from '../../shared/ui/dialog';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Dialog, DiscardDialog } from '../../../shared/ui/dialog';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
-import { createTask, getTask } from '../../../build/generated/openapi/client';
-import { taskKeys } from './api/task-keys';
-import { data } from '../../shared/api/http';
-import { csrf } from '../../shared/api/csrf';
-import { useCommandKey } from '../../shared/lib/forms/use-command-key';
-import { useFormNavigationGuard } from '../../shared/lib/forms/use-form-navigation-guard';
+import { useFormNavigationGuard } from '../../../shared/lib/forms/use-form-navigation-guard';
+import { useCreateTask, useCreatedTaskRefresh } from '../api/task-commands';
 
 export function NewTask() {
   const navigate = useNavigate();
@@ -20,29 +16,18 @@ export function NewTask() {
   const returnFocusRef = useOutletContext<RefObject<HTMLAnchorElement | null>>();
   const titleInput = useRef<HTMLInputElement>(null);
   const [dirty, setDirty] = useState(false);
-  const client = useQueryClient();
-  const command = useCommandKey();
-  const refresh = useMutation({
-    mutationFn: async (id: string) => {
-      await client.fetchQuery({ queryKey: taskKeys.task(id), queryFn: ({ signal }) => data(getTask(id, { signal })) });
-      await client.invalidateQueries({ queryKey: taskKeys.tasks }, { throwOnError: true });
-    },
-  });
+  const refresh = useCreatedTaskRefresh();
   const refreshCreated = (id: string) => refresh.mutate(id, {
     // Per-call callbacks do not redirect after the user has left this component.
     onSuccess: () => navigate('/tasks/' + id),
   });
-  const create = useMutation({
-    mutationFn: async (form: FormData) => {
-      const input = { title: String(form.get('title')), request: { reference: String(form.get('reference')), quantity: Number(form.get('quantity')) } };
-      return data(createTask(input, { ...await csrf(), 'Idempotency-Key': command.forInput(input) }));
-    },
-    onSuccess: result => {
-      command.reset(); guard.release();
-      refreshCreated(result.taskId);
-    },
-  });
+  const create = useCreateTask();
   const guard = useFormNavigationGuard({ dirty, pending: create.isPending });
+  const submit = (form: FormData) => {
+    if (create.isPending || create.isSuccess) return;
+    const input = { title: String(form.get('title')), request: { reference: String(form.get('reference')), quantity: Number(form.get('quantity')) } };
+    create.mutate(input, { onSuccess: result => { guard.release(); refreshCreated(result.taskId); } });
+  };
   const close = () => navigate({ pathname: '/tasks', search: search.toString() }, { replace: true });
   return <>
     <Dialog open title="Новое задание" description="Задание сохранится сразу, отправка исполнителю продолжится в фоне."
@@ -50,7 +35,7 @@ export function NewTask() {
       <form className="base-dialog-form" onChange={event => {
         const form = new FormData(event.currentTarget);
         setDirty(Boolean(form.get('title') || form.get('reference') || form.get('quantity') !== '25'));
-      }} onSubmit={event => { event.preventDefault(); if (!create.isPending && !create.isSuccess) create.mutate(new FormData(event.currentTarget)); }}>
+      }} onSubmit={event => { event.preventDefault(); submit(new FormData(event.currentTarget)); }}>
         <div className="base-dialog-body base-page-stack">
           <fieldset className="base-form-fieldset base-form" disabled={create.isPending || create.isSuccess} aria-label="Данные задания">
             <FormField id="field-title" label="Название" required>{attrs => <Input {...attrs} ref={titleInput} name="title" maxLength={160} pattern=".*\S.*" autoFocus />}</FormField>

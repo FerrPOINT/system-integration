@@ -6,6 +6,7 @@ import { RootErrorBoundary } from './app/root-error-boundary';
 import './shared/styles/design-tokens.css';
 import './shared/styles/controls.css';
 import './shared/styles/patterns.css';
+import './shared/styles/layout.css';
 import './app/shell/shell.css';
 
 const router = createBrowserRouter([{ path: '*', errorElement: <RootErrorBoundary />, element: <><App /><ScrollRestoration getKey={location =>

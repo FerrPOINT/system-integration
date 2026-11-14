@@ -34,6 +34,13 @@
 - FA-10: generic collection page и memo projection отделены от query proxy
   уже при переносе в shared; все три потребителя обновлены. Проверка pure projection
   проходит. Ограничение окна, нагрузка и интегрированные проверки остаются в FR-11.
+- FR-07: tasks разделён на api/model/ui; формы, история, фильтры и представление
+  реестра имеют отдельные точки поиска. Query options и инвалидация принадлежат API,
+  URL parser и режим списка — model. Все 34 затронутые component checks прошли
+  после переноса; scoped lint/typecheck и пять parser/polling tests зелёные.
+- CSS перенесён из shell к tasks/operations/auth и общим layout primitives.
+  Статическое сравнение PostCSS с предыдущим коммитом подтвердило сохранение
+  всех 147 пар selector/media/declarations. Это не заменяет итоговую визуальную проверку.
 - FR-06–FR-12: обязательные работы ещё не завершены. Полный build/test gate,
   IAB и публикация итогового кандидата ещё не выполнены.
 

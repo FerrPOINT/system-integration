@@ -1,12 +1,13 @@
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider, useNavigate } from 'react-router-dom';
-import { TaskCard } from '../src/features/tasks/task-details';
+import { TaskCard } from '../src/features/tasks/ui/task-details-page';
 import { taskKeys } from '../src/features/tasks/api/task-keys';
 import type { Task } from '../build/generated/openapi/client';
 import '../src/shared/styles/design-tokens.css';
 import '../src/shared/styles/controls.css';
 import '../src/shared/styles/patterns.css';
+import '../src/shared/styles/layout.css';
 import '../src/app/shell/shell.css';
 
 const params = new URLSearchParams(location.search);

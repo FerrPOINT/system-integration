@@ -7,6 +7,7 @@ import { RootErrorBoundary } from '../src/app/root-error-boundary';
 import '../src/shared/styles/design-tokens.css';
 import '../src/shared/styles/controls.css';
 import '../src/shared/styles/patterns.css';
+import '../src/shared/styles/layout.css';
 import '../src/app/shell/shell.css';
 
 const taskId = '00000000-0000-4000-8000-000000000001';
