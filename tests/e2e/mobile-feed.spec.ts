@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Request } from '@playwright/test';
 import type { Task } from '../../frontend/build/generated/openapi/client';
 import { login, selectChoice, waitForRegistry } from './support';
 
@@ -14,6 +14,15 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
   const source: Task = await (await page.request.get('/api/tasks/' + receipt.taskId)).json();
   const items = Array.from({ length: 45 }, (_, index) => ({ ...source, taskId: crypto.randomUUID(), title: 'Запись ленты ' + index }));
   const requests: { page: number; size: number; status: string | null }[] = [];
+  const attempts = new Map<Request, typeof requests[number]>();
+  const aborted = new Set<typeof requests[number]>();
+  page.on('requestfailed', request => {
+    const window = attempts.get(request);
+    if (window) {
+      expect(request.failure()?.errorText).toBe('net::ERR_ABORTED');
+      aborted.add(window);
+    }
+  });
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   let fail = true;
@@ -21,6 +30,7 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
     const query = new URL(route.request().url()).searchParams;
     const window = { page: Number(query.get('page')), size: Number(query.get('size')), status: query.get('businessStatus') };
     requests.push(window);
+    attempts.set(route.request(), window);
     if (window.page === 1 && fail) {
       await held;
       await route.fulfill({ status: 503, json: { code: 'SERVICE_UNAVAILABLE', status: 503 } });
@@ -57,7 +67,9 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
     await expect(footer).toHaveText('1–45 из 45');
     const hrefs = await cards.locator('a').evaluateAll(links => links.map(link => link.getAttribute('href')));
     expect(hrefs).toEqual(items.map(item => '/tasks/' + item.taskId));
-    expect(requests.map(window => window.page)).toEqual([0, 1, 1, 2]);
+    expect([...aborted].every(window => window.page === 0)).toBe(true);
+    expect(aborted.size).toBeLessThanOrEqual(1);
+    expect(requests.filter(window => !aborted.has(window)).map(window => window.page)).toEqual([0, 1, 1, 2]);
     expect(requests.every(window => window.size === 20)).toBe(true);
 
     // A whole card is a native link; both browser Back and the detail arrow keep the feed and position.
