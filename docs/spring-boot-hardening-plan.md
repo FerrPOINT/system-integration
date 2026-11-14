@@ -1,6 +1,7 @@
 # План доработок backend и emulator по Spring Boot
 
-Дата: 14.11.2026. Статус: этапы A–E реализованы; общая квалификация и итоговый аудит F выполняются.
+Дата: 14.11.2026. Статус: A–F выполнены и проверены. Квалифицированный код — f891edb;
+результаты — в docs/current-stage.md. Merge и публичный deploy не выполнялись.
 База: `cffcf96cc022d13c5e78221239eca94ef53dc725`, совпадает с GitHub main.
 Рабочий checkout: Firebat1, `/opt/dev/system-integration/.local/structure`.
 
@@ -29,7 +30,7 @@ P3 — сопровождаемость или приведение к совр�
 и разделение unit/PostgreSQL. Особое внимание — транзакциям, правам,
 восстановлению, маппингу и фактическим HTTP-границам.
 
-Свежий прогон на Firebat1:
+Прогон повторного аудита до реализации (базовый код):
 
 ~~~sh
 export GRADLE_USER_HOME=/opt/dev/system-integration/.local/gradle
@@ -80,7 +81,7 @@ PostgreSQL, UI, recovery и NF08 в рамках повторного аудит
 | Тесты | Unit-тесты отделены от реального PostgreSQL тегом postgres. Тестовые reset ограничены si_test/si_emulator_test. Field injection в test fixtures не приравнивается к production-дефекту. |
 | Запуск | Flyway ведёт схему; demo-users и test-faults включаются профилями. Readiness включает БД. JVM non-root; graceful shutdown включён Boot по умолчанию, Compose даёт 60 секунд. |
 
-## 4. Подтверждённые замечания
+## 4. Замечания исходного аудита — закрыты
 
 В сокращённых Java-путях `backend/` означает
 `backend/src/main/java/com/azhukov/integration/`, `emulator/` —
@@ -222,6 +223,8 @@ HTTP-сервере. Штатная максимальная страница п
    но подключить её к sourceSets.test и compileTestJava через task provider.
    External server API-интерфейсы backend не нужны; для этой задачи генерировать
    только модели. В emulator external server API/models остаются в main.
+   Внешний YAML по-прежнему нужен internal API из-за schema references:
+   объявить его в inputs internal generation и сохранить в Docker build context.
 3. Не копировать DTO вручную, не связывать backend с emulator JAR и не заводить
    shared-contract Gradle-модуль. Прежние проверки JSON и fingerprint остаются.
 4. Удалить неиспользуемый spring-security-test из backend.

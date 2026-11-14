@@ -457,6 +457,9 @@ Spring Security. Контроллеры эмулятора используют 
 оставляет method validation самому MVC без class-level @Validated.
 В backend внешний generated набор содержит только модели для src/test:
 production JAR использует внутренний API. Эмулятор владеет внешним server API.
+Внутренняя схема ссылается на external-exchange: внешний YAML остаётся входом
+production-генерации internal API и явно объявлен в Gradle inputs. Docker build
+содержит обе схемы; отсутствие внешних Java-моделей в backend JAR этого не отменяет.
 
 Frontend запускает Orval перед проверкой типов и сборкой. Клиент использует
 относительные URL, поддерживает обязательные заголовки CSRF и идемпотентности
@@ -602,6 +605,11 @@ connect timeout положительный и не больше response timeout
 BoundedResponseBody считает фактически полученные байты до их накопления,
 в том числе без Content-Length. Превышение — ошибка протокола с сохранённым HTTP-статусом,
 а не подтверждение, 404 или сетевая недоступность. Частичный JSON не применяется.
+JDK 25 имеет [BodySubscribers.limiting](https://docs.oracle.com/en/java/javase/25/docs/api/java.net.http/java/net/http/HttpResponse.BodySubscribers.html),
+но сообщает превышение обычным IOException, как и обрыв тела. Небольшой subscriber
+выбран ради отдельного типизированного исхода переполнения без распознавания
+текста исключений: обрыв транспорта должен сохранять неопределённый исход,
+а некорректный размер — требовать разбора. Собственный HTTP framework не вводится.
 При тайм-ауте или прерывании вызывается cancel(true);
 неопределённый исход сохраняется для GET.
 На Java 25 одного HttpRequest.timeout недостаточно для зависшего тела.
