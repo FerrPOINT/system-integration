@@ -1,6 +1,7 @@
 package com.azhukov.integration.client.http;
 
 import com.azhukov.integration.client.ExternalExchangeClient;
+import com.azhukov.integration.config.ExchangeHttpProperties;
 import com.azhukov.integration.domain.exchange.DeliveryAttempt;
 import com.azhukov.integration.domain.review.Reconciliation.Availability;
 import com.azhukov.integration.domain.task.TaskInput;
@@ -10,27 +11,25 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Component
-public class HttpExternalExchangeClient implements ExternalExchangeClient, AutoCloseable {
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1))
-        .version(HttpClient.Version.HTTP_1_1).build();
+public class HttpExternalExchangeClient implements ExternalExchangeClient {
+    private final HttpClient http;
+    private final ExchangeHttpProperties settings;
     private final URI base;
     private final ObjectMapper json;
 
-    public HttpExternalExchangeClient(ObjectMapper json, @Value("${SI_EMULATOR_URL:http://127.0.0.1:19581}") URI base) {
-        if (!validOrigin(base)) throw new IllegalArgumentException("SI_EMULATOR_URL must be an absolute HTTP origin");
-        this.base = base;
+    public HttpExternalExchangeClient(HttpClient http, ObjectMapper json, ExchangeHttpProperties settings) {
+        this.http = http;
+        this.settings = settings;
+        this.base = settings.baseUrl();
         this.json = json;
     }
 
@@ -55,6 +54,8 @@ public class HttpExternalExchangeClient implements ExternalExchangeClient, AutoC
     @Override
     public Lookup lookup(UUID id) {
         var reply=get(id);
+        if (reply.protocolFailure()!=null)
+            return new Lookup(Availability.UNAVAILABLE,null,reply.protocolFailure(),null);
         if (ExchangeProtocol.missingOperation(reply.status(),reply.body()))
             return new Lookup(Availability.NOT_FOUND,null,null,reply.body());
         if (reply.status()>=400 && reply.status()<500)
@@ -71,22 +72,24 @@ public class HttpExternalExchangeClient implements ExternalExchangeClient, AutoC
 
     private ExchangeReply send(HttpRequest.Builder request) {
         var pending = http.sendAsync(
-            request.timeout(Duration.ofSeconds(2)).header("Accept", "application/json").build(),
-            HttpResponse.BodyHandlers.ofString());
+            request.timeout(settings.responseTimeout()).header("Accept", "application/json").build(),
+            BoundedResponseBody.handler(settings.maxResponseSize().toBytes()));
         try {
             // Java 25 request.timeout covers headers only; bound the complete body as well.
-            var response = pending.get(2, TimeUnit.SECONDS);
+            var response = pending.get(settings.responseTimeout().toNanos(), TimeUnit.NANOSECONDS);
             JsonNode body;
             try { body = json.readTree(response.body()); } catch (RuntimeException invalid) { body = null; }
-            return new ExchangeReply(response.statusCode(), body, false);
+            return new ExchangeReply(response.statusCode(), body, false,null);
         } catch (TimeoutException ambiguous) {
             pending.cancel(true);
-            return new ExchangeReply(0, null, false);
+            return new ExchangeReply(0, null, false,null);
         } catch (ExecutionException failed) {
             var cause = failed.getCause();
+            if (cause instanceof BoundedResponseBody.TooLarge oversized)
+                return new ExchangeReply(oversized.status(),null,false,oversized.getMessage());
             if (cause instanceof ConnectException || cause instanceof HttpConnectTimeoutException)
-                return new ExchangeReply(0, null, true);
-            if (cause instanceof IOException) return new ExchangeReply(0, null, false);
+                return new ExchangeReply(0, null, true,null);
+            if (cause instanceof IOException) return new ExchangeReply(0, null, false,null);
             throw new IllegalStateException("Exchange request failed", cause);
         } catch (InterruptedException interrupted) {
             pending.cancel(true);
@@ -95,11 +98,4 @@ public class HttpExternalExchangeClient implements ExternalExchangeClient, AutoC
         }
     }
 
-    @Override public void close() { http.close(); }
-
-    private static boolean validOrigin(URI uri) {
-            return ("http".equals(uri.getScheme()) || "https".equals(uri.getScheme())) && uri.getHost() != null
-                && uri.getUserInfo() == null && (uri.getPath().isEmpty() || uri.getPath().equals("/"))
-                && uri.getQuery() == null && uri.getFragment() == null;
-    }
 }

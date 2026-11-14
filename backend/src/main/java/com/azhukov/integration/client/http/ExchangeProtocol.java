@@ -56,9 +56,9 @@ public final class ExchangeProtocol {
     }
 
     public DeliveryReply delivery(DeliveryAttempt attempt,ExchangeReply reply) {
-        String failure=null;
-        if ((attempt.step().equals("PUT") && (reply.status()==200 || reply.status()==202)) ||
-            (attempt.step().equals("GET") && reply.status()==200)) {
+        String failure=reply.protocolFailure();
+        if (failure==null && ((attempt.step().equals("PUT") && (reply.status()==200 || reply.status()==202)) ||
+            (attempt.step().equals("GET") && reply.status()==200))) {
             try {
                 var expected=new OperationIdentity(attempt.operationId(),attempt.request());
                 if (attempt.step().equals("PUT")) acknowledgement(reply.body(),expected);
@@ -77,6 +77,7 @@ public final class ExchangeProtocol {
     }
 
     public FeedReply feed(ExchangeReply reply,long after) {
+        if (reply.protocolFailure()!=null) return new FeedReply(FeedStatus.INVALID_PAGE,List.of(),reply.protocolFailure());
         if (reply.status()==0 || reply.status()>=500) return new FeedReply(FeedStatus.UNAVAILABLE,List.of(),reply.body());
         if (reply.status()!=200 || !validPage(reply.body(),after)) return new FeedReply(FeedStatus.INVALID_PAGE,List.of(),reply.body());
         var events=new ArrayList<IncomingEvent>();

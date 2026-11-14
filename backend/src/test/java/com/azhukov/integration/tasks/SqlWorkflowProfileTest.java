@@ -49,7 +49,7 @@ class SqlWorkflowProfileTest extends PostgresTest {
         var identity = Map.of("operationId",claim.operationId(),"request",claim.request());
         var acknowledgement = new java.util.LinkedHashMap<String,Object>(identity);
         acknowledgement.put("acceptedAt","2026-01-01T00:00:00Z");
-        step("ack",() -> { finish(exchange,claim,new ExchangeReply(202,json.valueToTree(acknowledgement),false)); return null; });
+        step("ack",() -> { finish(exchange,claim,new ExchangeReply(202,json.valueToTree(acknowledgement),false,null)); return null; });
         var running = new java.util.LinkedHashMap<String,Object>(identity);
         running.put("version",1); running.put("status","RUNNING");
         var terminal = new java.util.LinkedHashMap<String,Object>(identity);

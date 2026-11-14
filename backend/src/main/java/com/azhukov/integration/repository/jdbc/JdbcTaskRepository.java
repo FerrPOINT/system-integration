@@ -1,6 +1,8 @@
 package com.azhukov.integration.repository.jdbc;
 
 import com.azhukov.integration.domain.Actor;
+import com.azhukov.integration.domain.exchange.OperationResult;
+import com.azhukov.integration.json.ContentFingerprint;
 import com.azhukov.integration.domain.RuleViolation;
 import com.azhukov.integration.domain.task.BusinessStatus;
 import com.azhukov.integration.domain.task.HistoryType;
@@ -91,6 +93,23 @@ public class JdbcTaskRepository implements TaskRepository {
             VALUES (?,?,?,?,?,?,?,?::jsonb)
             """, eventId, task.id(), task.operationId(),
             actorId == null ? "SYSTEM" : "USER", actorId, type.name(), summary, json.writeValueAsString(details));
+        auditAfterCommit(eventId,task,actorId,type,details);
+    }
+
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void observe(Task task,UUID issue,OperationResult result,String summary) {
+        UUID eventId=UUID.randomUUID();
+        var details=Map.of("issueId",issue,"resultVersion",result.version());
+        int inserted=jdbc.update("""
+            INSERT INTO task_history(id,task_id,operation_id,actor,event_type,summary,details,observed_result,observation_fingerprint)
+            VALUES (?,?,?,'SYSTEM','RESULT_IGNORED',?,?::jsonb,?::jsonb,?)
+            ON CONFLICT(operation_id,observation_fingerprint) WHERE observation_fingerprint IS NOT NULL DO NOTHING
+            """,eventId,task.id(),result.operationId(),summary,json.writeValueAsString(details),
+            json.writeValueAsString(result),ContentFingerprint.of(json,result));
+        if (inserted==1) auditAfterCommit(eventId,task,null,HistoryType.RESULT_IGNORED,details);
+    }
+
+    private void auditAfterCommit(UUID eventId,Task task,UUID actorId,HistoryType type,Object details) {
         var references = json.valueToTree(details);
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override public void afterCommit() {

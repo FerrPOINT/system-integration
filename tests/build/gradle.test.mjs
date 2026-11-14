@@ -20,21 +20,32 @@ test('Java apps own their task graphs and regenerate only consumers of a changed
       copyFileSync(join(root, name), join(fixture, name));
     }
     cpSync(join(root, 'gradle/wrapper'), join(fixture, 'gradle/wrapper'), { recursive: true });
-    assert.ok(!run(':backend:bootJar', '--dry-run').includes(':emulator:'));
+    const backendJar=run(':backend:bootJar','--dry-run');
+    assert.ok(!backendJar.includes(':emulator:'));
+    assert.ok(!backendJar.includes(':backend:generateExchangeApi'),'Production JAR cannot depend on test-only generation');
+    assert.ok(run(':backend:compileTestJava','--dry-run').includes(':backend:generateExchangeApi'));
     assert.ok(!run(':emulator:bootJar', '--dry-run').includes(':backend:'));
     run(...tasks);
     for (const output of ['backend/build/generated/openapi/internal/src/main/java',
       'backend/build/generated/openapi/external/src/main/java', 'emulator/build/generated/openapi/external/src/main/java'])
       assert.ok(existsSync(join(fixture, output)), output);
+    assert.ok(!existsSync(join(fixture,'backend/build/generated/openapi/external/src/main/java/com/azhukov/integration/contract/external/api')),
+      'Backend needs external models for tests, not unused server interfaces');
+    assert.ok(existsSync(join(fixture,'emulator/build/generated/openapi/external/src/main/java/com/azhukov/integration/contract/external/api/ExchangeApi.java')));
     const unchanged = run(...tasks);
     for (const task of tasks) assert.ok(unchanged.includes('> Task ' + task + ' UP-TO-DATE'), task);
     appendFileSync(join(fixture, 'contracts/external-exchange.openapi.yaml'), '\n# synthetic invalidation probe\n');
     const changed = run(...tasks);
-    assert.ok(changed.includes('> Task :backend:openApiGenerate UP-TO-DATE'));
-    for (const task of [tasks[1], tasks[2]]) {
+    // Internal API references external schemas, so it is a real consumer too.
+    for (const task of tasks) {
       assert.ok(changed.includes('> Task ' + task + '\n'), task);
       assert.ok(!changed.includes('> Task ' + task + ' UP-TO-DATE'), task);
     }
+    appendFileSync(join(fixture,'contracts/internal-api.openapi.yaml'),'\n# internal-only invalidation probe\n');
+    const internalOnly=run(...tasks);
+    assert.ok(!internalOnly.includes('> Task '+tasks[0]+' UP-TO-DATE'));
+    for (const task of [tasks[1],tasks[2]])
+      assert.ok(internalOnly.includes('> Task '+task+' UP-TO-DATE'),task);
   } finally {
     assert.ok(resolve(fixture).startsWith(resolve(root, '.local') + '/gradle-check-'));
     rmSync(fixture, { recursive: true });

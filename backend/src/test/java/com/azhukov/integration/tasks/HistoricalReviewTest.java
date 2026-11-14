@@ -26,7 +26,7 @@ class HistoricalReviewTest extends PostgresTest {
     void historicalIssueReceiptKeepsItsOldOwnerAndDoesNotRewriteCurrentIssue() throws Exception {
         var task=created(login("initiator.one"),UUID.randomUUID());
         var claim=exchange.claim();
-        finish(exchange,claim,new com.azhukov.integration.client.http.ExchangeReply(400,null,false));
+        finish(exchange,claim,new com.azhukov.integration.client.http.ExchangeReply(400,null,false,null));
         UUID issue=jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id=?",UUID.class,task);
         UUID key=UUID.randomUUID();
         String historical="""

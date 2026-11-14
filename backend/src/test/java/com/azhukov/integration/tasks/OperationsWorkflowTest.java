@@ -63,7 +63,7 @@ class OperationsWorkflowTest extends PostgresTest {
             created(initiator,UUID.randomUUID());
             var claim=exchange.claim();
             assertNotNull(claim);
-            finish(exchange,claim,new ExchangeReply(400,null,false));
+            finish(exchange,claim,new ExchangeReply(400,null,false,null));
         }
         jdbc.update("""
             INSERT INTO exchange_issues(id,scope,fingerprint,kind,summary,evidence)
@@ -108,7 +108,7 @@ class OperationsWorkflowTest extends PostgresTest {
         var saved=body(first);
         assertEquals("MATCH",saved.get("outcome").asString());
         assertEquals("NOT_FOUND",saved.get("externalAvailability").asString());
-        when(client.get(claim.operationId())).thenReturn(new ExchangeReply(503,null,false));
+        when(client.get(claim.operationId())).thenReturn(new ExchangeReply(503,null,false,null));
         var unavailable=reconcile(op,task,UUID.randomUUID()); status(200,unavailable);
         assertEquals("UNAVAILABLE",body(unavailable).get("outcome").asString());
         assertEquals("PENDING",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id = ?",String.class,task));
@@ -233,7 +233,7 @@ class OperationsWorkflowTest extends PostgresTest {
     void protocolRetryRequiresFreshEvidenceAndPreservesInputAndCounter() throws Exception {
         UUID task=created(login("initiator.one"),UUID.randomUUID());
         var original=exchange.claim();
-        finish(exchange,original,new ExchangeReply(400,null,false));
+        finish(exchange,original,new ExchangeReply(400,null,false,null));
         var op=login("operator");
         UUID issue=jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id = ?",UUID.class,task);
         when(client.get(original.operationId())).thenReturn(missing());
@@ -256,7 +256,7 @@ class OperationsWorkflowTest extends PostgresTest {
     @Test
     void differentExternalRequestCannotAuthorizeRetryOrApplyAndStopPreservesBusinessState() throws Exception {
         UUID task=created(login("initiator.one"),UUID.randomUUID());
-        var claim=exchange.claim(); finish(exchange,claim,new ExchangeReply(409,null,false));
+        var claim=exchange.claim(); finish(exchange,claim,new ExchangeReply(409,null,false,null));
         var op=login("operator");
         when(client.get(claim.operationId())).thenReturn(external(claim,true,26));
         var reconciliation=reconcile(op,task,UUID.randomUUID()); status(200,reconciliation);
@@ -282,7 +282,7 @@ class OperationsWorkflowTest extends PostgresTest {
         for (int n=1;n<=5;n++) {
             jdbc.update("UPDATE delivery_queue SET due_at=clock_timestamp()-interval '1 second'");
             claim=exchange.claim();assertEquals(n,claim.number());
-            finish(exchange,claim,new ExchangeReply(0,null,true));
+            finish(exchange,claim,new ExchangeReply(0,null,true,null));
         }
         var op=login("operator");
         UUID id=jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id=?",UUID.class,task);
@@ -321,7 +321,7 @@ class OperationsWorkflowTest extends PostgresTest {
         DeliveryAttempt claim=null;
         for (int n=1;n<=5;n++) {
             jdbc.update("UPDATE delivery_queue SET due_at=clock_timestamp()-interval '1 second'");
-            claim=exchange.claim();finish(exchange,claim,new ExchangeReply(503,null,false));
+            claim=exchange.claim();finish(exchange,claim,new ExchangeReply(503,null,false,null));
         }
         var op=login("operator");
         UUID id=jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id=?",UUID.class,task);
@@ -344,7 +344,7 @@ class OperationsWorkflowTest extends PostgresTest {
         DeliveryAttempt claim=null;
         for (int n=1;n<=5;n++) {
             jdbc.update("UPDATE delivery_queue SET due_at=clock_timestamp()-interval '1 second'");
-            claim=exchange.claim();finish(exchange,claim,new ExchangeReply(503,null,false));
+            claim=exchange.claim();finish(exchange,claim,new ExchangeReply(503,null,false,null));
         }
         var op=login("operator");
         UUID id=jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id=?",UUID.class,task);
@@ -367,7 +367,7 @@ class OperationsWorkflowTest extends PostgresTest {
         DeliveryAttempt last=null;
         for (int n=1;n<=5;n++) {
             jdbc.update("UPDATE delivery_queue SET due_at=clock_timestamp()-interval '1 second'");
-            last=exchange.claim();finish(exchange,last,new ExchangeReply(503,null,false));
+            last=exchange.claim();finish(exchange,last,new ExchangeReply(503,null,false,null));
         }
         var op=login("operator");
         UUID id=jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id=?",UUID.class,task);
@@ -408,7 +408,7 @@ class OperationsWorkflowTest extends PostgresTest {
     void malformedComparisonIsVisibleAsAProtocolProblemAndCannotApply() throws Exception {
         UUID task=created(login("initiator.one"),UUID.randomUUID());
         var claim=exchange.claim();
-        when(client.get(claim.operationId())).thenReturn(new ExchangeReply(200,json.readTree("{\"bad\":true}"),false));
+        when(client.get(claim.operationId())).thenReturn(new ExchangeReply(200,json.readTree("{\"bad\":true}"),false,null));
         var op=login("operator");
         var comparison=reconcile(op,task,UUID.randomUUID()); status(200,comparison);
         assertEquals("UNAVAILABLE",body(comparison).get("outcome").asString());
@@ -522,9 +522,9 @@ class OperationsWorkflowTest extends PostgresTest {
             body.put("executions",1).set("result",json.createObjectNode().put("operationId",claim.operationId().toString())
                 .set("request",request).put("version",2).put("status","SUCCEEDED").put("completedAt","2026-11-12T00:00:01Z"));
         }
-        return new ExchangeReply(claim.step().equals("PUT") && !completed ? 202 : 200,body,false);
+        return new ExchangeReply(claim.step().equals("PUT") && !completed ? 202 : 200,body,false,null);
     }
-    private ExchangeReply missing() { return new ExchangeReply(404,json.readTree("{\"title\":\"Отсутствует\",\"status\":404,\"code\":\"OPERATION_NOT_FOUND\"}"),false); }
+    private ExchangeReply missing() { return new ExchangeReply(404,json.readTree("{\"title\":\"Отсутствует\",\"status\":404,\"code\":\"OPERATION_NOT_FOUND\"}"),false,null); }
     private MvcResult reconcile(Client op,UUID task,UUID key) throws Exception {
         return mvc.perform(post("/api/tasks/"+task+"/reconciliations").session(op.session()).header("X-CSRF-TOKEN",op.csrf())
             .header("Idempotency-Key",key)).andReturn();

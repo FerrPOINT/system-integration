@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.transaction.CannotCreateTransactionException;
@@ -50,11 +51,19 @@ public class ApiExceptionHandler {
         return response(503,"SERVICE_UNAVAILABLE","Хранилище временно недоступно. Повторите действие позже");
     }
 
-    @ExceptionHandler({BindException.class, HandlerMethodValidationException.class, jakarta.validation.ConstraintViolationException.class,
+    @ExceptionHandler({BindException.class,
         HttpMessageNotReadableException.class, MissingRequestValueException.class,
         MethodArgumentTypeMismatchException.class})
     ResponseEntity<Problem> validation(Exception error) {
         return response(400,"VALIDATION_FAILED","Проверьте поля запроса");
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    ResponseEntity<?> methodValidation(HandlerMethodValidationException error) {
+        if (!error.isForReturnValue()) return validation(error);
+        log.error("Controller response violates validation constraints");
+        return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(ProblemDetail.forStatus(500));
     }
 
     public void write(HttpServletResponse response, int status, String code) throws IOException {
