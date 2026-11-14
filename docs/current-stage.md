@@ -4,9 +4,16 @@
 
 Во время приёмки backend в main вошёл frontend PR #8 (673c7ec).
 Его код и документы сохранены; конфликты затронули только документацию.
-Backend/SQL/контракты совпадают с 46ffcc8. Совместимость нового frontend
-с исправленным backend проверяется отдельно; результаты ниже закреплены
-на своих исходных кандидатах и не подменяют эту интеграционную проверку.
+Интегрированный кандидат 2653c7775deddccf674ebb2341efdb8a2a09def3 проверен
+на Firebat1: lint/typecheck/codegen/Vite, 56 frontend Node tests, две asset-проверки,
+четыре HTTP smoke, 74 desktop/mobile UI и 110 component, без ошибок и пропусков.
+Backend/SQL/контракты и compile inputs совпадают с 46ffcc8; файловая система
+backend-образа побайтно совпала по DiffIDs, OS-слои emulator/frontend прежние.
+Java/SQL/recovery/NF08 ниже относятся к этим неизменённым backend inputs;
+нагрузка не повторялась только из-за переноса frontend. Новые UI/component
+результаты — отдельная проверка связки, не выдаются за старые 74/10.
+Receipts: integrated-*.log/json, integrated-components.json.gz и
+integration-qualification.json в tests/results/backend-audit-fixes-2026-11-15.
 
 ## Финальный backend-аудит — квалификация 15 ноября
 
