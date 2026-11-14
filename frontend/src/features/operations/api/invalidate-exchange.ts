@@ -10,7 +10,7 @@ export async function invalidateExchange(client: QueryClient, { taskId, issueId 
   if (issueId) affected.push(exchangeKeys.issue(issueId), exchangeKeys.issueLists);
   if (taskId) affected.push(taskKeys.task(taskId), taskKeys.taskLists);
   // Task detail prefixes include history; list prefixes cover every active filter.
-  await Promise.all(affected.map(queryKey => client.invalidateQueries({ queryKey }, { throwOnError: true })));
+  await Promise.all(affected.map((queryKey) => client.invalidateQueries({ queryKey }, { throwOnError: true })));
 }
 
 /** The follow-up read has observable state independent of an accepted command. */

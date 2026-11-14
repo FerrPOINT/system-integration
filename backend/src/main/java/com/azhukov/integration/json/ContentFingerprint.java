@@ -19,14 +19,17 @@ public final class ContentFingerprint {
 
     public static String text(String value) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException error) { throw new IllegalStateException(error); }
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException error) {
+            throw new IllegalStateException(error);
+        }
     }
 
     private static Object normalize(Object value) {
-        if (value instanceof Map<?,?> map) {
-            var ordered = new TreeMap<String,Object>();
-            map.forEach((key,item) -> ordered.put((String) key, normalize(item)));
+        if (value instanceof Map<?, ?> map) {
+            var ordered = new TreeMap<String, Object>();
+            map.forEach((key, item) -> ordered.put((String) key, normalize(item)));
             return ordered;
         }
         if (value instanceof List<?> list) return list.stream().map(ContentFingerprint::normalize).toList();

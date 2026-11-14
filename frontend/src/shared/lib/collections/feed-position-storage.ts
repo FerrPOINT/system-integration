@@ -5,18 +5,33 @@ const positionLimit = 32;
 export type FeedPosition = { page: number; index: number; id?: string; offset: number; scrollY: number };
 export type PositionIssue = 'invalid' | 'unavailable';
 
-export const positionKey = (owner: string, route: string, query: string) => prefix + JSON.stringify([owner, route, query]);
+export const positionKey = (owner: string, route: string, query: string) =>
+  prefix + JSON.stringify([owner, route, query]);
 
-export function readPosition(key: string, size: number, supplied?: Storage): { position?: FeedPosition; issue?: PositionIssue } {
+export function readPosition(
+  key: string,
+  size: number,
+  supplied?: Storage,
+): { position?: FeedPosition; issue?: PositionIssue } {
   try {
     const value = (supplied ?? window.sessionStorage).getItem(key);
     if (!value) return {};
     const record = JSON.parse(value);
     const p = record?.position;
-    if (record?.version !== 1 || !p || !Number.isSafeInteger(p.page) || p.page < 0 ||
-      !Number.isInteger(p.index) || p.index < 0 || p.index >= size ||
+    if (
+      record?.version !== 1 ||
+      !p ||
+      !Number.isSafeInteger(p.page) ||
+      p.page < 0 ||
+      !Number.isInteger(p.index) ||
+      p.index < 0 ||
+      p.index >= size ||
       (p.id !== undefined && (typeof p.id !== 'string' || !p.id)) ||
-      !Number.isFinite(p.offset) || !Number.isFinite(p.scrollY) || p.scrollY < 0) return { issue: 'invalid' };
+      !Number.isFinite(p.offset) ||
+      !Number.isFinite(p.scrollY) ||
+      p.scrollY < 0
+    )
+      return { issue: 'invalid' };
     return { position: { page: p.page, index: p.index, id: p.id, offset: p.offset, scrollY: p.scrollY } };
   } catch (error) {
     return { issue: error instanceof SyntaxError ? 'invalid' : 'unavailable' };
@@ -33,7 +48,11 @@ export function writePosition(key: string, position: FeedPosition, supplied?: St
         const candidate = storage.key(index);
         if (candidate?.startsWith(prefix)) {
           let time = 0;
-          try { time = JSON.parse(storage.getItem(candidate) || '{}').updatedAt || 0; } catch { /* Invalid UI metadata is expendable. */ }
+          try {
+            time = JSON.parse(storage.getItem(candidate) || '{}').updatedAt || 0;
+          } catch {
+            /* Invalid UI metadata is expendable. */
+          }
           entries.push({ key: candidate, time });
         }
       }
@@ -41,7 +60,9 @@ export function writePosition(key: string, position: FeedPosition, supplied?: St
       while (entries.length >= positionLimit) storage.removeItem(entries.shift()!.key);
     }
     storage.setItem(key, JSON.stringify({ version: 1, updatedAt: Date.now(), position }));
-  } catch { return 'unavailable'; }
+  } catch {
+    return 'unavailable';
+  }
 }
 
 export function clearFeedPositions(supplied?: Storage) {
@@ -51,5 +72,7 @@ export function clearFeedPositions(supplied?: Storage) {
       const key = storage.key(index);
       if (key?.startsWith(prefix)) storage.removeItem(key);
     }
-  } catch { /* An inaccessible browser store cannot expose a previous identity's position. */ }
+  } catch {
+    /* An inaccessible browser store cannot expose a previous identity's position. */
+  }
 }

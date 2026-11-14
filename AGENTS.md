@@ -82,10 +82,11 @@ $env:PLAYWRIGHT_BROWSERS_PATH="$PWD/.local/browsers"
 
 ## Форматирование
 
-Сейчас подготовлены только настройки. Массовое форматирование обоих backend,
-frontend и тестов отложено до готовности frontend и отдельного поручения
-на общий проход. До этого не запускайте spotlessApply/pnpm format и не
-включайте format-on-save или обязательную проверку форматирования в сборке.
+Общий проход выполнен по поручению пользователя. Gradle build/check проверяет
+рукописную Java через Spotless; frontend build проверяет Prettier, ESLint и
+TypeScript. Docker targets выполняют те же проверки. Проверка не переписывает
+код: исправление стиля запускается явно через spotlessApply/pnpm format.
+Format-on-save включён для настроенных Java/JS/TS/CSS/JSON/HTML редакторов.
 Правила и версии заданы в root build.gradle, .editorconfig, .prettierrc.json
 и frontend/package.json; второго локального стиля не добавлять.
 Generated/build/results, lockfile и применённые миграции исключены.

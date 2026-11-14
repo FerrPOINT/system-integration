@@ -15,27 +15,33 @@ import org.springframework.stereotype.Component;
  * External availability never changes readiness: local acceptance must remain possible.
  */
 @Component
-@Endpoint(id="exchange")
+@Endpoint(id = "exchange")
 public class ExchangeDiagnosticsEndpoint {
     private final ExchangeCoordinator coordinator;
     private final ExchangeService exchange;
     private final boolean enabled;
 
-    public ExchangeDiagnosticsEndpoint(ExchangeCoordinator coordinator,ExchangeService exchange,
-                                       @Value("${si.exchange.enabled:true}") String enabled) {
+    public ExchangeDiagnosticsEndpoint(
+            ExchangeCoordinator coordinator,
+            ExchangeService exchange,
+            @Value("${si.exchange.enabled:true}") String enabled) {
         // ConditionalOnProperty matches only these literals; Boolean conversion also accepts yes/on/1.
         if (!"true".equalsIgnoreCase(enabled) && !"false".equalsIgnoreCase(enabled))
             throw new IllegalArgumentException("si.exchange.enabled must be true or false");
-        this.coordinator=coordinator;this.exchange=exchange;this.enabled=Boolean.parseBoolean(enabled);
+        this.coordinator = coordinator;
+        this.exchange = exchange;
+        this.enabled = Boolean.parseBoolean(enabled);
     }
 
-    public record Diagnostics(Instant observedAt,boolean workerEnabled,
-                              ExchangeCoordinator.FeedDiagnostics feed,
-                              DeliveryBacklog deliveryQueue) {}
+    public record Diagnostics(
+            Instant observedAt,
+            boolean workerEnabled,
+            ExchangeCoordinator.FeedDiagnostics feed,
+            DeliveryBacklog deliveryQueue) {}
 
     @ReadOperation
     public Diagnostics read() {
-        var backlog=exchange.backlog();
-        return new Diagnostics(Instant.now(),enabled,coordinator.diagnostics(),backlog);
+        var backlog = exchange.backlog();
+        return new Diagnostics(Instant.now(), enabled, coordinator.diagnostics(), backlog);
     }
 }

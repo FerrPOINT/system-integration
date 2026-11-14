@@ -21,21 +21,72 @@ export function RenameForm({ task, onClose }: { task: Task; onClose: () => void 
   const rename = useRenameTask(task.taskId);
   const conflict = rename.error instanceof ApiError && rename.error.status === 409;
   const guard = useFormNavigationGuard({ dirty, pending: rename.isPending });
-  return <><form className="base-form edit-form" onSubmit={event => {
-    event.preventDefault();
-    if (!rename.isPending && !rename.isSuccess) rename.mutate({ title: String(new FormData(event.currentTarget).get('title')), expectedTitleRevision: revision },
-      { onSuccess: () => { guard.release(); refreshTask(); } });
-  }}>
-    <fieldset className="base-form-fieldset base-form" disabled={rename.isPending || rename.isSuccess}>
-    <FormField id="field-title" label="Новое название" required>{attrs => <Input {...attrs} ref={titleInput} name="title" maxLength={160} pattern=".*\S.*" defaultValue={initialTitle} autoFocus
-      onChange={event => setDirty(event.target.value !== initialTitle)} />}</FormField>
-    </fieldset>
-    <ErrorMessage error={rename.error} />
-    <CommandRefresh message="Название сохранено." error={refresh.error} pending={refresh.isPending} onRetry={refreshTask} />
-    <ActionGroup align="start">
-      {!rename.isSuccess && <Button variant="default" disabled={rename.isPending || conflict}>Сохранить</Button>}
-      <Button type="button" disabled={rename.isPending} onClick={() => guard.requestClose(conflict ? () => { guard.release(); refreshTask(); } : onClose)}>
-        {conflict ? 'Обновить карточку' : rename.isSuccess ? 'Закрыть' : 'Отмена'}</Button>
-    </ActionGroup>
-  </form><DiscardDialog open={guard.open} returnFocusRef={titleInput} onCancel={guard.cancel} onDiscard={guard.discard} /></>;
+  return (
+    <>
+      <form
+        className="base-form edit-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!rename.isPending && !rename.isSuccess)
+            rename.mutate(
+              { title: String(new FormData(event.currentTarget).get('title')), expectedTitleRevision: revision },
+              {
+                onSuccess: () => {
+                  guard.release();
+                  refreshTask();
+                },
+              },
+            );
+        }}
+      >
+        <fieldset className="base-form-fieldset base-form" disabled={rename.isPending || rename.isSuccess}>
+          <FormField id="field-title" label="Новое название" required>
+            {(attrs) => (
+              <Input
+                {...attrs}
+                ref={titleInput}
+                name="title"
+                maxLength={160}
+                pattern=".*\S.*"
+                defaultValue={initialTitle}
+                autoFocus
+                onChange={(event) => setDirty(event.target.value !== initialTitle)}
+              />
+            )}
+          </FormField>
+        </fieldset>
+        <ErrorMessage error={rename.error} />
+        <CommandRefresh
+          message="Название сохранено."
+          error={refresh.error}
+          pending={refresh.isPending}
+          onRetry={refreshTask}
+        />
+        <ActionGroup align="start">
+          {!rename.isSuccess && (
+            <Button variant="default" disabled={rename.isPending || conflict}>
+              Сохранить
+            </Button>
+          )}
+          <Button
+            type="button"
+            disabled={rename.isPending}
+            onClick={() =>
+              guard.requestClose(
+                conflict
+                  ? () => {
+                      guard.release();
+                      refreshTask();
+                    }
+                  : onClose,
+              )
+            }
+          >
+            {conflict ? 'Обновить карточку' : rename.isSuccess ? 'Закрыть' : 'Отмена'}
+          </Button>
+        </ActionGroup>
+      </form>
+      <DiscardDialog open={guard.open} returnFocusRef={titleInput} onCancel={guard.cancel} onDiscard={guard.discard} />
+    </>
+  );
 }

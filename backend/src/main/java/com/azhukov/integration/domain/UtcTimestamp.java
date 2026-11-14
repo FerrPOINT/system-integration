@@ -8,6 +8,6 @@ public final class UtcTimestamp {
     private UtcTimestamp() {}
 
     public static boolean isSupported(OffsetDateTime value) {
-        return value.getOffset().equals(ZoneOffset.UTC) && value.getYear()>=1 && value.getYear()<=9999;
+        return value.getOffset().equals(ZoneOffset.UTC) && value.getYear() >= 1 && value.getYear() <= 9999;
     }
 }

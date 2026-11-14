@@ -7,7 +7,8 @@ import { clearSession, sessionKey } from '../model/session-policy';
 export function useLogin() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async (form: FormData) => data(logIn({ username: String(form.get('username')), password: String(form.get('password')) }, await csrf())),
+    mutationFn: async (form: FormData) =>
+      data(logIn({ username: String(form.get('username')), password: String(form.get('password')) }, await csrf())),
     // Session-query failures have their own recovery in the auth gate.
     onSuccess: () => client.invalidateQueries({ queryKey: sessionKey }),
   });

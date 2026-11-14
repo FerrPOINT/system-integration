@@ -20,48 +20,115 @@ export function NewTask() {
   const retryButton = useRef<HTMLButtonElement>(null);
   const [dirty, setDirty] = useState(false);
   const refresh = useCreatedTaskRefresh();
-  const refreshCreated = (id: string) => refresh.mutate(id, {
-    // Per-call callbacks do not redirect after the user has left this component.
-    onSuccess: () => navigate('/tasks/' + id),
-  });
+  const refreshCreated = (id: string) =>
+    refresh.mutate(id, {
+      // Per-call callbacks do not redirect after the user has left this component.
+      onSuccess: () => navigate('/tasks/' + id),
+    });
   const { command: create, unresolvedInput } = useCreateTask();
   const guard = useFormNavigationGuard({ dirty, pending: create.isPending });
   const submit = (form: FormData) => {
     if (create.isPending || create.isSuccess) return;
-    const input = unresolvedInput ?? { title: String(form.get('title')), request: { reference: String(form.get('reference')), quantity: Number(form.get('quantity')) } };
-    create.mutate(input, { onSuccess: result => { guard.release(); refreshCreated(result.taskId); } });
+    const input = unresolvedInput ?? {
+      title: String(form.get('title')),
+      request: { reference: String(form.get('reference')), quantity: Number(form.get('quantity')) },
+    };
+    create.mutate(input, {
+      onSuccess: (result) => {
+        guard.release();
+        refreshCreated(result.taskId);
+      },
+    });
   };
   const close = () => navigate({ pathname: '/tasks', search: search.toString() }, { replace: true });
-  return <>
-    <Dialog open title="Новое задание" description="Задание сохранится сразу, отправка исполнителю продолжится в фоне."
-      onClose={close} pending={create.isPending} returnFocusRef={returnFocusRef}>
-      <form className="base-dialog-form" onChange={event => {
-        const form = new FormData(event.currentTarget);
-        setDirty(Boolean(form.get('title') || form.get('reference') || form.get('quantity') !== '25'));
-      }} onSubmit={event => { event.preventDefault(); submit(new FormData(event.currentTarget)); }}>
-        <div className="base-dialog-body base-page-stack">
-          <fieldset className="base-form-fieldset base-form" disabled={create.isPending || create.isSuccess || Boolean(unresolvedInput)} aria-label="Данные задания">
-            <FormField id="field-title" label="Название" required>{attrs => <Input {...attrs} ref={titleInput} name="title" maxLength={160} pattern=".*\S.*" autoFocus />}</FormField>
-            <div className="task-input-row">
-              <FormField id="field-reference" label="Номер заявки" required hint="REQ- и шесть цифр. После создания изменить нельзя.">{attrs => <Input {...attrs} name="reference" pattern="REQ-[0-9]{6}" placeholder="REQ-000001" />}</FormField>
-              <FormField id="field-quantity" label="Количество" required hint="От 1 до 1000 единиц.">{attrs => <Input {...attrs} name="quantity" type="number" min={1} max={1000} step={1} defaultValue={25} />}</FormField>
-            </div>
-            <p className="muted">До 100 единиц включительно — успешное исполнение, больше — бизнес-отказ.</p>
-          </fieldset>
-          {unresolvedInput ? <Notice role="alert" tone="warning" title="Результат отправки неизвестен">
-            Задание могло сохраниться. Повторите исходную отправку, чтобы узнать результат.
-          </Notice> : <ErrorMessage error={create.error} />}
-          <CommandRefresh message="Задание создано." error={refresh.error} pending={refresh.isPending}
-            onRetry={() => create.data && refreshCreated(create.data.taskId)} />
-        </div>
-        <div className="base-dialog-footer">
-          <Button type="button" onClick={close} disabled={create.isPending}>{create.isSuccess ? 'Закрыть' : 'Отмена'}</Button>
-          {!create.isSuccess && <Button ref={retryButton} variant="default" disabled={create.isPending}>{create.isPending ? 'Сохраняем…' : unresolvedInput ? 'Повторить исходную отправку' : 'Создать'}</Button>}
-        </div>
-      </form>
-    </Dialog>
-    <DiscardDialog open={guard.open} returnFocusRef={unresolvedInput ? retryButton : titleInput} onCancel={guard.cancel} onDiscard={guard.discard}
-      description={unresolvedInput ? 'Задание могло сохраниться. Закрыв форму, вы потеряете возможность безопасно повторить эту отправку.' : undefined}
-      discardLabel={unresolvedInput ? 'Закрыть без проверки' : undefined} cancelLabel={unresolvedInput ? 'Вернуться к проверке' : undefined} />
-  </>;
+  return (
+    <>
+      <Dialog
+        open
+        title="Новое задание"
+        description="Задание сохранится сразу, отправка исполнителю продолжится в фоне."
+        onClose={close}
+        pending={create.isPending}
+        returnFocusRef={returnFocusRef}
+      >
+        <form
+          className="base-dialog-form"
+          onChange={(event) => {
+            const form = new FormData(event.currentTarget);
+            setDirty(Boolean(form.get('title') || form.get('reference') || form.get('quantity') !== '25'));
+          }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            submit(new FormData(event.currentTarget));
+          }}
+        >
+          <div className="base-dialog-body base-page-stack">
+            <fieldset
+              className="base-form-fieldset base-form"
+              disabled={create.isPending || create.isSuccess || Boolean(unresolvedInput)}
+              aria-label="Данные задания"
+            >
+              <FormField id="field-title" label="Название" required>
+                {(attrs) => (
+                  <Input {...attrs} ref={titleInput} name="title" maxLength={160} pattern=".*\S.*" autoFocus />
+                )}
+              </FormField>
+              <div className="task-input-row">
+                <FormField
+                  id="field-reference"
+                  label="Номер заявки"
+                  required
+                  hint="REQ- и шесть цифр. После создания изменить нельзя."
+                >
+                  {(attrs) => <Input {...attrs} name="reference" pattern="REQ-[0-9]{6}" placeholder="REQ-000001" />}
+                </FormField>
+                <FormField id="field-quantity" label="Количество" required hint="От 1 до 1000 единиц.">
+                  {(attrs) => (
+                    <Input {...attrs} name="quantity" type="number" min={1} max={1000} step={1} defaultValue={25} />
+                  )}
+                </FormField>
+              </div>
+              <p className="muted">До 100 единиц включительно — успешное исполнение, больше — бизнес-отказ.</p>
+            </fieldset>
+            {unresolvedInput ? (
+              <Notice role="alert" tone="warning" title="Результат отправки неизвестен">
+                Задание могло сохраниться. Повторите исходную отправку, чтобы узнать результат.
+              </Notice>
+            ) : (
+              <ErrorMessage error={create.error} />
+            )}
+            <CommandRefresh
+              message="Задание создано."
+              error={refresh.error}
+              pending={refresh.isPending}
+              onRetry={() => create.data && refreshCreated(create.data.taskId)}
+            />
+          </div>
+          <div className="base-dialog-footer">
+            <Button type="button" onClick={close} disabled={create.isPending}>
+              {create.isSuccess ? 'Закрыть' : 'Отмена'}
+            </Button>
+            {!create.isSuccess && (
+              <Button ref={retryButton} variant="default" disabled={create.isPending}>
+                {create.isPending ? 'Сохраняем…' : unresolvedInput ? 'Повторить исходную отправку' : 'Создать'}
+              </Button>
+            )}
+          </div>
+        </form>
+      </Dialog>
+      <DiscardDialog
+        open={guard.open}
+        returnFocusRef={unresolvedInput ? retryButton : titleInput}
+        onCancel={guard.cancel}
+        onDiscard={guard.discard}
+        description={
+          unresolvedInput
+            ? 'Задание могло сохраниться. Закрыв форму, вы потеряете возможность безопасно повторить эту отправку.'
+            : undefined
+        }
+        discardLabel={unresolvedInput ? 'Закрыть без проверки' : undefined}
+        cancelLabel={unresolvedInput ? 'Вернуться к проверке' : undefined}
+      />
+    </>
+  );
 }
