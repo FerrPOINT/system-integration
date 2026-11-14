@@ -13,26 +13,18 @@ PostgreSQL 18.6 → 18.7: counts/digests 14 business/migration таблиц
 Receipts — tests/results/public-2026-11-14 (ignored) и runtime release.json.
 Предыдущие immutable образы и rollback override сохранены. PR #6 не слит.
 
-Форматирование ведётся отдельно в chore/code-formatting поверх 2e97ce4:
+В chore/code-formatting поверх 2e97ce4 подготовлены только настройки:
 Spotless 8.11.0 / google-java-format 2.0.0 (AOSP, 4 пробела, 120 колонок)
-для рукописной Java обоих приложений, Prettier 3.10.1 (2 пробела, 120)
-для frontend и JS/TS-тестов; .editorconfig и IDE format-on-save.
-Версии закреплены, generated/build/results/lockfile/миграции не форматируются.
-CLI-команды — в README; spotlessCheck входит в Gradle check, новых CI/hooks нет.
-
-После первичного форматирования прошли все 221 Java-тест
-(backend unit 107 / PostgreSQL 84, emulator unit 13 / PostgreSQL 17),
-два JAR, TypeScript/Vite, 29 Node-проверок и пять SQL inventory-тестов.
-Для 142 изменённых Java-файлов сверены кодовые токены/литералы; imports
-только сортируются либо удаляются как неиспользуемые. Для 69 JDBC sites
-сохранились IDs и строковые фрагменты SQL. Исправлен обнаруженный разбор
-переноса между jdbc и .query; регрессия сначала воспроизвела пропуск вызова.
-JS/TS AST сверены до/после форматирования; JSX проверен после штатного Vite
-transform с объединением соседних статических текстовых children.
-Полные UI/recovery/NF08 для форматирования повторно не запускались.
-Receipts — tests/results/code-formatting (ignored).
-Formatter commit отделён от настройки инструментов и поправки SQL inventory.
-Форматированная ветка отдельно не развёртывалась: публичный runtime — 2e97ce4.
+для рукописной Java обоих приложений и Prettier 3.10.1 (2 пробела, 120)
+для frontend и JS/TS-тестов, .editorconfig и настройки редактора.
+Версии закреплены; generated/build/results/lockfile/миграции исключены.
+По решению пользователя общий проход отложен до готовности frontend.
+Массовый diff и сопутствующая поправка SQL inventory убраны из PR #7;
+исходники приложений и тесты совпадают с 2e97ce4.
+Format-on-save выключен, enforceCheck=false не добавляет проверку текущего
+стиля к Gradle check. Команды будущего общего прохода описаны в README;
+новых CI/hooks нет. Текущие исходники не требуется форматировать для сборки.
+Настройки проверяются без перезаписи файлов. Публичный runtime — 2e97ce4.
 
 ## PR #6 — замечание P2 по диагностике исправлено
 

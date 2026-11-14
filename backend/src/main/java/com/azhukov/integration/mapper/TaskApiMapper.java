@@ -22,21 +22,13 @@ public interface TaskApiMapper {
     Task task(com.azhukov.integration.domain.task.Task value);
 
     Request request(TaskInput value);
-
     TaskInput input(Request value);
-
     CreateTask create(CreateTaskRequest value);
-
     CreateTaskResult created(CreateTask.Result value);
-
     RenameTask rename(RenameTaskRequest value);
-
     RenameTaskResult renamed(RenameTask.Result value);
-
     HistoryEvent history(HistoryEntry value);
-
     TaskResult result(TaskOutcome value);
-
     com.azhukov.integration.domain.task.BusinessStatus status(BusinessStatus value);
 
     @ValueMapping(source = "PENDING", target = MappingConstants.THROW_EXCEPTION)

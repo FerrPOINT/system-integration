@@ -23,66 +23,48 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Configuration
 public class SecurityConfiguration {
     @Bean
-    PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+    PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
 
     @Bean
     SecurityFilterChain security(HttpSecurity http, ApiExceptionHandler problems) throws Exception {
         // Authentication precedes CSRF so an expired session consistently returns 401.
-        http.addFilterBefore(
-                new OncePerRequestFilter() {
-                    @Override
-                    protected void doFilterInternal(
-                            HttpServletRequest request, HttpServletResponse response, FilterChain chain)
-                            throws ServletException, IOException {
-                        var path = request.getRequestURI().substring(request.getContextPath().length());
-                        var authentication = SecurityContextHolder.getContext().getAuthentication();
-                        if (path.startsWith("/api/")
-                                && !path.equals("/api/csrf")
-                                && !path.equals("/api/login")
-                                && (authentication == null || !(authentication.getPrincipal() instanceof AppUser))) {
-                            problems.write(response, 401, "SESSION_REQUIRED");
-                            return;
-                        }
-                        chain.doFilter(request, response);
-                    }
-                },
-                CsrfFilter.class);
-        http.authorizeHttpRequests(auth ->
-                auth.dispatcherTypeMatchers(DispatcherType.ERROR)
-                        .permitAll()
-                        .requestMatchers("/api/csrf", "/api/login", "/actuator/health/**")
-                        .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/tasks")
-                        .hasRole("INITIATOR")
-                        .requestMatchers(HttpMethod.PATCH, "/api/tasks/*")
-                        .hasRole("INITIATOR")
-                        .requestMatchers("/api/exchange/**", "/api/tasks/*/reconciliations/**")
-                        .hasRole("OPERATOR")
-                        .requestMatchers("/actuator/exchange")
-                        .hasRole("OPERATOR")
-                        .requestMatchers("/api/**")
-                        .authenticated()
-                        .anyRequest()
-                        .denyAll());
-        http.formLogin(form ->
-                form.loginProcessingUrl("/api/login")
-                        .successHandler((req, res, auth) -> res.setStatus(204))
-                        .failureHandler((req, res, error) -> {
-                            if (error instanceof AuthenticationServiceException)
-                                problems.write(res, 503, "SERVICE_UNAVAILABLE");
-                            else problems.write(res, 401, "INVALID_CREDENTIALS");
-                        }));
-        http.logout(logout ->
-                logout.logoutUrl("/api/logout")
-                        .deleteCookies("JSESSIONID")
-                        .logoutSuccessHandler((req, res, auth) -> res.setStatus(204)));
-        http.exceptionHandling(errors ->
-                errors.authenticationEntryPoint((req, res, error) -> problems.write(res, 401, "SESSION_REQUIRED"))
-                        .accessDeniedHandler((req, res, error) ->
-                                problems.write(
-                                        res, 403, error instanceof CsrfException ? "CSRF_INVALID" : "ACCESS_DENIED")));
+        http.addFilterBefore(new OncePerRequestFilter() {
+            @Override
+            protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                                            FilterChain chain) throws ServletException, IOException {
+                var path = request.getRequestURI().substring(request.getContextPath().length());
+                var authentication = SecurityContextHolder.getContext().getAuthentication();
+                if (path.startsWith("/api/") && !path.equals("/api/csrf") && !path.equals("/api/login")
+                    && (authentication == null || !(authentication.getPrincipal() instanceof AppUser))) {
+                    problems.write(response, 401, "SESSION_REQUIRED");
+                    return;
+                }
+                chain.doFilter(request, response);
+            }
+        }, CsrfFilter.class);
+        http.authorizeHttpRequests(auth -> auth
+            .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+            .requestMatchers("/api/csrf", "/api/login", "/actuator/health/**").permitAll()
+            .requestMatchers(HttpMethod.POST, "/api/tasks").hasRole("INITIATOR")
+            .requestMatchers(HttpMethod.PATCH, "/api/tasks/*").hasRole("INITIATOR")
+            .requestMatchers("/api/exchange/**", "/api/tasks/*/reconciliations/**").hasRole("OPERATOR")
+            .requestMatchers("/actuator/exchange").hasRole("OPERATOR")
+            .requestMatchers("/api/**").authenticated()
+            .anyRequest().denyAll());
+        http.formLogin(form -> form.loginProcessingUrl("/api/login")
+            .successHandler((req, res, auth) -> res.setStatus(204))
+            .failureHandler((req, res, error) -> {
+                if (error instanceof AuthenticationServiceException)
+                    problems.write(res, 503, "SERVICE_UNAVAILABLE");
+                else problems.write(res, 401, "INVALID_CREDENTIALS");
+            }));
+        http.logout(logout -> logout.logoutUrl("/api/logout")
+            .deleteCookies("JSESSIONID")
+            .logoutSuccessHandler((req, res, auth) -> res.setStatus(204)));
+        http.exceptionHandling(errors -> errors
+            .authenticationEntryPoint((req, res, error) -> problems.write(res, 401, "SESSION_REQUIRED"))
+            .accessDeniedHandler((req, res, error) -> problems.write(res, 403,
+                error instanceof CsrfException ? "CSRF_INVALID" : "ACCESS_DENIED")));
         http.requestCache(cache -> cache.disable());
         return http.build();
     }

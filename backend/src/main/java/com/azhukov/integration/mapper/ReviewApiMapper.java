@@ -14,27 +14,18 @@ import org.mapstruct.ValueMapping;
 @Mapper(config = MapStructConfig.class, uses = TaskApiMapper.class)
 public interface ReviewApiMapper {
     Issue issue(com.azhukov.integration.domain.review.Issue value);
-
     IssueResolution resolution(com.azhukov.integration.domain.review.IssueResolution value);
 
     // Preserve the validated snapshot and its existing JSON contract.
     @Mapping(target = "external", expression = "java(value.external())")
     Reconciliation reconciliation(com.azhukov.integration.domain.review.Reconciliation value);
-
     ExchangeEvidence evidence(Evidence value);
-
     LocalSnapshot local(com.azhukov.integration.domain.exchange.LocalSnapshot value);
-
     ExchangeEvidenceReceived received(OperationResult value);
-
     ExchangeEvidenceReceivedRequest receivedRequest(com.azhukov.integration.domain.task.TaskInput value);
-
     com.azhukov.integration.domain.review.Issue.Status status(IssueStatus value);
-
     IssueCommands.Take take(TakeIssueRequest value);
-
     IssueCommands.Retry retry(RetryRequest value);
-
     IssueCommands.Resolve resolve(ResolveIssueRequest value);
 
     @ValueMapping(source = "PENDING", target = MappingConstants.THROW_EXCEPTION)
@@ -43,7 +34,6 @@ public interface ReviewApiMapper {
     default LocalSnapshot.ResultVersionEnum localVersion(Integer value) {
         return value == null ? null : LocalSnapshot.ResultVersionEnum.fromValue(value);
     }
-
     default ExchangeEvidenceReceived.VersionEnum receivedVersion(int value) {
         return ExchangeEvidenceReceived.VersionEnum.fromValue(value);
     }

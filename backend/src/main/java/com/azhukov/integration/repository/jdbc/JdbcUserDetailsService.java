@@ -17,18 +17,9 @@ public class JdbcUserDetailsService implements UserDetailsService {
 
     @Override
     public AppUser loadUserByUsername(String username) {
-        return jdbc
-                .query(
-                        "SELECT * FROM users WHERE username = ?",
-                        (rs, row) ->
-                                new AppUser(
-                                        rs.getObject("id", UUID.class),
-                                        rs.getString("username"),
-                                        rs.getString("password_hash"),
-                                        rs.getString("role")),
-                        username.toLowerCase(Locale.ROOT))
-                .stream()
-                .findFirst()
-                .orElseThrow(() -> new UsernameNotFoundException("Unknown user"));
+        return jdbc.query("SELECT * FROM users WHERE username = ?",(rs,row) ->
+            new AppUser(rs.getObject("id",UUID.class),rs.getString("username"),rs.getString("password_hash"),rs.getString("role")),
+            username.toLowerCase(Locale.ROOT)).stream().findFirst()
+            .orElseThrow(() -> new UsernameNotFoundException("Unknown user"));
     }
 }

@@ -24,34 +24,26 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
   await expect(page.getByText(/Название изменено:/)).toBeVisible();
   const history = page.getByRole('region', { name: 'История', exact: true });
   const historyViewport = page.locator('.task-history-viewport');
-  await expect
-    .poll(async () => {
-      const state = await page.getByRole('region', { name: 'Состояние задания', exact: true }).boundingBox();
-      const events = await history.boundingBox();
-      return (
-        state &&
-        events &&
-        (testInfo.project.name === 'desktop'
-          ? events.x >= state.x + state.width && Math.abs(events.y - state.y) < 1
-          : events.y >= state.y + state.height)
-      );
-    })
-    .toBe(true);
+  await expect.poll(async () => {
+    const state = await page.getByRole('region', { name: 'Состояние задания', exact: true }).boundingBox();
+    const events = await history.boundingBox();
+    return state && events && (testInfo.project.name === 'desktop'
+      ? events.x >= state.x + state.width && Math.abs(events.y - state.y) < 1
+      : events.y >= state.y + state.height);
+  }).toBe(true);
   if (testInfo.project.name === 'desktop') {
     await expect.poll(() => new URL(page.url()).searchParams.get('size')).not.toBeNull();
     const historySize = Number(new URL(page.url()).searchParams.get('size'));
     await page.setViewportSize({ width: 1440, height: 550 });
     await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeLessThan(historySize);
-    await expect
-      .poll(async () => {
-        const card = await history.boundingBox();
-        const viewport = await historyViewport.boundingBox();
-        return card && viewport && card.y + card.height <= viewport.y + viewport.height + 1;
-      })
-      .toBe(true);
+    await expect.poll(async () => {
+      const card = await history.boundingBox();
+      const viewport = await historyViewport.boundingBox();
+      return card && viewport && card.y + card.height <= viewport.y + viewport.height + 1;
+    }).toBe(true);
   } else {
     await expect(history.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
-    expect(await historyViewport.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
+    expect(await historyViewport.evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
   }
   await page.setViewportSize({ width: testInfo.project.name === 'desktop' ? 1440 : 390, height: 1000 });
   await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
@@ -61,8 +53,7 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
     await expect(page.locator('.task-cards > li').first()).toBeVisible();
   } else await expect(page.getByRole('table')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  const widths =
-    testInfo.project.name === 'mobile' ? [390, 480, 481, 759, 760] : [761, 767, 768, 1024, 1150, 1151, 1440];
+  const widths = testInfo.project.name === 'mobile' ? [390, 480, 481, 759, 760] : [761, 767, 768, 1024, 1150, 1151, 1440];
   for (const width of widths) {
     await page.setViewportSize({ width, height: 1000 });
     await expect(page.getByRole('link', { name: name + ' обновлено', exact: true })).toBeVisible();
@@ -71,15 +62,10 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
       await expect(page.locator('.task-cards > li').first()).toBeVisible();
     } else {
       await expect(page.getByRole('table')).toBeVisible();
-      expect(
-        await page.locator('.base-table-scroll').evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
-        'The task table must fit at width ' + width,
-      ).toBe(true);
+      expect(await page.locator('.base-table-scroll').evaluate(element => element.scrollWidth <= element.clientWidth + 1),
+        'The task table must fit at width ' + width).toBe(true);
     }
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-      'Page width ' + width,
-    ).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Page width ' + width).toBe(true);
   }
 });
 
@@ -115,19 +101,12 @@ test('TC-01 / TC-09: business rejection, visible loading and recovery to the fil
   await expect(page.getByText('Отклонено', { exact: true })).toBeVisible();
   await expect(page.getByText('Количество превышает 100 единиц', { exact: true })).toBeVisible();
   let release!: () => void;
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route('**/api/tasks?*', async (route) => {
-    await held;
-    await route.continue();
-  });
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/tasks?*', async route => { await held; await route.continue(); });
   try {
     await page.goto('/tasks?businessStatus=REJECTED');
     await expect(page.getByRole('status')).toContainText('Загрузка');
-  } finally {
-    release();
-  }
+  } finally { release(); }
   await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
@@ -143,38 +122,28 @@ test('TC-09 / TC-12: empty filter, server error recovery and UTC rendering', asy
   const { taskId } = await created.json();
   await page.goto('/tasks?createdFrom=2000-01-01T00%3A00%3A00Z&createdTo=2000-01-02T00%3A00%3A00Z');
   await expect(page.getByRole('heading', { name: 'Ничего не найдено' })).toBeVisible();
-  await page.route('**/api/tasks?*', (route) =>
-    route.fulfill({ status: 502, contentType: 'text/html', body: '<html><body>502 Bad Gateway</body></html>' }),
-  );
+  await page.route('**/api/tasks?*', route => route.fulfill({ status: 502, contentType: 'text/html',
+    body: '<html><body>502 Bad Gateway</body></html>' }));
   await page.getByRole('button', { name: 'Обновить', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Не удалось выполнить запрос. Повторите попытку.');
   await page.unroute('**/api/tasks?*');
   await page.getByRole('button', { name: 'Повторить', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Ничего не найдено' })).toBeVisible();
-  if (await page.getByRole('button', { name: 'Фильтры заданий', exact: true }).count())
-    await page.getByRole('button', { name: 'Фильтры заданий', exact: true }).click();
+  if (await page.getByRole('button', { name: 'Фильтры заданий', exact: true }).count()) await page.getByRole('button', { name: 'Фильтры заданий', exact: true }).click();
   await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
-  if (await page.getByRole('button', { name: 'Готово', exact: true }).count())
-    await page.getByRole('button', { name: 'Готово', exact: true }).click();
+  if (await page.getByRole('button', { name: 'Готово', exact: true }).count()) await page.getByRole('button', { name: 'Готово', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Создать задание' })).toBeVisible();
   await page.goto('/tasks/' + taskId);
   const task = await (await page.request.get('/api/tasks/' + taskId)).json();
-  const time = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' }).format(
-    new Date(task.createdAt),
-  );
+  const time = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' }).format(new Date(task.createdAt));
   await expect(page.locator('.details time')).toHaveText(time);
-  const otherZone = await page
-    .context()
-    .browser()!
-    .newContext({ baseURL: new URL(page.url()).origin, timezoneId: 'America/Los_Angeles' });
+  const otherZone = await page.context().browser()!.newContext({ baseURL: new URL(page.url()).origin, timezoneId: 'America/Los_Angeles' });
   try {
     const other = await otherZone.newPage();
     await login(other);
     await other.goto('/tasks/' + taskId);
     await expect(other.locator('.details time')).toHaveText(time);
-  } finally {
-    await otherZone.close();
-  }
+  } finally { await otherZone.close(); }
 });
 
 test('TC-08 / TC-09: expired server session clears protected screens and allows another login', async ({ page }) => {
@@ -187,6 +156,7 @@ test('TC-08 / TC-09: expired server session clears protected screens and allows 
   await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toHaveCount(0);
   await login(page, 'initiator.two');
 });
+
 
 test('TC-08: session refresh removes the previous owner cache before an in-place login', async ({ page, context }) => {
   await page.clock.setFixedTime(new Date());
@@ -205,9 +175,7 @@ test('TC-08: session refresh removes the previous owner cache before an in-place
   expect((await page.request.post('/api/logout', { headers: { 'X-CSRF-TOKEN': csrf.token } })).status()).toBe(204);
   await context.setOffline(true);
   await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
-  const expired = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === '/api/session' && response.status() === 401,
-  );
+  const expired = page.waitForResponse(response => new URL(response.url()).pathname === '/api/session' && response.status() === 401);
   await context.setOffline(false);
   await expired;
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
@@ -221,12 +189,11 @@ test('TC-08: session refresh removes the previous owner cache before an in-place
   await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0);
 });
 
+
 test('TC-09: history follows automatic task updates without reopening the card', async ({ page, request }, info) => {
   const external = process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19681';
   const reference = info.project.name === 'mobile' ? 'REQ-800007' : 'REQ-800006';
-  expect((await request.put(`${external}/test/faults/${reference}`, { data: { mode: 'UNAVAILABLE' } })).status()).toBe(
-    204,
-  );
+  expect((await request.put(`${external}/test/faults/${reference}`, { data: { mode: 'UNAVAILABLE' } })).status()).toBe(204);
   try {
     await login(page);
     await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
@@ -240,7 +207,5 @@ test('TC-09: history follows automatic task updates without reopening the card',
     expect((await request.delete(`${external}/test/faults/${reference}`)).status()).toBe(204);
     await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
     await expect(page.getByText('Принят внешний результат: SUCCEEDED', { exact: true })).toBeVisible();
-  } finally {
-    expect((await request.delete(`${external}/test/faults/${reference}`)).status()).toBe(204);
-  }
+  } finally { expect((await request.delete(`${external}/test/faults/${reference}`)).status()).toBe(204); }
 });

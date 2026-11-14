@@ -13,50 +13,29 @@ test('UI-01: dark default, all palettes and readable controls', async ({ page })
   for (const theme of ['light', 'gray', 'dark']) {
     await selectChoice(page, 'Цветовая тема', themeLabels[theme]);
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-    expect(await page.evaluate((key) => localStorage.getItem(key), key)).toBe(theme);
+    expect(await page.evaluate(key => localStorage.getItem(key), key)).toBe(theme);
     const contrasts = await page.evaluate(() => {
-      const rgb = (value: string) =>
-        value
-          .match(/[\d.]+/g)!
-          .slice(0, 3)
-          .map(Number);
-      const luminance = (color: number[]) =>
-        color
-          .map((c) => {
-            const n = c / 255;
-            return n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4;
-          })
-          .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
+      const rgb = (value: string) => value.match(/[\d.]+/g)!.slice(0, 3).map(Number);
+      const luminance = (color: number[]) => color.map(c => { const n = c / 255; return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4; })
+        .reduce((sum, c, i) => sum + c * [.2126, .7152, .0722][i], 0);
       const background = (el: Element): string => {
         const color = getComputedStyle(el).backgroundColor;
         return color !== 'transparent' && !color.endsWith(', 0)') ? color : background(el.parentElement!);
       };
-      return [
-        '.login-panel .base-page-title',
-        '.login-panel .base-page-context',
-        '.login-panel .base-button[data-variant="default"]',
-        '.theme-control .base-choice-trigger',
-        '.login-panel input',
-      ].map((selector) => {
+      return ['.login-panel .base-page-title', '.login-panel .base-page-context', '.login-panel .base-button[data-variant="default"]', '.theme-control .base-choice-trigger', '.login-panel input'].map(selector => {
         const el = document.querySelector(selector)!;
-        const colors = [luminance(rgb(getComputedStyle(el).color)), luminance(rgb(background(el)))].sort(
-          (a, b) => a - b,
-        );
-        return { selector, ratio: (colors[1] + 0.05) / (colors[0] + 0.05) };
+        const colors = [luminance(rgb(getComputedStyle(el).color)), luminance(rgb(background(el)))].sort((a, b) => a - b);
+        return { selector, ratio: (colors[1] + .05) / (colors[0] + .05) };
       });
     });
-    for (const contrast of contrasts)
-      expect(contrast.ratio, `${theme}: ${contrast.selector}`).toBeGreaterThanOrEqual(4.5);
+    for (const contrast of contrasts) expect(contrast.ratio, `${theme}: ${contrast.selector}`).toBeGreaterThanOrEqual(4.5);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   await page.reload();
   await expect(picker).toHaveAttribute('data-value', 'dark');
 });
 
-test('UI-02: theme survives navigation and logout, synchronizes tabs and preserves the form', async ({
-  page,
-  context,
-}, info) => {
+test('UI-02: theme survives navigation and logout, synchronizes tabs and preserves the form', async ({ page, context }, info) => {
   await page.goto('/');
   const picker = page.getByRole('combobox', { name: 'Цветовая тема', exact: true });
   await selectChoice(page, 'Цветовая тема', themeLabels['gray']);
@@ -89,9 +68,7 @@ test('UI-02: theme survives navigation and logout, synchronizes tabs and preserv
     await selectChoice(other, 'Цветовая тема', 'Тёмная');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect(page.getByLabel('Название *', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');
-  } finally {
-    await other.close();
-  }
+  } finally { await other.close(); }
   await page.getByRole('button', { name: 'Отмена', exact: true }).click();
   await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
   await openAccountMenu(page);
@@ -101,7 +78,7 @@ test('UI-02: theme survives navigation and logout, synchronizes tabs and preserv
 });
 
 test('UI-03: invalid saved preference is explained and can be corrected', async ({ page }) => {
-  await page.addInitScript((key) => localStorage.setItem(key, 'unsupported'), key);
+  await page.addInitScript(key => localStorage.setItem(key, 'unsupported'), key);
   await page.goto('/');
   await expect(page.getByText('Сохранённая тема не распознана. Выберите тему заново.')).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -111,13 +88,7 @@ test('UI-03: invalid saved preference is explained and can be corrected', async 
 });
 
 test('UI-04: blocked storage keeps the chosen theme usable and explains persistence', async ({ page }) => {
-  await page.addInitScript(() =>
-    Object.defineProperty(window, 'localStorage', {
-      get() {
-        throw new DOMException('Storage is blocked', 'SecurityError');
-      },
-    }),
-  );
+  await page.addInitScript(() => Object.defineProperty(window, 'localStorage', { get() { throw new DOMException('Storage is blocked', 'SecurityError'); } }));
   await page.goto('/');
   await expect(page.getByText('Браузер не сохраняет тему. Выбор действует в этой вкладке.')).toBeVisible();
   await selectChoice(page, 'Цветовая тема', themeLabels['light']);
@@ -130,7 +101,7 @@ test('UI-05: Base popup uses the selected palette, safe arrow spacing and keyboa
   const picker = page.getByRole('combobox', { name: 'Цветовая тема', exact: true });
   for (const theme of ['dark', 'light', 'gray']) {
     await selectChoice(page, 'Цветовая тема', themeLabels[theme]);
-    const gap = await picker.evaluate((el) => {
+    const gap = await picker.evaluate(el => {
       const button = el.getBoundingClientRect();
       const icon = el.querySelector('svg')!.getBoundingClientRect();
       return button.right - icon.right;
@@ -140,11 +111,11 @@ test('UI-05: Base popup uses the selected palette, safe arrow spacing and keyboa
     const popup = page.getByRole('listbox');
     await expect(popup).toBeVisible();
     await expect(popup.getByRole('option', { selected: true })).toHaveText(themeLabels[theme]);
-    const palette = await popup.evaluate((el) => ({
+    const palette = await popup.evaluate(el => ({
       background: getComputedStyle(el).backgroundColor,
       right: el.getBoundingClientRect().right,
     }));
-    const surface = await page.locator('.login-panel').evaluate((el) => getComputedStyle(el).backgroundColor);
+    const surface = await page.locator('.login-panel').evaluate(el => getComputedStyle(el).backgroundColor);
     expect(palette.background).toBe(surface);
     expect(palette.right).toBeLessThanOrEqual(page.viewportSize()!.width);
     await popup.press('Escape');
@@ -168,9 +139,7 @@ test('UI-06: shared brand, surfaces and form fields across the application', asy
   await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
   await expect(page.locator('.app-brand .base-icon-mark svg')).toHaveCount(1);
   const logo = await page.locator('.app-brand').innerHTML();
-  const dialogRadius = await page.evaluate(() =>
-    getComputedStyle(document.documentElement).getPropertyValue('--base-radius-dialog').trim(),
-  );
+  const dialogRadius = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--base-radius-dialog').trim());
   await expect(page.getByLabel('Логин *', { exact: true })).toHaveAttribute('required', '');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await login(page);
@@ -178,17 +147,11 @@ test('UI-06: shared brand, surfaces and form fields across the application', asy
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toHaveClass('base-dialog-title');
   const editor = page.getByRole('dialog', { name: 'Новое задание', exact: true });
-  expect(await editor.evaluate((el) => getComputedStyle(el).borderRadius)).toBe(dialogRadius);
+  expect(await editor.evaluate(el => getComputedStyle(el).borderRadius)).toBe(dialogRadius);
   const reference = page.getByLabel('Номер заявки');
   await expect(reference).toHaveAttribute('aria-describedby', 'field-reference-hint');
   await expect(page.locator('#field-reference-hint')).toHaveText('REQ- и шесть цифр. После создания изменить нельзя.');
   await expect(reference).toHaveAttribute('required', '');
-  expect(
-    await page.evaluate(
-      () =>
-        document.querySelectorAll('button:not(.base-control), input:not(.base-control), textarea:not(.base-control)')
-          .length,
-    ),
-  ).toBe(0);
+  expect(await page.evaluate(() => document.querySelectorAll('button:not(.base-control), input:not(.base-control), textarea:not(.base-control)').length)).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

@@ -11,18 +11,13 @@ import org.springframework.stereotype.Component;
  * delivery and result ingestion independent when virtual HTTP threads are enabled.
  */
 @Component
-@ConditionalOnProperty(name = "si.exchange.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name="si.exchange.enabled",havingValue="true",matchIfMissing=true)
 @RequiredArgsConstructor
 public class ExchangeScheduler {
     private final ExchangeCoordinator exchange;
 
-    @Scheduled(fixedDelay = 100)
-    void deliver() {
-        exchange.deliver();
-    }
-
-    @Scheduled(fixedDelay = 200)
-    void receive() {
-        exchange.receive();
-    }
+    @Scheduled(fixedDelay=100)
+    void deliver() { exchange.deliver(); }
+    @Scheduled(fixedDelay=200)
+    void receive() { exchange.receive(); }
 }

@@ -17,25 +17,24 @@ class EmulatorWorker {
     private final OperationService operations;
     private final int publicationBatch;
 
-    EmulatorWorker(OperationService operations, @Value("${si.emulator.publication-batch-size}") int publicationBatch) {
-        if (publicationBatch < 1 || publicationBatch > OperationService.MAX_PUBLICATION_BATCH)
+    EmulatorWorker(OperationService operations,@Value("${si.emulator.publication-batch-size}") int publicationBatch) {
+        if (publicationBatch<1 || publicationBatch>OperationService.MAX_PUBLICATION_BATCH)
             throw new IllegalArgumentException("si.emulator.publication-batch-size must be 1..100");
-        this.operations = operations;
-        this.publicationBatch = publicationBatch;
+        this.operations=operations; this.publicationBatch=publicationBatch;
     }
 
     @Scheduled(fixedDelay = 250)
     void execute() {
-        for (int n = 0; n < 50 && operations.executeNext(); n++) {}
+        for (int n = 0; n < 50 && operations.executeNext(); n++) { }
     }
 
     @Scheduled(fixedDelay = 250)
     void publish() {
-        int published = 0;
-        while (published < 100) {
-            int count = operations.publish(Math.min(publicationBatch, 100 - published));
-            if (count == 0) break;
-            published += count;
+        int published=0;
+        while (published<100) {
+            int count=operations.publish(Math.min(publicationBatch,100-published));
+            if (count==0) break;
+            published+=count;
         }
     }
 }

@@ -188,7 +188,13 @@ CSS, JS-тесты и frontend-конфигурации: 2 пробела, ши�
 node_modules, результаты и lockfile. Версии закреплены в Gradle/package.json
 и lockfile; не используйте npx с автоматически загружаемой latest.
 
-Из корня проекта:
+Сейчас добавлены только настройки. Общий проход по backend, frontend и тестам
+выполняется после готовности frontend, отдельным поручением. Format-on-save
+в .vscode выключен; Spotless enforceCheck=false оставляет обычный Gradle check
+без проверки существующего стиля. Ручные команды check доступны, но до общего
+прохода могут сообщать о текущих различиях; это пока не gate сборки.
+
+Команды для будущего общего прохода, из корня проекта:
 
 ~~~sh
 ./gradlew spotlessApply
@@ -198,14 +204,11 @@ corepack pnpm format
 corepack pnpm format:check
 ~~~
 
-spotlessCheck штатно входит в Gradle check обоих приложений; проверка
-ничего не исправляет. Перед commit выполните обе проверки. В VS Code
-рекомендованы Prettier и Spotless Gradle, настройки format-on-save находятся
-в .vscode. В IntelliJ используйте Spotless plugin с этими Gradle-правилами,
-а для frontend — локальный frontend/node_modules/prettier и format on save.
+После общего прохода включите enforceCheck=true и format-on-save; настройку
+и массовый diff проверьте вместе. В VS Code рекомендованы Prettier и Spotless
+Gradle; в IntelliJ используйте Spotless plugin с этими Gradle-правилами,
+для frontend — локальный frontend/node_modules/prettier.
 CLI остаётся источником истины. Новых CI jobs и Git hooks нет.
-Первичный formatter commit указан в .git-blame-ignore-revs. При необходимости
-включите его для blame командой git config blame.ignoreRevsFile .git-blame-ignore-revs.
 
 ## Сборка и проверки
 

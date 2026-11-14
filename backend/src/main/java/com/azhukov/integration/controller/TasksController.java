@@ -24,14 +24,12 @@ public class TasksController implements TasksApi {
     }
 
     @Override
-    public ResponseEntity<Task> getTask(UUID id) {
-        return ResponseEntity.ok(mapper.task(tasks.get(AppUser.current().actor(), id)));
-    }
+    public ResponseEntity<Task> getTask(UUID id) { return ResponseEntity.ok(mapper.task(tasks.get(AppUser.current().actor(), id))); }
 
     @Override
-    public ResponseEntity<TaskPage> listTasks(
-            Integer page, Integer size, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
-        var result = tasks.list(AppUser.current().actor(), page, size, mapper.status(status), from, to);
+    public ResponseEntity<TaskPage> listTasks(Integer page, Integer size, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
+        var result = tasks.list(AppUser.current().actor(), page, size,
+            mapper.status(status), from, to);
         return ResponseEntity.ok(mapper.tasks(result));
     }
 

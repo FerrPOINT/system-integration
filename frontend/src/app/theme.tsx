@@ -12,13 +12,9 @@ const storageNotice = 'Браузер не сохраняет тему. Выбо
 function readPreference(): Preference {
   try {
     const value = localStorage.getItem(storageKey);
-    return {
-      theme: isTheme(value) ? value : 'dark',
-      notice: value !== null && !isTheme(value) ? 'Сохранённая тема не распознана. Выберите тему заново.' : '',
-    };
-  } catch {
-    return { theme: 'dark', notice: storageNotice };
-  }
+    return { theme: isTheme(value) ? value : 'dark', notice: value !== null && !isTheme(value)
+      ? 'Сохранённая тема не распознана. Выберите тему заново.' : '' };
+  } catch { return { theme: 'dark', notice: storageNotice }; }
 }
 
 export function useThemePreference() {
@@ -35,38 +31,19 @@ export function useThemePreference() {
   }, []);
   function setTheme(theme: Theme) {
     let notice = '';
-    try {
-      localStorage.setItem(storageKey, theme);
-    } catch {
-      notice = storageNotice;
-    }
+    try { localStorage.setItem(storageKey, theme); }
+    catch { notice = storageNotice; }
     setPreference({ theme, notice });
   }
   return { ...preference, setTheme };
 }
 
 export function ThemePicker({ theme, setTheme, notice }: ReturnType<typeof useThemePreference>) {
-  return (
-    <div className="theme-picker">
-      <Label className="theme-control" htmlFor="theme-choice">
-        <span>Тема</span>
-        <Select
-          id="theme-choice"
-          aria-label="Цветовая тема"
-          value={theme}
-          onValueChange={(value) => setTheme(value as Theme)}
-          options={[
-            { value: 'dark', label: 'Тёмная' },
-            { value: 'light', label: 'Светлая' },
-            { value: 'gray', label: 'Серая' },
-          ]}
-        />
-      </Label>
-      {notice && (
-        <div className="theme-notice">
-          <Notice role="status">{notice}</Notice>
-        </div>
-      )}
-    </div>
-  );
+  return <div className="theme-picker">
+    <Label className="theme-control" htmlFor="theme-choice"><span>Тема</span>
+      <Select id="theme-choice" aria-label="Цветовая тема" value={theme} onValueChange={value => setTheme(value as Theme)}
+        options={[{ value: 'dark', label: 'Тёмная' }, { value: 'light', label: 'Светлая' }, { value: 'gray', label: 'Серая' }]} />
+    </Label>
+    {notice && <div className="theme-notice"><Notice role="status">{notice}</Notice></div>}
+  </div>;
 }

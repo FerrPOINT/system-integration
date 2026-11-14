@@ -17,17 +17,9 @@ public final class AppUser extends User {
         this.role = role;
     }
 
-    public UUID id() {
-        return id;
-    }
-
-    public String role() {
-        return role;
-    }
-
-    public Actor actor() {
-        return new Actor(id, Actor.Role.valueOf(role));
-    }
+    public UUID id() { return id; }
+    public String role() { return role; }
+    public Actor actor() { return new Actor(id, Actor.Role.valueOf(role)); }
 
     public static AppUser current() {
         return (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();

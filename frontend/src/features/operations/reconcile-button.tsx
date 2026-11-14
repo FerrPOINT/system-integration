@@ -12,20 +12,13 @@ export function ReconcileButton({ taskId }: { taskId: string }) {
   const refresh = useRefreshExchange();
   const command = useCommandKey();
   const reconcile = useMutation({
-    mutationFn: async () =>
-      data(reconcileTask(taskId, { ...(await csrf()), 'Idempotency-Key': command.forInput(taskId) })),
-    onSuccess: async (snapshot) => {
+    mutationFn: async () => data(reconcileTask(taskId, { ...await csrf(), 'Idempotency-Key': command.forInput(taskId) })),
+    onSuccess: async snapshot => {
       await refresh();
       command.reset();
       navigate('/tasks/' + taskId + '/reconciliations/' + snapshot.reconciliationId);
     },
   });
-  return (
-    <div className="inline-action">
-      <Button onClick={() => reconcile.mutate()} disabled={reconcile.isPending}>
-        {reconcile.isPending ? 'Сверяем…' : 'Выполнить сверку'}
-      </Button>
-      <ErrorMessage error={reconcile.error} />
-    </div>
-  );
+  return <div className="inline-action"><Button onClick={() => reconcile.mutate()} disabled={reconcile.isPending}>
+    {reconcile.isPending ? 'Сверяем…' : 'Выполнить сверку'}</Button><ErrorMessage error={reconcile.error} /></div>;
 }

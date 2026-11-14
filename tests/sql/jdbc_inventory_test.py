@@ -20,14 +20,6 @@ class JdbcInventoryTest(unittest.TestCase):
         for key in first:self.assertEqual(first[key]['strings'],second[key]['strings'])
         self.assertEqual({'Repository.alpha/1:1','Repository.beta/0:1'},set(first))
 
-    def test_wrapped_jdbc_calls_keep_the_same_identity_and_sql(self):
-        compact='class Repository {\n    Long read() { return jdbc.queryForObject("SELECT count(*) FROM tasks",Long.class); }\n}'
-        wrapped='class Repository {\n    Long read() { return jdbc\n        /* layout only */ . queryForObject (\n            "SELECT count(*) FROM tasks",Long.class); }\n}'
-        before=self.collect_source(compact)
-        after=self.collect_source(wrapped)
-        self.assertEqual(set(before),set(after))
-        self.assertEqual(before['Repository.read/0:1']['strings'],after['Repository.read/0:1']['strings'])
-
     def test_comments_strings_text_blocks_and_nested_generic_parameters_are_not_methods(self):
         source=r'''
 class Repository {

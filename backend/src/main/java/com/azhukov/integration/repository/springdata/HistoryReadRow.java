@@ -11,40 +11,18 @@ import tools.jackson.databind.ObjectMapper;
 
 /** Append-only history is loaded as an independent bounded page, never as Task children. */
 @Table("task_history")
-record HistoryReadRow(
-        @Id UUID id,
-        @Column("task_id") UUID taskId,
-        @Column("operation_id") UUID operationId,
-        @Column("occurred_at") OffsetDateTime occurredAt,
-        HistoryEntry.Actor actor,
-        @Column("actor_user_id") UUID actorUserId,
-        @Column("event_type") HistoryType eventType,
-        String summary,
-        String details) {
+record HistoryReadRow(@Id UUID id, @Column("task_id") UUID taskId,
+                      @Column("operation_id") UUID operationId,
+                      @Column("occurred_at") OffsetDateTime occurredAt,
+                      HistoryEntry.Actor actor, @Column("actor_user_id") UUID actorUserId,
+                      @Column("event_type") HistoryType eventType, String summary, String details) {
     HistoryEntry entry(ObjectMapper json) {
-        var refs = json.readValue(details, Details.class);
-        return new HistoryEntry(
-                id,
-                taskId,
-                operationId,
-                occurredAt,
-                actor,
-                actorUserId,
-                eventType,
-                summary,
-                refs.attemptId(),
-                refs.resultVersion(),
-                refs.issueId(),
-                refs.reconciliationId(),
-                refs.previousAssigneeId(),
-                refs.assignedTo());
+        var refs=json.readValue(details,Details.class);
+        return new HistoryEntry(id,taskId,operationId,occurredAt,actor,actorUserId,eventType,summary,
+            refs.attemptId(),refs.resultVersion(),refs.issueId(),refs.reconciliationId(),
+            refs.previousAssigneeId(),refs.assignedTo());
     }
 
-    private record Details(
-            UUID attemptId,
-            Integer resultVersion,
-            UUID issueId,
-            UUID reconciliationId,
-            UUID previousAssigneeId,
-            UUID assignedTo) {}
+    private record Details(UUID attemptId,Integer resultVersion,UUID issueId,UUID reconciliationId,
+                           UUID previousAssigneeId,UUID assignedTo) {}
 }

@@ -10,22 +10,13 @@ for (const deliveryStatus of ['NEEDS_REVIEW', 'STOPPED'] as const) {
     const user = await (await page.request.get('/api/session')).json();
     const id = crypto.randomUUID();
     const task = {
-      taskId: id,
-      operationId: crypto.randomUUID(),
-      ownerId: user.userId,
-      title: 'E2E интервал обновления',
-      titleRevision: 1,
-      request: { reference: 'REQ-850001', quantity: 25 },
-      deliveryStatus,
-      businessStatus: 'PENDING',
-      createdAt: '2026-11-12T00:00:00Z',
+      taskId: id, operationId: crypto.randomUUID(), ownerId: user.userId, title: 'E2E интервал обновления',
+      titleRevision: 1, request: { reference: 'REQ-850001', quantity: 25 }, deliveryStatus,
+      businessStatus: 'PENDING', createdAt: '2026-11-12T00:00:00Z',
     } satisfies Task;
     const reads = { card: 0, history: 0 };
-    await page.route('**/api/tasks/' + id, (route) => {
-      reads.card++;
-      return route.fulfill({ json: task });
-    });
-    await page.route('**/api/tasks/' + id + '/history?*', (route) => {
+    await page.route('**/api/tasks/' + id, route => { reads.card++; return route.fulfill({ json: task }); });
+    await page.route('**/api/tasks/' + id + '/history?*', route => {
       reads.history++;
       return route.fulfill({ json: { items: [], page: 0, hasNext: false, totalItems: 0, totalPages: 0 } });
     });
@@ -33,9 +24,7 @@ for (const deliveryStatus of ['NEEDS_REVIEW', 'STOPPED'] as const) {
     await expect(page.getByRole('heading', { name: task.title, exact: true })).toBeVisible();
     await expect.poll(() => reads.history).toBe(1);
     await expect(page.getByRole('status', { name: 'Загрузка…', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('region', { name: 'История', exact: true }).getByRole('status')).toHaveText(
-      'Нет записей',
-    );
+    await expect(page.getByRole('region', { name: 'История', exact: true }).getByRole('status')).toHaveText('Нет записей');
     await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
     const before = { ...reads };
     await page.clock.runFor(8000);
@@ -46,41 +35,36 @@ for (const deliveryStatus of ['NEEDS_REVIEW', 'STOPPED'] as const) {
   });
 }
 
-test('UI-14: a completed task receives another operator audit entry without reopening or changing business state', async ({
-  page,
-  baseURL,
-}) => {
-  await page.clock.install();
-  await login(page);
-  const csrf = await (await page.request.get('/api/csrf')).json();
-  const created = await page.request.post('/api/tasks', {
-    headers: { 'X-CSRF-TOKEN': csrf.token, 'Idempotency-Key': crypto.randomUUID() },
-    data: {
-      title: 'E2E завершённая история ' + crypto.randomUUID(),
-      request: { reference: 'REQ-850002', quantity: 25 },
-    },
+test('UI-14: a completed task receives another operator audit entry without reopening or changing business state',
+  async ({ page, baseURL }) => {
+    await page.clock.install();
+    await login(page);
+    const csrf = await (await page.request.get('/api/csrf')).json();
+    const created = await page.request.post('/api/tasks', {
+      headers: { 'X-CSRF-TOKEN': csrf.token, 'Idempotency-Key': crypto.randomUUID() },
+      data: { title: 'E2E завершённая история ' + crypto.randomUUID(), request: { reference: 'REQ-850002', quantity: 25 } },
+    });
+    expect(created.status()).toBe(201);
+    const { taskId } = await created.json();
+    await page.goto('/tasks/' + taskId);
+    await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
+    await expect(page.getByText('Принят внешний результат: SUCCEEDED', { exact: true })).toBeVisible();
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
+    expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
+    const operator = new ApiSession(baseURL);
+    await operator.login('operator', process.env.SI_DEMO_PASSWORD);
+    const saved = await operator.command('POST', '/api/tasks/' + taskId + '/reconciliations');
+    expect(saved.outcome).toBe('MATCH');
+    await expect(page.getByText('Сверка: MATCH', { exact: true })).toHaveCount(0);
+    const refreshed = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === '/api/tasks/' + taskId + '/history' && response.status() === 200;
+    });
+    await page.clock.runFor(11000);
+    const history = await (await refreshed).json();
+    expect(history.items.some((event: { summary: string }) => event.summary === 'Сверка: MATCH')).toBe(true);
+    // Real HTTP can finish after runFor returns; let the paused browser flush query notifications.
+    await page.clock.runFor(100);
+    await expect(page.getByText('Сверка: MATCH', { exact: true })).toBeVisible();
+    await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
   });
-  expect(created.status()).toBe(201);
-  const { taskId } = await created.json();
-  await page.goto('/tasks/' + taskId);
-  await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
-  await expect(page.getByText('Принят внешний результат: SUCCEEDED', { exact: true })).toBeVisible();
-  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
-  expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
-  const operator = new ApiSession(baseURL);
-  await operator.login('operator', process.env.SI_DEMO_PASSWORD);
-  const saved = await operator.command('POST', '/api/tasks/' + taskId + '/reconciliations');
-  expect(saved.outcome).toBe('MATCH');
-  await expect(page.getByText('Сверка: MATCH', { exact: true })).toHaveCount(0);
-  const refreshed = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return url.pathname === '/api/tasks/' + taskId + '/history' && response.status() === 200;
-  });
-  await page.clock.runFor(11000);
-  const history = await (await refreshed).json();
-  expect(history.items.some((event: { summary: string }) => event.summary === 'Сверка: MATCH')).toBe(true);
-  // Real HTTP can finish after runFor returns; let the paused browser flush query notifications.
-  await page.clock.runFor(100);
-  await expect(page.getByText('Сверка: MATCH', { exact: true })).toBeVisible();
-  await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
-});

@@ -57,8 +57,7 @@ public class OperationsController implements OperationsApi {
     }
 
     @Override
-    public ResponseEntity<IssueResolution> resolveExchangeIssue(
-            String csrf, UUID key, UUID id, ResolveIssueRequest input) {
+    public ResponseEntity<IssueResolution> resolveExchangeIssue(String csrf, UUID key, UUID id, ResolveIssueRequest input) {
         var command = mapper.resolve(input);
         var result = operations.resolve(AppUser.current().actor(), key, id, command);
         return ResponseEntity.ok(mapper.resolution(result));

@@ -26,15 +26,11 @@ public class DemoUsers implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        if (password.length() < 12)
-            throw new IllegalArgumentException("SI_DEMO_PASSWORD must contain at least 12 characters");
-        for (String username : new String[] {"initiator.one", "initiator.two", "operator"}) {
-            jdbc.update(
-                    "INSERT INTO users (id,username,password_hash,role) VALUES (?,?,?,?) ON CONFLICT (username) DO NOTHING",
-                    UUID.randomUUID(),
-                    username,
-                    passwords.encode(password),
-                    username.equals("operator") ? "OPERATOR" : "INITIATOR");
+        if (password.length() < 12) throw new IllegalArgumentException("SI_DEMO_PASSWORD must contain at least 12 characters");
+        for (String username : new String[]{"initiator.one", "initiator.two", "operator"}) {
+            jdbc.update("INSERT INTO users (id,username,password_hash,role) VALUES (?,?,?,?) ON CONFLICT (username) DO NOTHING",
+                UUID.randomUUID(), username, passwords.encode(password),
+                username.equals("operator") ? "OPERATOR" : "INITIATOR");
         }
     }
 }

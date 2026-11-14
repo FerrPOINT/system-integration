@@ -23,7 +23,8 @@ public interface TaskReadRepository {
      * Initiators are scoped to their owner ID; operators see all owners.
      * The UTC interval includes from and excludes to; null bounds are omitted.
      */
-    Page<Task> page(Actor actor, int page, int size, BusinessStatus status, OffsetDateTime from, OffsetDateTime to);
+    Page<Task> page(Actor actor, int page, int size, BusinessStatus status,
+                    OffsetDateTime from, OffsetDateTime to);
 
     /**
      * Reads history by occurredAt/id descending after verifying task visibility.

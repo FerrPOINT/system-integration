@@ -13,30 +13,23 @@ export function usePagination(mode: 'pages' | 'feed' = 'pages') {
     if (!valid) return;
     // The router can update the address before its transitioned React location.
     // A queued measurement must not overwrite a newer route or filter navigation.
-    if (
-      window.location.pathname !== location.pathname ||
-      window.location.search !== location.search ||
-      window.location.hash !== location.hash
-    )
-      return;
+    if (window.location.pathname !== location.pathname || window.location.search !== location.search ||
+      window.location.hash !== location.hash) return;
     const updated = new URLSearchParams(search);
     if (mode === 'feed') {
       if (!updated.has('page') && !updated.has('size')) return;
-      updated.delete('page');
-      updated.delete('size');
+      updated.delete('page'); updated.delete('size');
       setSearch(updated, { replace: true });
       return;
     }
     if (measuredSize === null || measuredSize === size) return;
     updated.set('size', String(measuredSize));
     // Keep the old first record within the new server page; filters stay in the URL.
-    if (page > 0 || updated.has('page')) updated.set('page', String(Math.floor((page * size) / measuredSize)));
+    if (page > 0 || updated.has('page')) updated.set('page', String(Math.floor(page * size / measuredSize)));
     setSearch(updated, { replace: true });
   }, [valid, measuredSize, size, page, search, setSearch, location, mode]);
   function changePage(next: number) {
-    const updated = new URLSearchParams(search);
-    updated.set('page', String(next));
-    setSearch(updated);
+    const updated = new URLSearchParams(search); updated.set('page', String(next)); setSearch(updated);
   }
   return { page: mode === 'feed' ? 0 : page, size: mode === 'feed' ? 20 : size, valid, viewportRef, changePage };
 }

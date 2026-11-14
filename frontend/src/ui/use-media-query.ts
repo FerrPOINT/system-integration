@@ -7,7 +7,10 @@ export function useMediaQuery(
   onChange?: (matches: boolean) => void,
 ): boolean {
   const media = useMemo(
-    () => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(query) : null),
+    () =>
+      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        ? window.matchMedia(query)
+        : null,
     [query],
   );
   const subscribe = useCallback(
