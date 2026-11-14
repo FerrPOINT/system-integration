@@ -23,12 +23,15 @@ class ExchangeCoordinatorTest {
         var claimed = new AtomicInteger();
         var active = new AtomicInteger();
         var peak = new AtomicInteger();
+        var threads=java.util.concurrent.ConcurrentHashMap.<Thread>newKeySet();
         when(tasks.claim()).thenAnswer(call -> {
             if (claimed.incrementAndGet() > 40) return null;
             return new DeliveryAttempt(UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1,
                 new TaskInput("REQ-900001", 25));
         });
         when(client.deliver(any())).thenAnswer(call -> {
+            assertTrue(Thread.currentThread().isVirtual());
+            threads.add(Thread.currentThread());
             int current = active.incrementAndGet();
             try { peak.accumulateAndGet(current, Math::max); return new ExternalExchangeClient.DeliveryReply(DeliveryAttempt.Outcome.ACKNOWLEDGED,202,false,null,null); }
             finally { active.decrementAndGet(); }
@@ -39,6 +42,7 @@ class ExchangeCoordinatorTest {
             assertTrue(claimed.get() <= 32, "one scheduler turn must remain bounded");
             assertTrue(peak.get() <= 4);
             verify(tasks, times(claimed.get())).finish(any(), any());
+            assertEquals(claimed.get(),threads.size(),"Each delivery is its own virtual thread");
         }
     }
 

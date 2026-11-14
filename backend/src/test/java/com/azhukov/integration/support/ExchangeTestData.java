@@ -14,7 +14,7 @@ public final class ExchangeTestData {
         exchange.finish(attempt,new ExchangeProtocol().delivery(attempt,reply));
     }
     public static boolean consume(ExchangeService exchange,long after,JsonNode page) {
-        var decoded=new ExchangeProtocol().feed(new ExchangeReply(200,page,false),after);
+        var decoded=new ExchangeProtocol().feed(new ExchangeReply(200,page,false,null),after);
         if (decoded.status()!=FeedStatus.READY) throw new IllegalArgumentException("Test fixture has an invalid feed envelope");
         return exchange.consume(after,decoded.events());
     }

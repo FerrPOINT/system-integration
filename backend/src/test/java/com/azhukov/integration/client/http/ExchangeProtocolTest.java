@@ -130,7 +130,7 @@ class ExchangeProtocolTest {
             new Case("PUT",0,null,false,DeliveryAttempt.Outcome.TEMPORARY_FAILURE),
             new Case("PUT",503,null,false,DeliveryAttempt.Outcome.TEMPORARY_FAILURE))) {
             var attempt=new DeliveryAttempt(identity.id(),UUID.randomUUID(),probe.step(),1,1,identity.request());
-            var decoded=protocol.delivery(attempt,new ExchangeReply(probe.status(),probe.body(),probe.failed()));
+            var decoded=protocol.delivery(attempt,new ExchangeReply(probe.status(),probe.body(),probe.failed(),null));
             assertEquals(probe.expected(),decoded.outcome(),probe.toString());
             assertEquals(probe.status(),decoded.httpStatus());
             assertEquals(probe.failed(),decoded.connectionFailed());
@@ -146,7 +146,7 @@ class ExchangeProtocolTest {
             .add(json.createObjectNode().put("cursor",11).set("result",valid))
             .add(json.createObjectNode().put("cursor",12).set("result",malformed))
             .add(json.createObjectNode().put("cursor",13));
-        var decoded=protocol.feed(new ExchangeReply(200,page,false),10);
+        var decoded=protocol.feed(new ExchangeReply(200,page,false,null),10);
         assertEquals(ExternalExchangeClient.FeedStatus.READY,decoded.status());
         assertEquals(java.util.List.of(11L,12L,13L),decoded.events().stream().map(ExternalExchangeClient.IncomingEvent::cursor).toList());
         assertNotNull(decoded.events().get(0).result());
@@ -155,8 +155,8 @@ class ExchangeProtocolTest {
         assertEquals(malformed,decoded.events().get(1).evidence());
         assertNull(decoded.events().get(2).operationId());
         assertNull(decoded.events().get(2).result());
-        assertEquals(ExternalExchangeClient.FeedStatus.INVALID_PAGE,protocol.feed(new ExchangeReply(200,page,false),11).status());
-        assertEquals(ExternalExchangeClient.FeedStatus.UNAVAILABLE,protocol.feed(new ExchangeReply(503,null,false),10).status());
+        assertEquals(ExternalExchangeClient.FeedStatus.INVALID_PAGE,protocol.feed(new ExchangeReply(200,page,false,null),11).status());
+        assertEquals(ExternalExchangeClient.FeedStatus.UNAVAILABLE,protocol.feed(new ExchangeReply(503,null,false,null),10).status());
     }
 
     @Test

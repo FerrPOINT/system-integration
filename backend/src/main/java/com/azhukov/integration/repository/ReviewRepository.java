@@ -1,7 +1,5 @@
 package com.azhukov.integration.repository;
 
-import com.azhukov.integration.domain.exchange.ExchangeState;
-import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.review.*;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +15,7 @@ public interface ReviewRepository {
     void delay(UUID id, String reason);
     List<UUID> confirm(UUID task);
     void protocol(UUID id, String reason, Evidence evidence);
-    void observe(ExchangeState state, OperationResult result);
+    UUID observationIssue(UUID task);
     StoredIssue get(UUID id, boolean lock);
     long count(Issue.Status status);
     List<StoredIssue> list(int page, int size, Issue.Status status);

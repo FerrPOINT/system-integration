@@ -67,5 +67,8 @@ public class IssueLifecycleService {
         return existing;
     }
 
-    public void observe(ExchangeState state,OperationResult result) { issues.observe(state,result); }
+    public void observe(ExchangeState state,OperationResult result) {
+        UUID issue=issues.observationIssue(state.task().id());
+        tasks.observe(state.task(),issue,result,"Внешний снимок сохранён как наблюдение до решения оператора");
+    }
 }

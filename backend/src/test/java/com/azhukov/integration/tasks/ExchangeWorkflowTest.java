@@ -44,14 +44,14 @@ class ExchangeWorkflowTest extends PostgresTest {
         UUID id = created(owner,UUID.randomUUID());
         var claim = exchange.claim();
         assertEquals("PUT",claim.step());
-        finish(exchange,claim,new ExchangeReply(503,null,false));
+        finish(exchange,claim,new ExchangeReply(503,null,false,null));
         assertEquals("UNKNOWN",delivery(id));
         assertEquals(1,count("exchange_issues"));
         dueNow();
         var check = exchange.claim();
         assertEquals("GET",check.step());
         assertEquals(2,check.number());
-        finish(exchange,check,new ExchangeReply(404,json.readTree("{\"title\":\"Отсутствует\",\"status\":404,\"code\":\"OPERATION_NOT_FOUND\"}"),false));
+        finish(exchange,check,new ExchangeReply(404,json.readTree("{\"title\":\"Отсутствует\",\"status\":404,\"code\":\"OPERATION_NOT_FOUND\"}"),false,null));
         assertEquals("RETRY_WAIT",delivery(id));
         dueNow();
         var repeat = exchange.claim();
@@ -73,7 +73,7 @@ class ExchangeWorkflowTest extends PostgresTest {
             assertEquals(n,attempt.automaticNumber());
             assertEquals(operation,attempt.operationId());
             assertEquals(n==1 ? "PUT" : "GET",attempt.step());
-            finish(exchange,attempt,new ExchangeReply(503,null,false));
+            finish(exchange,attempt,new ExchangeReply(503,null,false,null));
             if (n<5) {
                 int delay=DeliveryAttempt.delay(n);
                 double remaining=jdbc.queryForObject(
@@ -105,10 +105,10 @@ class ExchangeWorkflowTest extends PostgresTest {
     void successOnLastAttemptStillAcknowledgesAndAppliesItsResult() throws Exception {
         UUID id=created(login("initiator.one"),UUID.randomUUID());
         for (int n=1;n<5;n++) {
-            dueNow();var attempt=exchange.claim();finish(exchange,attempt,new ExchangeReply(503,null,false));
+            dueNow();var attempt=exchange.claim();finish(exchange,attempt,new ExchangeReply(503,null,false,null));
         }
         dueNow();var last=exchange.claim();assertEquals(5,last.automaticNumber());
-        finish(exchange,last,new ExchangeReply(200,ack(last).put("executions",0).putNull("result"),false));
+        finish(exchange,last,new ExchangeReply(200,ack(last).put("executions",0).putNull("result"),false,null));
         assertEquals("ACKNOWLEDGED",delivery(id));assertEquals(0,count("delivery_queue"));
         consume(exchange,0,page(1,result(last,2,"SUCCEEDED")));
         assertEquals("SUCCEEDED",business(id));
@@ -118,7 +118,7 @@ class ExchangeWorkflowTest extends PostgresTest {
     @Test
     void interruptedLastClaimPausesWithoutAnExtraGetAndIgnoresItsLateAck() throws Exception {
         UUID id=created(login("initiator.one"),UUID.randomUUID());
-        for (int n=1;n<5;n++) { dueNow();finish(exchange,exchange.claim(),new ExchangeReply(503,null,false)); }
+        for (int n=1;n<5;n++) { dueNow();finish(exchange,exchange.claim(),new ExchangeReply(503,null,false,null)); }
         dueNow();var last=exchange.claim();
         jdbc.update("UPDATE delivery_queue SET claimed_until=clock_timestamp()-interval '1 second'");
         assertNull(exchange.claim());
@@ -126,7 +126,7 @@ class ExchangeWorkflowTest extends PostgresTest {
         assertEquals("INTERRUPTED",jdbc.queryForObject("SELECT outcome FROM delivery_attempts WHERE id=?",String.class,last.attemptId()));
         long pauses=jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='DELIVERY_ATTEMPT' AND summary LIKE 'Автоматическая доставка приостановлена:%'",Long.class);
         for (int n=0;n<4;n++) { dueNow();assertNull(exchange.claim()); }
-        finish(exchange,last,new ExchangeReply(200,ack(last).put("executions",0).putNull("result"),false));
+        finish(exchange,last,new ExchangeReply(200,ack(last).put("executions",0).putNull("result"),false,null));
         assertEquals("NEEDS_REVIEW",delivery(id));
         assertEquals(5,count("delivery_attempts"));assertEquals(1,pauses);
         assertEquals(pauses,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE event_type='DELIVERY_ATTEMPT' AND summary LIKE 'Автоматическая доставка приостановлена:%'",Long.class));
@@ -147,7 +147,7 @@ class ExchangeWorkflowTest extends PostgresTest {
     void lateResultAfterExhaustionRemainsAnObservationForOperatorReview() throws Exception {
         UUID id=created(login("initiator.one"),UUID.randomUUID());
         DeliveryAttempt last=null;
-        for (int n=1;n<=5;n++) { dueNow();last=exchange.claim();finish(exchange,last,new ExchangeReply(503,null,false)); }
+        for (int n=1;n<=5;n++) { dueNow();last=exchange.claim();finish(exchange,last,new ExchangeReply(503,null,false,null)); }
         consume(exchange,0,page(1,result(last,2,"SUCCEEDED")));
         assertEquals("NEEDS_REVIEW",delivery(id));assertEquals("PENDING",business(id));
         assertEquals(1,exchange.cursor());
@@ -158,11 +158,11 @@ class ExchangeWorkflowTest extends PostgresTest {
     @Test
     void failedPauseAuditRollsBackStateAndTheExpiredClaimStillCannotSendASixthAttempt() throws Exception {
         UUID id=created(login("initiator.one"),UUID.randomUUID());
-        for (int n=1;n<5;n++) { dueNow();finish(exchange,exchange.claim(),new ExchangeReply(503,null,false)); }
+        for (int n=1;n<5;n++) { dueNow();finish(exchange,exchange.claim(),new ExchangeReply(503,null,false,null)); }
         dueNow();var last=exchange.claim();
         jdbc.execute("ALTER TABLE task_history ADD CONSTRAINT si10_reject_pause CHECK (summary NOT LIKE 'Автоматическая доставка приостановлена:%')");
         try {
-            assertThrows(org.springframework.dao.DataAccessException.class,() -> finish(exchange,last,new ExchangeReply(503,null,false)));
+            assertThrows(org.springframework.dao.DataAccessException.class,() -> finish(exchange,last,new ExchangeReply(503,null,false,null)));
         } finally { jdbc.execute("ALTER TABLE task_history DROP CONSTRAINT si10_reject_pause"); }
         assertEquals("UNKNOWN",delivery(id));
         assertEquals(last.attemptId(),jdbc.queryForObject("SELECT claim_id FROM delivery_queue",UUID.class));
@@ -182,7 +182,7 @@ class ExchangeWorkflowTest extends PostgresTest {
         assertNull(exchange.claim());
         assertEquals("UNKNOWN",delivery(id));
         assertEquals("INTERRUPTED",jdbc.queryForObject("SELECT outcome FROM delivery_attempts WHERE id = ?",String.class,old.attemptId()));
-        finish(exchange,old,new ExchangeReply(202,ack(old),false));
+        finish(exchange,old,new ExchangeReply(202,ack(old),false,null));
         assertEquals("UNKNOWN",delivery(id));
         dueNow();
         var next = exchange.claim();
@@ -197,7 +197,7 @@ class ExchangeWorkflowTest extends PostgresTest {
         assertTrue(consume(exchange,0,page(1,result(claim,2,"SUCCEEDED"))));
         assertEquals("ACKNOWLEDGED",delivery(id));
         assertEquals("SUCCEEDED",business(id));
-        finish(exchange,claim,new ExchangeReply(503,null,false));
+        finish(exchange,claim,new ExchangeReply(503,null,false,null));
         assertEquals("ACKNOWLEDGED",delivery(id));
         assertEquals(0,count("delivery_queue"));
         assertEquals(0,count("exchange_issues"));
@@ -236,7 +236,7 @@ class ExchangeWorkflowTest extends PostgresTest {
         assertEquals("QUEUED",delivery(id));
         assertEquals("PENDING",business(id));
         assertEquals(1,count("exchange_issues"));
-        finish(exchange,claim,new ExchangeReply(409,json.readTree("{\"code\":\"OPERATION_CONFLICT\"}"),false));
+        finish(exchange,claim,new ExchangeReply(409,json.readTree("{\"code\":\"OPERATION_CONFLICT\"}"),false,null));
         assertEquals("NEEDS_REVIEW",delivery(id));
     }
 
@@ -244,7 +244,7 @@ class ExchangeWorkflowTest extends PostgresTest {
     void pausedAndStoppedObserveBothRunningAndFinalWithoutApplying() throws Exception {
         UUID id = created(login("initiator.one"),UUID.randomUUID());
         var claim = exchange.claim();
-        finish(exchange,claim,new ExchangeReply(400,null,false));
+        finish(exchange,claim,new ExchangeReply(400,null,false,null));
         for (int version : new int[]{1,2}) {
             var incoming = result(claim,version,version == 1 ? "RUNNING" : "SUCCEEDED");
             long after = exchange.cursor();
@@ -283,6 +283,38 @@ class ExchangeWorkflowTest extends PostgresTest {
         assertTrue(consume(exchange,0,page(1,result(claim,2,"SUCCEEDED"))));
         assertFalse(consume(exchange,0,page(1,result(claim,2,"REJECTED"))));
         assertEquals("SUCCEEDED",business(id));
+    }
+
+    @Test
+    void observationAuditFollowsTheCommitAndDeduplicationOfItsHistoryRecord() throws Exception {
+        UUID id=created(login("initiator.one"),UUID.randomUUID());
+        var claim=exchange.claim();
+        finish(exchange,claim,new ExchangeReply(400,null,false,null));
+        var incoming=result(claim,2,"SUCCEEDED");
+        var logger=(ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger(JdbcTaskRepository.class);
+        var appender=new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        appender.start(); logger.addAppender(appender);
+        try {
+            new TransactionTemplate(transactions).executeWithoutResult(tx -> {
+                consume(exchange,0,page(1,incoming));
+                tx.setRollbackOnly();
+            });
+            assertTrue(appender.list.isEmpty());
+            assertEquals(0,exchange.cursor());
+            assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE observed_result IS NOT NULL",Integer.class));
+            consume(exchange,0,page(1,incoming));
+            assertEquals(1,appender.list.size());
+            var event=jdbc.queryForObject("SELECT id FROM task_history WHERE observed_result IS NOT NULL",UUID.class);
+            String log=appender.list.getFirst().getFormattedMessage();
+            assertTrue(log.contains("eventId="+event));
+            assertTrue(log.contains("taskId="+id));
+            assertTrue(log.contains("type=RESULT_IGNORED"));
+            consume(exchange,1,page(2,incoming));
+            assertEquals(1,appender.list.size(),"A repeated observation cannot claim another committed audit event");
+            assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE observed_result IS NOT NULL",Integer.class));
+            assertEquals("PENDING",business(id));
+            assertEquals("NEEDS_REVIEW",delivery(id));
+        } finally { logger.detachAppender(appender); appender.stop(); }
     }
 
     @Test

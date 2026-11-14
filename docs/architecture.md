@@ -277,7 +277,7 @@ Spring MVC принимает запросы, Spring Security
 | ReviewContext / IssueLifecycleService / ReviewService | Domain-политика действий, транзакции операторского разбора и история через ReviewRepository/JdbcReviewRepository. |
 | IdempotencyService / CommandReceiptRepository | Сервис координирует lock/read/callback/save и JSON. JdbcCommandReceiptRepository только блокирует, читает и пишет; транзакция обязательна от вызывающего сценария. |
 | HttpExternalExchangeClient / ExchangeProtocol | Внешний HTTP-адаптер, строгая проверка протокола и преобразование во внутреннюю модель. |
-| ReconciliationService / ExchangeCoordinator / ExchangeScheduler | HTTP между короткими транзакциями, четыре отправителя и ограниченный executor. Сверка использует два существующих bean: prepare/save в ReviewService, сеть в ReconciliationService. |
+| ReconciliationService / ExchangeCoordinator / ExchangeScheduler | HTTP между короткими транзакциями, virtual thread на отправку и максимум четыре незавершённые попытки. Сверка использует два существующих bean: prepare/save в ReviewService, сеть в ReconciliationService. |
 | OperationService / OperationRepository / JdbcOperationRepository эмулятора | Независимое исполнение и публикация событий, своя БД; HTTP-проекции в OperationApiMapper. |
 | TaskApiMapper / ReviewApiMapper / OperationApiMapper | Реальные MapStruct Spring beans; поля и enum/null проверяются через generated impl, бизнес-решений нет. |
 | RuleViolation / ApiExceptionHandler | Предметная ошибка и единый действующий HTTP-формат. |
@@ -453,7 +453,13 @@ API получаются `SessionApi`, `TasksApi`, `OperationsApi`,
 заданий и операторских действий. Вход и выход обслуживают фильтры
 Spring Security. Контроллеры эмулятора используют `ExchangeApi` и
 `TestFaultsApi`, причём служебные маршруты включаются только тестовым
-профилем. Сгенерированные интерфейсы содержат аннотации Spring MVC.
+профилем. Сгенерированные интерфейсы содержат аннотации Spring MVC; useSpringBuiltInValidation
+оставляет method validation самому MVC без class-level @Validated.
+В backend внешний generated набор содержит только модели для src/test:
+production JAR использует внутренний API. Эмулятор владеет внешним server API.
+Внутренняя схема ссылается на external-exchange: внешний YAML остаётся входом
+production-генерации internal API и явно объявлен в Gradle inputs. Docker build
+содержит обе схемы; отсутствие внешних Java-моделей в backend JAR этого не отменяет.
 
 Frontend запускает Orval перед проверкой типов и сборкой. Клиент использует
 относительные URL, поддерживает обязательные заголовки CSRF и идемпотентности
@@ -591,16 +597,29 @@ HTTP выполняется вне транзакции; доставка пов
 Проверка живости соединения короче бюджета получения из пула.
 TC-17, NF08 и TC-18 проверены на опубликованном кандидате;
 численные результаты и пройденная регрессия HTTP deadline — в [текущей стадии](current-stage.md).
-Исходящий HTTP-клиент общий на процесс: connect timeout 1 с и общий deadline 2 с
-на завершение sendAsync с BodyHandlers.ofString, включая тело. При тайм-ауте
-или прерывании вызывается cancel(true); неопределённый исход сохраняется для GET.
+Исходящий HTTP-клиент — один Spring bean на процесс; Spring закрывает его
+при завершении контекста. ExchangeHttpProperties связывает origin, connect timeout
+1 с, общий deadline ответа 2 с и предел 256 KiB. Настройки валидируются при старте:
+connect timeout положительный и не больше response timeout; последний не выше
+10 с, чтобы оставить запас до lease 15 с; размер 1 B–1 MiB.
+BoundedResponseBody считает фактически полученные байты до их накопления,
+в том числе без Content-Length. Превышение — ошибка протокола с сохранённым HTTP-статусом,
+а не подтверждение, 404 или сетевая недоступность. Частичный JSON не применяется.
+JDK 25 имеет [BodySubscribers.limiting](https://docs.oracle.com/en/java/javase/25/docs/api/java.net.http/java/net/http/HttpResponse.BodySubscribers.html),
+но сообщает превышение обычным IOException, как и обрыв тела. Небольшой subscriber
+выбран ради отдельного типизированного исхода переполнения без распознавания
+текста исключений: обрыв транспорта должен сохранять неопределённый исход,
+а некорректный размер — требовать разбора. Собственный HTTP framework не вводится.
+При тайм-ауте или прерывании вызывается cancel(true);
+неопределённый исход сохраняется для GET.
 На Java 25 одного HttpRequest.timeout недостаточно для зависшего тела.
 
 Spring Boot использует graceful HTTP shutdown (до 30 с на lifecycle phase);
 Compose предоставляет приложениям 60 с до принудительного завершения.
 Это не отменяет восстановление lease после SIGKILL. TC-05 дополнен остановкой
 с восемью ожидающими заданиями и проверкой завершения HTTP-запросов и закрытия пула БД (допустимы exit codes 0/143 после SIGTERM; 137 запрещён).
-Доставка держит максимум четыре незавершённые попытки и 32 захвата за цикл;
+Доставка создаёт virtual thread на задачу; pending-loop — единственный владелец
+лимита четырёх незавершённых попыток. За цикл — максимум 32 захвата;
 пауза 100 мс остаётся между циклами. Освободившийся слот заполняется независимо
 от медленного соседа. Lease берётся перед отправкой, а не заранее для очереди
 executor. Все завершённые ошибки наблюдаются, оставшиеся отправки завершаются

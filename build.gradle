@@ -51,6 +51,7 @@ ext.configureContract = { GenerateTask task, String contract, String boundary ->
         interfaceOnly: 'true',
         skipDefaultInterface: 'true',
         useSpringBoot4: 'true',
+        useSpringBuiltInValidation: 'true',
         useTags: 'true',
         documentationProvider: 'none',
         annotationLibrary: 'none',

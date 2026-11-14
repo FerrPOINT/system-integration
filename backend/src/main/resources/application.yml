@@ -34,6 +34,13 @@ spring:
     deserialization:
       accept-float-as-int: false
       fail-on-unknown-properties: true
+si:
+  exchange:
+    http:
+      base-url: ${SI_EMULATOR_URL:http://127.0.0.1:19581}
+      connect-timeout: 1s
+      response-timeout: 2s
+      max-response-size: 256KB
 management:
   endpoints:
     web:
