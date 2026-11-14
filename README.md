@@ -7,27 +7,28 @@
 
 ## Рабочая среда
 
-Текущая разработка и проверки выполняются на Firebat1 по SSH.
-Исходники и выбранный checkout определяются по [AGENTS.md](AGENTS.md);
-публичная демонстрация — [demo.azhukov-dev.ru](https://demo.azhukov-dev.ru/).
+Рабочую среду задаёт поручение: локальный Windows checkout или явно выбранный
+Firebat1 по SSH. Исходники и выбранный checkout проверяются по [AGENTS.md](AGENTS.md);
+фактическая среда квалификации указана в [текущей стадии](docs/current-stage.md).
+Публичная демонстрация — [demo.azhukov-dev.ru](https://demo.azhukov-dev.ru/).
 Демонстрационный runtime и изолированный тестовый system-integration-load —
 разные окружения: тесты и нагрузку не направляем на публичную БД.
 Точная версия и результаты приёмки указаны в [текущей стадии](docs/current-stage.md).
 
 ### Локальный Windows preview
 
-Команды ниже — необязательный способ локального preview на Windows,
-а не описание текущего запуска на Firebat1. Отдельные API, эмулятор и БД
+Команды ниже запускают локальный preview на Windows. Отдельные API, эмулятор и БД
 используют проект system-integration-load и порты 19680/19681/19632;
 Vite с HMR — [127.0.0.1:19673](http://127.0.0.1:19673/).
 После настройки Node/Corepack по [AGENTS.md](AGENTS.md):
 
 ```powershell
 docker compose -p system-integration-load -f compose.yml -f compose.load.yml --profile app up -d --no-build --wait postgres backend emulator
-node .local/toolchains/corepack/node_modules/corepack/dist/corepack.js pnpm --dir frontend dev
+Push-Location frontend
+try { corepack pnpm dev } finally { Pop-Location }
 ```
 
-Эти команды используют подготовленные серверные образы; изменение backend
+Эти команды используют уже собранные локальные образы; изменение backend
 требует их локальной сборки через общий host execution slot. Для полного
 Compose/UI-прогона Vite освобождает порт 19673 frontend-контейнеру.
 Приведённые ниже порты 195xx относятся к обычному Compose и публикации.
