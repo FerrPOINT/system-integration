@@ -15,6 +15,15 @@ for (const deliveryStatus of ['NEEDS_REVIEW', 'STOPPED'] as const) {
       businessStatus: 'PENDING', createdAt: '2026-11-12T00:00:00Z',
     } satisfies Task;
     const reads = { card: 0, history: 0 };
+    const aborted = { card: 0, history: 0 };
+    page.on('requestfailed', request => {
+      const path = new URL(request.url()).pathname;
+      const resource = path === '/api/tasks/' + id ? 'card' : path === '/api/tasks/' + id + '/history' ? 'history' : undefined;
+      if (resource) {
+        expect(request.failure()?.errorText).toBe('net::ERR_ABORTED');
+        aborted[resource]++;
+      }
+    });
     await page.route('**/api/tasks/' + id, route => { reads.card++; return route.fulfill({ json: task }); });
     await page.route('**/api/tasks/' + id + '/history?*', route => {
       reads.history++;
@@ -22,11 +31,15 @@ for (const deliveryStatus of ['NEEDS_REVIEW', 'STOPPED'] as const) {
     });
     await page.goto('/tasks/' + id);
     await expect(page.getByRole('heading', { name: task.title, exact: true })).toBeVisible();
-    await expect.poll(() => reads.history).toBe(1);
+    // StrictMode cancels its first subscription; only one initial read completes.
+    await expect.poll(() => reads.history - aborted.history).toBe(1);
     await expect(page.getByRole('status', { name: 'Загрузка…', exact: true })).toHaveCount(0);
+    await expect(page.locator('.history-panel .paged-list')).toHaveAttribute('aria-busy', 'false');
     await expect(page.getByRole('region', { name: 'История', exact: true }).getByRole('status')).toHaveText('Нет записей');
     await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
     const before = { ...reads };
+    expect(before.card - aborted.card).toBe(1);
+    expect(before.history - aborted.history).toBe(1);
     await page.clock.runFor(8000);
     expect(reads).toEqual(before);
     await page.clock.runFor(3000);

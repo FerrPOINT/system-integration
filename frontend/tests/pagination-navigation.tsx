@@ -1,6 +1,7 @@
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createBrowserRouter, RouterProvider, Route, Routes, useNavigate } from 'react-router-dom';
-import { usePagination } from '../src/app/use-pagination';
+import { createBrowserRouter, RouterProvider, useNavigate } from 'react-router-dom';
+import { usePagination } from '../src/shared/lib/pagination/use-pagination';
 
 // Control observer delivery to reproduce a queued layout measurement in the same
 // turn as navigation. The hook is production code; the router setup matches main.tsx.
@@ -41,8 +42,8 @@ function Source() {
     }}>Filter with queued measurement</button>
   </>;
 }
-const router = createBrowserRouter([{ path: '*', element: <Routes>
-  <Route path="/destination" element={<h1>Destination</h1>} />
-  <Route path="*" element={<Source />} />
-</Routes> }]);
-createRoot(document.getElementById('root')!).render(<RouterProvider router={router} />);
+const router = createBrowserRouter([
+  { path: '/destination', element: <h1>Destination</h1> },
+  { path: '*', element: <Source /> },
+]);
+createRoot(document.getElementById('root')!).render(<StrictMode><RouterProvider router={router} /></StrictMode>);

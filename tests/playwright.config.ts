@@ -3,7 +3,6 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.ts',
-  testIgnore: ['choice-fields.spec.ts', 'pagination-navigation.spec.ts'],
   outputDir: './results/playwright',
   reporter: [['list'], ['html', { outputFolder: './results/report', open: 'never' }]],
   workers: 1,
@@ -17,7 +16,7 @@ export default defineConfig({
     timezoneId: 'Asia/Novosibirsk',
   },
   projects: [
-    { name: 'desktop', testIgnore: ['mobile-feed.spec.ts', 'choice-fields.spec.ts', 'pagination-navigation.spec.ts'], use: { browserName: 'chromium', viewport: { width: 1440, height: 1000 } } },
+    { name: 'desktop', testIgnore: ['mobile-feed.spec.ts'], use: { browserName: 'chromium', viewport: { width: 1440, height: 1000 } } },
     { name: 'mobile', use: { browserName: 'chromium', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
   ],
 });

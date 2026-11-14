@@ -55,7 +55,7 @@ test('TC-03 / TC-07: lost reply, independent execution, reconciliation and opera
   await expect(page.getByText(operator.userId, { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Взять разбор', exact: true })).toHaveCount(0);
   await selectChoice(page, 'Действие', 'Принять внешний результат');
-  await expect(actions).toContainText('Результат последней сверки будет применён к заданию');
+  await expect(actions).toContainText('Результат выбранной сверки будет применён к заданию');
   await page.getByLabel('Причина решения *', { exact: true }).fill('Проверено фактическое исполнение, принимаю сохранённый результат');
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });

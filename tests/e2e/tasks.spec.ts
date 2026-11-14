@@ -125,7 +125,7 @@ test('TC-09 / TC-12: empty filter, server error recovery and UTC rendering', asy
   await page.route('**/api/tasks?*', route => route.fulfill({ status: 502, contentType: 'text/html',
     body: '<html><body>502 Bad Gateway</body></html>' }));
   await page.getByRole('button', { name: 'Обновить', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('Не удалось выполнить запрос. Повторите попытку.');
+  await expect(page.getByRole('alert')).toHaveText('Не удалось выполнить запрос');
   await page.unroute('**/api/tasks?*');
   await page.getByRole('button', { name: 'Повторить', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Ничего не найдено' })).toBeVisible();
