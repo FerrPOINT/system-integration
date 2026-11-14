@@ -103,10 +103,11 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
 
 test('UI-19: narrow phones use one scroll surface and compact, accessible controls', async ({ page }) => {
   await login(page, 'operator');
-  for (const [width, height] of [[320, 568], [348, 672], [390, 844], [390, 480]]) {
+  // A 320 px Windows viewport with a classic scrollbar leaves 305 px for content.
+  for (const [width, height] of [[305, 568], [320, 568], [348, 672], [390, 844], [390, 480]]) {
     await page.setViewportSize({ width, height });
     await waitForRegistry(page);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     const metrics = await page.evaluate(() => {
       const header = document.querySelector('.app-header')!.getBoundingClientRect();
       const tools = document.querySelector('.list-tools')!.getBoundingClientRect();
