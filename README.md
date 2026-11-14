@@ -190,13 +190,14 @@ CSS, JS-тесты и frontend-конфигурации: 2 пробела, ши�
 node_modules, результаты и lockfile. Версии закреплены в Gradle/package.json
 и lockfile; не используйте npx с автоматически загружаемой latest.
 
-Сейчас добавлены только настройки. Общий проход по backend, frontend и тестам
-выполняется после готовности frontend, отдельным поручением. Format-on-save
-в .vscode выключен; Spotless enforceCheck=false оставляет обычный Gradle check
-без проверки существующего стиля. Ручные команды check доступны, но до общего
-прохода могут сообщать о текущих различиях; это пока не gate сборки.
+Общий проход выполнен по поручению пользователя. Format-on-save включён
+для настроенных редакторов. Gradle build/check выполняет spotlessCheck;
+frontend build — format:check, ESLint и TypeScript. Docker targets проверяют
+тот же стиль; frontend builder получает корневые настройки и исходники тестов,
+которые не попадают в финальный образ. Проверки завершаются ошибкой при
+расхождении, а не меняют файлы автоматически.
 
-Команды для будущего общего прохода, из корня проекта:
+Команды исправления и проверки стиля, из корня проекта:
 
 ~~~sh
 ./gradlew spotlessApply
@@ -206,9 +207,8 @@ corepack pnpm format
 corepack pnpm format:check
 ~~~
 
-После общего прохода включите enforceCheck=true и format-on-save; настройку
-и массовый diff проверьте вместе. В VS Code рекомендованы Prettier и Spotless
-Gradle; в IntelliJ используйте Spotless plugin с этими Gradle-правилами,
+В VS Code рекомендованы Prettier и Spotless Gradle; в IntelliJ используйте
+Spotless plugin с этими Gradle-правилами,
 для frontend — локальный frontend/node_modules/prettier.
 CLI остаётся источником истины. Новых CI jobs и Git hooks нет.
 

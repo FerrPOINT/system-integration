@@ -12,19 +12,20 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /** Stored/external JSON rules stay in an adapter, outside the domain records. */
-@Configuration(proxyBeanMethods=false)
+@Configuration(proxyBeanMethods = false)
 public class DocumentJsonConfiguration {
     @Bean
     public JsonMapperBuilderCustomizer documents() {
-        return builder -> builder.addMixIn(OperationResult.class,OptionalFields.class)
-            .addMixIn(OperationSnapshot.class,RequiredNullable.class)
-            .addMixIn(LocalSnapshot.class,OptionalFields.class)
-            .addMixIn(TaskOutcome.class,OptionalFields.class)
-            .addMixIn(Evidence.class,OptionalFields.class)
-            .addMixIn(Issue.class,OptionalFields.class)
-            .addMixIn(Reconciliation.class,OptionalFields.class)
-            .addMixIn(IssueResolution.class,OptionalFields.class)
-            .addMixIn(IssueCommands.Retry.class,OptionalFields.class);
+        return builder ->
+                builder.addMixIn(OperationResult.class, OptionalFields.class)
+                        .addMixIn(OperationSnapshot.class, RequiredNullable.class)
+                        .addMixIn(LocalSnapshot.class, OptionalFields.class)
+                        .addMixIn(TaskOutcome.class, OptionalFields.class)
+                        .addMixIn(Evidence.class, OptionalFields.class)
+                        .addMixIn(Issue.class, OptionalFields.class)
+                        .addMixIn(Reconciliation.class, OptionalFields.class)
+                        .addMixIn(IssueResolution.class, OptionalFields.class)
+                        .addMixIn(IssueCommands.Retry.class, OptionalFields.class);
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

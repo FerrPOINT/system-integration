@@ -1,8 +1,28 @@
-.login-panel .base-button[data-variant="default"] { width: 100%; }
-.login-page { max-width: 1080px; min-height: 100dvh; }
-.login-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
-.login-content { display: grid; place-items: center; min-height: calc(100dvh - 160px); padding-block: var(--base-panel-padding); }
-.login-panel { width: 100%; max-width: 440px; }
+.login-panel .base-button[data-variant='default'] {
+  width: 100%;
+}
+.login-page {
+  max-width: 1080px;
+  min-height: 100dvh;
+}
+.login-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.login-content {
+  display: grid;
+  place-items: center;
+  min-height: calc(100dvh - 160px);
+  padding-block: var(--base-panel-padding);
+}
+.login-panel {
+  width: 100%;
+  max-width: 440px;
+}
 @media (max-width: 760px) {
-  .login-toolbar { gap: 12px; }
+  .login-toolbar {
+    gap: 12px;
+  }
 }

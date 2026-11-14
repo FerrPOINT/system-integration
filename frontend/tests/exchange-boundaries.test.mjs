@@ -8,8 +8,20 @@ import { decisionBasis, isDecisionStale, decisionActions } from '../src/features
 
 test('exchange invalidation affects its subjects and lists, preserving other records and saved snapshots', async () => {
   const client = new QueryClient();
-  const affected = [taskKeys.task('a'), taskKeys.history('a'), taskKeys.taskList({}), exchangeKeys.issue('a'), exchangeKeys.issueList('OPEN'), exchangeKeys.issueList('RESOLVED')];
-  const unchanged = [taskKeys.task('b'), taskKeys.history('b'), exchangeKeys.issue('b'), exchangeKeys.reconciliation('a', 'saved')];
+  const affected = [
+    taskKeys.task('a'),
+    taskKeys.history('a'),
+    taskKeys.taskList({}),
+    exchangeKeys.issue('a'),
+    exchangeKeys.issueList('OPEN'),
+    exchangeKeys.issueList('RESOLVED'),
+  ];
+  const unchanged = [
+    taskKeys.task('b'),
+    taskKeys.history('b'),
+    exchangeKeys.issue('b'),
+    exchangeKeys.reconciliation('a', 'saved'),
+  ];
   for (const key of [...affected, ...unchanged]) client.setQueryData(key, { fixture: true });
   await invalidateExchange(client, { taskId: 'a', issueId: 'a' });
   for (const key of affected) assert.equal(client.getQueryState(key).isInvalidated, true, JSON.stringify(key));
@@ -29,7 +41,12 @@ test('global issues do not invalidate task data; an empty scope fails explicitly
 });
 
 test('decision basis stays frozen across revision, snapshot and status changes', () => {
-  const issue = { issueRevision: 1, latestReconciliationId: 'first', status: 'OPEN', allowedActions: ['TAKE_OWNERSHIP', 'ACKNOWLEDGE_DIFFERENCE'] };
+  const issue = {
+    issueRevision: 1,
+    latestReconciliationId: 'first',
+    status: 'OPEN',
+    allowedActions: ['TAKE_OWNERSHIP', 'ACKNOWLEDGE_DIFFERENCE'],
+  };
   const basis = decisionBasis(issue);
   assert.equal(isDecisionStale(basis, { ...issue }), false);
   assert.equal(isDecisionStale(basis, { ...issue, issueRevision: 2 }), true);
