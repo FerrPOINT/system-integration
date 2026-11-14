@@ -1,24 +1,26 @@
 package com.azhukov.integration.tasks;
 
-import com.azhukov.integration.infrastructure.jdbc.TaskRepository;
-import com.azhukov.integration.application.Actor;
+import com.azhukov.integration.domain.Actor;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.BusinessStatus;
+import com.azhukov.integration.repository.jdbc.JdbcExchangeRepository;
+import com.azhukov.integration.repository.jdbc.JdbcTaskRepository;
 import com.azhukov.integration.support.PostgresTest;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import tools.jackson.databind.ObjectMapper;
-import java.util.Map;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 class TaskMappingTest extends PostgresTest {
-    @Autowired TaskRepository store;
+    @Autowired JdbcTaskRepository store;
+    @Autowired JdbcExchangeRepository exchanges;
     @MockitoSpyBean ObjectMapper observedJson;
 
     @Test
@@ -36,7 +38,7 @@ class TaskMappingTest extends PostgresTest {
     void exchangeDecodesTheAcceptedSnapshotOnceForDeduplication() throws Exception {
         var task = running();
         clearInvocations(observedJson);
-        var state = store.exchange(task.operation(),false);
+        var state = exchanges.exchange(task.operation(),false);
         assertEquals(1,state.result().version());
         assertNull(state.task().outcome());
         verify(observedJson,times(1)).readValue(anyString(),eq(OperationResult.class));

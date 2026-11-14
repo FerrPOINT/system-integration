@@ -1,7 +1,8 @@
 /.local/
-/backend/.gradle/
+/.gradle/
+/build/
 /backend/build/
-/backend/emulator/build/
+/emulator/build/
 /frontend/node_modules/
 /frontend/dist/
 /frontend/build/

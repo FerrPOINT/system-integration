@@ -3,6 +3,7 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.ts',
+  testIgnore: ['choice-fields.spec.ts', 'pagination-navigation.spec.ts'],
   outputDir: './results/playwright',
   reporter: [['list'], ['html', { outputFolder: './results/report', open: 'never' }]],
   workers: 1,

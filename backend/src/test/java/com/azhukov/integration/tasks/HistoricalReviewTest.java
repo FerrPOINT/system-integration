@@ -1,35 +1,32 @@
 package com.azhukov.integration.tasks;
 
-import static com.azhukov.integration.support.ExchangeTestData.*;
-
-import com.azhukov.integration.application.ExchangeTasks;
-
-import com.azhukov.integration.application.port.ExternalExchange.Lookup;
+import com.azhukov.integration.client.ExternalExchangeClient.Lookup;
+import com.azhukov.integration.client.http.HttpExternalExchangeClient;
 import com.azhukov.integration.domain.review.Reconciliation.Availability;
-import com.azhukov.integration.infrastructure.http.ExchangeClient;
+import com.azhukov.integration.service.ExchangeService;
 import com.azhukov.integration.support.PostgresTest;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
-import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import static com.azhukov.integration.support.ExchangeTestData.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 
 class HistoricalReviewTest extends PostgresTest {
-    @MockitoBean ExchangeClient client;
-    @Autowired ExchangeTasks exchange;
+    @MockitoBean HttpExternalExchangeClient client;
+    @Autowired ExchangeService exchange;
 
     @Test
     void historicalIssueReceiptKeepsItsOldOwnerAndDoesNotRewriteCurrentIssue() throws Exception {
         var task=created(login("initiator.one"),UUID.randomUUID());
         var claim=exchange.claim();
-        finish(exchange,claim,new com.azhukov.integration.infrastructure.http.ExchangeReply(400,null,false));
+        finish(exchange,claim,new com.azhukov.integration.client.http.ExchangeReply(400,null,false));
         UUID issue=jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id=?",UUID.class,task);
         UUID key=UUID.randomUUID();
         String historical="""

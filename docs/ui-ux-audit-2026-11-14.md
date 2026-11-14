@@ -10,6 +10,9 @@
 соответствии всем требованиям доступности. Мобильная компоновка проверялась
 на узком viewport Chromium, без физических iOS/Android устройств.
 
+Пути исходников актуализированы после интеграции структурного PR #3.
+Замечания и измерения ниже описывают исходный срез аудита, а не повторную приёмку.
+
 ## Среда и покрытие
 
 Исходники и Vite работают на Windows, API/эмулятор/БД — в локальном проекте
@@ -62,7 +65,7 @@ Docker Desktop `system-integration-load`. Проверки используют 
 
 **Владелец причины:** локальный runtime/artifact. У запущенного backend label
 `org.opencontainers.image.revision=a5cde46ca28c075e8a976a078e2d8ea22756f7b7`.
-Текущие [контроллер](../backend/src/main/java/com/azhukov/integration/web/TasksController.java)
+Текущие [контроллер](../backend/src/main/java/com/azhukov/integration/controller/TasksController.java)
 и [контракт](../contracts/internal-api.openapi.yaml) уже принимают `size`;
 [серверная проверка](../backend/src/test/java/com/azhukov/integration/tasks/PaginationWorkflowTest.java)
 проверяет реальное разбиение и отсутствие пропусков. Документированная ранее
@@ -85,8 +88,8 @@ Receipt: `tests/results/ui-ux-audit-2026-11-14/api-window.json`.
 В списке разборов ссылка назад также всегда ведёт в `/issues`, поэтому
 завершённый разбор возвращает пользователя к открытым.
 
-**Владелец:** ссылки из [реестра/карточки задания](../frontend/src/features/tasks/Tasks.tsx)
-и [разборов](../frontend/src/features/operations/Operations.tsx).
+**Владелец:** ссылки из [реестра/карточки задания](../frontend/src/features/tasks/task-details.tsx)
+и [разборов](../frontend/src/features/operations/issue-details.tsx).
 Передавать адрес возврата вместе с переходом в карточку через состояние маршрута;
 для прямого URL использовать явный корень соответствующего списка. Проверять
 страницу, фильтры и браузерные Back/Forward. Не сохранять этот контекст глобально.
@@ -97,7 +100,7 @@ Receipt: `tests/results/ui-ux-audit-2026-11-14/api-window.json`.
 в «Задания» и вернуться браузерным Back. Подтверждения нет, поле пустое.
 Команда решения при этой проверке не отправлялась.
 
-**Владелец:** `DecisionForm` в [Operations.tsx](../frontend/src/features/operations/Operations.tsx).
+**Владелец:** `DecisionForm` в [issue-details.tsx](../frontend/src/features/operations/issue-details.tsx).
 Использовать существующие механизмы блокировки маршрута/закрытия и предупреждения
 при перезагрузке, уже применённые в создании. Сохранить текст при ошибке команды,
 защиту pending и возможность явно отказаться от черновика.
@@ -109,7 +112,7 @@ Receipt: `tests/results/ui-ux-audit-2026-11-14/api-window.json`.
 названия задания. Для сопоставления приходится открывать карточки по очереди.
 
 **Владелец:** DTO `Issue` в [контракте](../contracts/internal-api.openapi.yaml)
-и [IssueList](../frontend/src/features/operations/Operations.tsx).
+и [IssueList](../frontend/src/features/operations/issue-list.tsx).
 Добавить краткую идентичность связанного задания в выдачу списка и показать
 номер заявки/название. Общую проблему ленты явно отличать от проблемы задания.
 Не делать отдельный запрос задания для каждой карточки.
@@ -122,9 +125,9 @@ Receipt: `tests/results/ui-ux-audit-2026-11-14/api-window.json`.
 но не понять, кто принял решение.
 
 **Владелец:** создание подписей в
-[ExchangeTasks](../backend/src/main/java/com/azhukov/integration/application/ExchangeTasks.java),
-[ReviewService](../backend/src/main/java/com/azhukov/integration/application/ReviewService.java),
-контракт представления акторов и отображение [истории](../frontend/src/features/tasks/Tasks.tsx).
+[ExchangeService](../backend/src/main/java/com/azhukov/integration/service/ExchangeService.java),
+[ReviewService](../backend/src/main/java/com/azhukov/integration/service/ReviewService.java),
+контракт представления акторов и отображение [истории](../frontend/src/features/tasks/task-details.tsx).
 Использовать понятные названия событий и отображаемое имя автора. Технические
 методы, коды и идентификаторы оставить доступными в диагностике. Не переписывать
 сохранённые валидные события и не заменять подстроки в произвольном тексте.
@@ -151,7 +154,7 @@ Receipt: `tests/results/ui-ux-audit-2026-11-14/api-window.json`.
 Уменьшенная панель пагинации вернула 28 px, но это всё ещё одна запись за раз.
 
 **Владелец:** мобильная карточка и компоновка реестра в
-[Tasks.tsx](../frontend/src/features/tasks/Tasks.tsx).
+[task-list.tsx](../frontend/src/features/tasks/task-list.tsx).
 Следующий срез: компактнее собрать номер заявки/количество/дату и сократить
 декоративные интервалы, сохранив отдельные состояния доставки и исполнения,
 читаемые даты и доступные действия. После изменения снова измерить вместимость.
@@ -163,7 +166,7 @@ Receipt: `tests/results/ui-ux-audit-2026-11-14/api-window.json`.
 В модальном создании возврат фокуса уже реализован корректно.
 
 **Владелец:** `RenameForm`/`TaskCard` в
-[Tasks.tsx](../frontend/src/features/tasks/Tasks.tsx). После отмены возвращать
+[task-details.tsx](../frontend/src/features/tasks/task-details.tsx). После отмены возвращать
 фокус на «Изменить название», после успешного сохранения — на видимый заголовок
 или тот же триггер. При аудите название задания не менялось.
 

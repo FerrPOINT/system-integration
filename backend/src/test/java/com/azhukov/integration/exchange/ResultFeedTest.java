@@ -1,35 +1,32 @@
 package com.azhukov.integration.exchange;
 
-import com.azhukov.integration.application.ExchangeCoordinator;
-
-import com.azhukov.integration.infrastructure.http.ExchangeClient;
-
+import com.azhukov.integration.client.http.HttpExternalExchangeClient;
+import com.azhukov.integration.service.ExchangeCoordinator;
+import com.azhukov.integration.service.ExchangeService;
 import com.azhukov.integration.support.PostgresTest;
-import com.azhukov.integration.application.ExchangeTasks;
 import com.sun.net.httpserver.HttpServer;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-import org.springframework.jdbc.core.JdbcTemplate;
-import static org.mockito.Mockito.*;
-
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class ResultFeedTest extends PostgresTest {
-    @Autowired ExchangeTasks exchange;
+    @Autowired ExchangeService exchange;
     @MockitoSpyBean JdbcTemplate observedSql;
 
     @Test
     void emptyFeedKeepsItsIdleDelayWithoutWritingTheCursor() throws Exception {
         var requests=new AtomicInteger();
         var server=source(requests,new AtomicReference<>("[]"),new AtomicInteger(200));
-        try (var client=new ExchangeClient(json,origin(server)); var worker=new ExchangeCoordinator(exchange,client)) {
+        try (var client=new HttpExternalExchangeClient(json,origin(server)); var worker=new ExchangeCoordinator(exchange,client)) {
             clearInvocations(observedSql);
             worker.receive();
             worker.receive();
@@ -49,7 +46,7 @@ class ResultFeedTest extends PostgresTest {
         var requests = new AtomicInteger();
         var page = new AtomicReference<>("[{\"cursor\":8},{\"cursor\":7}]");
         var server = source(requests, page, new AtomicInteger(200));
-        try (var client = new ExchangeClient(json, origin(server))) {
+        try (var client = new HttpExternalExchangeClient(json, origin(server))) {
             try (var worker = new ExchangeCoordinator(exchange, client)) {
                 worker.receive();
                 worker.receive();
@@ -74,7 +71,7 @@ class ResultFeedTest extends PostgresTest {
     void temporaryFeedFailureDoesNotAdvanceOrSpin() throws Exception {
         var requests = new AtomicInteger();
         var server = source(requests, new AtomicReference<>("{}"), new AtomicInteger(503));
-        try (var client = new ExchangeClient(json, origin(server)); var worker = new ExchangeCoordinator(exchange, client)) {
+        try (var client = new HttpExternalExchangeClient(json, origin(server)); var worker = new ExchangeCoordinator(exchange, client)) {
             worker.receive();
             worker.receive();
             assertEquals(1, requests.get());
