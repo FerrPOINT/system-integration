@@ -1,5 +1,6 @@
 import { ErrorMessage } from './error-message';
 import { PageHeader } from '../ui/page-header';
+import { BackLink } from '../ui/back-link';
 import { Card, CardContent } from '../ui/card';
 import { FormField } from '../ui/form-field';
 import { Brand } from './Brand';
@@ -84,7 +85,7 @@ function Shell({ user, appearance }: { user: GetSession200; appearance: ReactNod
         <Route path="/issues/:id" element={user.role === 'OPERATOR' ? <IssueCard /> : <Navigate to="/tasks" replace />} />
         <Route path="/tasks/:taskId/reconciliations/:reconciliationId" element={user.role === 'OPERATOR' ? <ReconciliationCard /> : <Navigate to="/tasks" replace />} />
         <Route path="/" element={<Navigate to="/tasks" replace />} />
-        <Route path="*" element={<section><PageHeader title="Страница не найдена" actions={<Button asChild><Link to="/tasks">К заданиям</Link></Button>} /></section>} />
+        <Route path="*" element={<section><PageHeader title="Страница не найдена" back={<BackLink to="/tasks">К заданиям</BackLink>} /></section>} />
       </Routes>
     </main>
   </div>;
