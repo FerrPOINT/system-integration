@@ -1,7 +1,9 @@
+import { StrictMode } from 'react';
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Select } from '../src/ui/select';
-import '../src/app/styles.css';
+import { Select } from '../src/shared/ui/select';
+import '../src/shared/styles/layout.css';
+import '../src/app/shell/shell.css';
 
 const options = [{ value: 'A', label: 'Alpha' }, { value: 'B', label: 'Beta' }, { value: 'C', label: 'Disabled', disabled: true }];
 
@@ -29,4 +31,4 @@ function ChoiceForm() {
     <output role="status">{JSON.stringify(entries)}</output>
   </main>;
 }
-createRoot(document.getElementById('root')!).render(<ChoiceForm />);
+createRoot(document.getElementById('root')!).render(<StrictMode><ChoiceForm /></StrictMode>);

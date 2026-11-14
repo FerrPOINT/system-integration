@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { fitPageSize } from '../src/ui/use-page-size.ts';
+import { fitPageSize } from '../src/shared/lib/pagination/use-page-size.ts';
 
 test('fits complete rows using available height, gaps and grid columns', () => {
   assert.equal(fitPageSize(420,200,20,2),4);
