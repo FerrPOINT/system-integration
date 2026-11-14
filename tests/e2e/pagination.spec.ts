@@ -123,8 +123,10 @@ test('UI-10: lost create response keeps the command key and invalidates the cach
   await page.getByLabel('Название *', { exact: true }).fill(title);
   await page.getByLabel('Номер заявки').fill('REQ-880002');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
-  await expect(page.getByRole('alert')).toBeVisible();
-  await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Результат отправки неизвестен');
+  await expect(page.getByLabel('Название *', { exact: true })).toBeDisabled();
+  await expect(page.getByLabel('Название *', { exact: true })).toHaveValue(title);
+  await page.getByRole('button', { name: 'Повторить исходную отправку', exact: true }).click();
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   expect(keys).toHaveLength(2); expect(keys[0]).toBe(keys[1]); expect(ids[0]).toBe(ids[1]);
   expect((await (await page.request.get('/api/tasks')).json()).totalItems).toBe(before.totalItems + 1);
@@ -181,9 +183,10 @@ test('UI-12: storage unavailability keeps the form, session and command key for 
   await page.getByLabel('Название *', { exact: true }).fill(title);
   await page.getByLabel('Номер заявки').fill('REQ-880003');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('Сервис временно недоступен. Повторите запрос позже');
+  await expect(page.getByRole('alert')).toContainText('Результат отправки неизвестен');
+  await expect(page.getByLabel('Название *', { exact: true })).toBeDisabled();
   await expect(page.getByLabel('Название *', { exact: true })).toHaveValue(title);
-  await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  await page.getByRole('button', { name: 'Повторить исходную отправку', exact: true }).click();
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   expect(keys).toHaveLength(2);
   expect(keys[0]).toBe(keys[1]);

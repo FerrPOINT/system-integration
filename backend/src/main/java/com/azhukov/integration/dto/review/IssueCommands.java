@@ -5,6 +5,7 @@ import com.azhukov.integration.domain.review.IssueResolution;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.nio.charset.StandardCharsets;
 
 public final class IssueCommands {
     private static final Pattern NON_BLANK=Pattern.compile("\\S",Pattern.UNICODE_CHARACTER_CLASS);
@@ -26,7 +27,7 @@ public final class IssueCommands {
         if (value<1 || value>9007199254740991L) throw RuleViolation.invalid("Некорректная версия проблемы");
     }
     private static void reason(String value) {
-        if (value==null || value.length()>500 || value.indexOf(0)>=0 || !NON_BLANK.matcher(value).find())
-            throw RuleViolation.invalid("Укажите непустую причину длиной до 500 символов без нулевого символа");
+        if (value==null || value.length()>500 || value.indexOf(0)>=0 || !StandardCharsets.UTF_8.newEncoder().canEncode(value) || !NON_BLANK.matcher(value).find())
+            throw RuleViolation.invalid("Укажите непустую причину до 500 символов: корректный Unicode без нулевого символа");
     }
 }

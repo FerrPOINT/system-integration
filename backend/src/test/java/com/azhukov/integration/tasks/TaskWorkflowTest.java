@@ -254,4 +254,51 @@ class TaskWorkflowTest extends PostgresTest {
         assertEquals(1,count("task_history"));assertEquals(1,count("command_receipts"));
         assertNotNull(rename.getResponse().getHeader("X-Request-ID"));
     }
+    @Test
+    void escapedSurrogatesAreRejectedBeforeStorageAndDoNotConsumeTheCommandKey() throws Exception {
+        var owner=login("initiator.one");
+        for (String escape : List.of("\\uD800","\\uDC00")) {
+            var key=UUID.randomUUID();
+            var rejected=create(owner,key,CREATE.replace("Проверка заявки","before"+escape+"after"));
+            status(400,rejected);
+            assertEquals("VALIDATION_FAILED",body(rejected).get("code").asString());
+            for (String table : List.of("tasks","delivery_queue","task_history","command_receipts"))
+                assertEquals(0,count(table));
+        }
+        var key=UUID.randomUUID();
+        status(400,create(owner,key,CREATE.replace("Проверка заявки","bad\\uD800value")));
+        var accepted=create(owner,key,CREATE.replace("Проверка заявки","Название 😀"));
+        status(201,accepted);
+        var id=UUID.fromString(body(accepted).get("taskId").asString());
+        for (String escape : List.of("\\uD800","\\uDC00")) {
+            var rejected=mvc.perform(patch("/api/tasks/"+id).session(owner.session())
+                .header("X-CSRF-TOKEN",owner.csrf()).header("Idempotency-Key",UUID.randomUUID())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"bad"+escape+"value\",\"expectedTitleRevision\":1}")).andReturn();
+            status(400,rejected);
+            assertEquals("VALIDATION_FAILED",body(rejected).get("code").asString());
+        }
+        assertEquals("Название 😀",jdbc.queryForObject("SELECT title FROM tasks WHERE id=?",String.class,id));
+        assertEquals(1,count("task_history"));assertEquals(1,count("command_receipts"));
+        status(200,rename(owner,id,UUID.randomUUID(),"Новое 𐀀",1));
+        assertEquals("Новое 𐀀",jdbc.queryForObject("SELECT title FROM tasks WHERE id=?",String.class,id));
+    }
+
+    @Test
+    void utcFiltersRejectUnsupportedCalendarYearsBeforeJdbc() throws Exception {
+        var owner=login("initiator.one");
+        created(owner,UUID.randomUUID());
+        for (String field : List.of("createdFrom","createdTo")) {
+            for (String invalid : List.of("0000-01-01T00:00:00Z","+10000-01-01T00:00:00Z",
+                "+999999999-01-01T00:00:00Z")) {
+                var response=mvc.perform(get("/api/tasks").session(owner.session()).param(field,invalid)).andReturn();
+                status(400,response);
+                assertEquals("VALIDATION_FAILED",body(response).get("code").asString());
+            }
+        }
+        var full=mvc.perform(get("/api/tasks").session(owner.session())
+            .param("createdFrom","0001-01-01T00:00:00Z").param("createdTo","9999-12-31T23:59:59Z")).andReturn();
+        status(200,full);assertEquals(1,body(full).get("totalItems").asInt());
+        assertEquals(1,count("tasks"));assertEquals(1,count("task_history"));assertEquals(1,count("command_receipts"));
+    }
 }

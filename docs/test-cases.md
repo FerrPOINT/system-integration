@@ -2,6 +2,23 @@
 
 ## Регрессии backend-аудита
 
+Финальный аудит F01–F05 дополнительно проверяет:
+
+- одиночные UTF-16 surrogate-коды в escaped JSON create/rename/retry/resolve:
+  VALIDATION_FAILED до хранения; отсутствуют частичные записи и receipt,
+  отклонённый ключ пригоден для следующей корректной команды;
+- годы вне 0001–9999 в обеих границах фильтра: 400, а не SQL 500;
+  допустимые границы работают с теми же правами и [from,to);
+- внешние timestamps с extended year, отсутствующими секундами, неизвестным
+  offset -00:00 или лишней дробной точностью: ошибка протокола;
+  плохое событие не мешает соседнему корректному, повтор не дублирует проблему;
+- lookup 201/202/204/302: PROTOCOL_ERROR и сохранённая сверка/история,
+  replay без нового HTTP/эффекта; корректные 200/404 и временный 503 сохранены;
+- private diagnostics: feed.deliveryInFlight вместо неясного inFlight,
+  прежние права и отсутствие побочной записи;
+- конечные runtime-образы: vendor OS updates, повторный Trivy и smoke.
+
+
 [BA-01–BA-09](backend-audit-followup-plan.md): U+0000 и допустимый Unicode
 проверяют TaskTitle/IssueCommands, HTTP create/rename — TaskWorkflowTest/
 ThreadingTest, причины допустимых retry/resolve — OperationsWorkflowTest.
@@ -497,3 +514,28 @@ Read/architecture, полный Java/UI/recovery gate, SQL-планы, demo и N
 Четыре регрессии используют фактическую конфигурацию RouterProvider:
 без проверки актуального адреса падают, с ней проходят. Fixtures исключены
 из production payload. Результаты — в [текущей стадии](current-stage.md).
+
+## Архитектурные регрессии frontend
+
+FR-00–FR-12 [плана frontend](frontend-refactoring-plan.md) сохраняют исходные
+UI-сценарии и добавляют проверки границ состояния и ошибок:
+
+| Область | Проверка | Ожидаемый результат |
+| --- | --- | --- |
+| Form identity | Тёплые/холодные A/B, равные revision, refetch той же записи | Новый taskId создаёт новый form session; прежний ID сохраняет draft и expected revision. |
+| Write/read outcomes | Receipt получен, follow-up GET отказал | Команда остаётся принятой; retry выполняет только чтение. Неизвестный исход сохраняет input/key. |
+| Unknown create | Обрыв после записи, повторный отказ CSRF/400, новый сознательный create | Отправленные поля заблокированы; повтор сохраняет input/key. Уход предупреждает о возможном сохранении; только после явного discard новая команда получает новый key. |
+| Create receipt | 201 с отсутствующим, числовым или неверным taskId | Результат остаётся неизвестным; нет GET по невалидному ID и ложного success. Валидный replay подтверждает ту же команду. |
+| Session lifecycle | Initial/background 502, dirty/pending форма, настоящий 401 и смена роли | Background failure сохраняет форму/observer; initial retry выполняет чтение; 401/смена identity удаляют приватное состояние. |
+| Guard | Cancel, route/Back, reload, pending, focus | Один guard управляет подтверждением, pending блокирует уход, discard возвращает правильный фокус. |
+| Operator basis | Новая сверка/revision или внешнее закрытие во время ввода | Основа draft не обновляется молча, submit блокируется до явного обновления; причина сохраняется. |
+| Router | Прямой URL, роль, not-found, render/chunk error | Один route tree, безопасный fallback и восстановление с доступной оболочкой. |
+| Collection budget | 20/100/1000/5000 записей; refetch и polling | Не более 5 страниц/100 записей кэша/DOM и 5 GET; нет копии DTO в state/storage. |
+| Collection access | Полный обход 5000, обратная загрузка, Back после Query GC | Нет пропусков в стабильном наборе, вытесненные записи доступны; ID/offset восстанавливаются. |
+| History navigation | Глубокое warm-окно → сверка → Link к заданию; затем native Back | Новая entry открывает summary и page 0; старая entry восстанавливает прежние ID/offset. Кэш остаётся ограниченным. |
+| Changed/error position | Вставка, удаление anchor, сокращение списка, отказ чтения/storage | Стабильный доступный anchor или явное состояние; нет скрытого API-успеха и autoretry цикла. |
+| Architecture gates | Positive/negative lint fixtures, StrictMode, strict TS | Неверные imports/cycles/generated calls отклоняются; lifecycle исправлен без отключения правил. |
+
+Component fixtures находятся в tests/components и frontend/tests, выполняются
+без БД через перехват API; 74 интеграционных UI-сценария используют отдельный
+локальный Compose. Их результаты и IAB-приёмка фиксируются раздельно в current-stage.

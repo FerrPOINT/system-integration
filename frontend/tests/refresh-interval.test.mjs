@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { taskRefreshInterval } from '../src/features/tasks/refresh-interval.ts';
+import { taskRefreshInterval } from '../src/features/tasks/model/refresh-interval.ts';
 
 test('active delivery and execution retain the three-second refresh', () => {
   for (const businessStatus of ['PENDING', 'RUNNING'])

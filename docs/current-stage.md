@@ -1,8 +1,23 @@
 # Текущая стадия
 
-## Публичный выпуск и форматирование — 14.11.2026
+## Настройки форматирования — без изменения исходников
 
-Demo обновлён из PR #6 до 2e97ce4, включая актуальный frontend.
+В PR #7 поверх main после PR #6 подготовлены только настройки:
+Spotless 8.11.0 / google-java-format 2.0.0 (AOSP, 4 пробела, 120 колонок)
+для рукописной Java обоих приложений и Prettier 3.10.1 (2 пробела, 120)
+для frontend и JS/TS-тестов, .editorconfig и настройки редактора.
+Версии закреплены; generated/build/results/lockfile/миграции исключены.
+Общий проход отложен до отдельного поручения пользователя.
+В diff нет изменений прикладных исходников, тестов и SQL относительно main
+после PR #6; frontend PR #8 сохраняется.
+Format-on-save выключен, enforceCheck=false не добавляет проверку текущего
+стиля к Gradle check. Команды будущего общего прохода описаны в README;
+новых CI/hooks нет. Текущие исходники не требуется форматировать для сборки.
+Настройки проверяются без перезаписи файлов. Публичный runtime — 2e97ce4.
+
+### Публичная квалификация 14 ноября
+
+Demo обновлён из PR #6 до 2e97ce4, включая актуальный на 14 ноября frontend.
 Все три image revision/IDs сверены с candidate; публичные JS/CSS совпали
 с образом. В IAB проверены вход, реестр с адаптивным size, карточка и
 компактная история. Прошли пять public/API-проверок: три роли, чужая карточка,
@@ -11,22 +26,66 @@ PostgreSQL 18.6 → 18.7: counts/digests 14 business/migration таблиц
 не изменились. Рабочий том сохранён; reset/seed/dump не выполнялись.
 Семь соседних контейнеров сохранили ID/image/StartedAt.
 Receipts — tests/results/public-2026-11-14 (ignored) и runtime release.json.
-Предыдущие immutable образы и rollback override сохранены. PR #6 не слит.
+Предыдущие immutable образы и rollback override сохранены. PR #6 влит в main; этот публичный runtime остаётся на 2e97ce4.
 
-В chore/code-formatting поверх 2e97ce4 подготовлены только настройки:
-Spotless 8.11.0 / google-java-format 2.0.0 (AOSP, 4 пробела, 120 колонок)
-для рукописной Java обоих приложений и Prettier 3.10.1 (2 пробела, 120)
-для frontend и JS/TS-тестов, .editorconfig и настройки редактора.
-Версии закреплены; generated/build/results/lockfile/миграции исключены.
-По решению пользователя общий проход отложен до готовности frontend.
-Массовый diff и сопутствующая поправка SQL inventory убраны из PR #7;
-исходники приложений и тесты совпадают с 2e97ce4.
-Format-on-save выключен, enforceCheck=false не добавляет проверку текущего
-стиля к Gradle check. Команды будущего общего прохода описаны в README;
-новых CI/hooks нет. Текущие исходники не требуется форматировать для сборки.
-Настройки проверяются без перезаписи файлов. Публичный runtime — 2e97ce4.
 
-## PR #6 — замечание P2 по диагностике исправлено
+## Интеграция с актуальным main
+
+Во время приёмки backend в main вошёл frontend PR #8 (673c7ec).
+Его код и документы сохранены; конфликты затронули только документацию.
+Интегрированный кандидат 2653c7775deddccf674ebb2341efdb8a2a09def3 проверен
+на Firebat1: lint/typecheck/codegen/Vite, 56 frontend Node tests, две asset-проверки,
+четыре HTTP smoke, 74 desktop/mobile UI и 110 component, без ошибок и пропусков.
+Backend/SQL/контракты и compile inputs совпадают с 46ffcc8; файловая система
+backend-образа побайтно совпала по DiffIDs, OS-слои emulator/frontend прежние.
+Java/SQL/recovery/NF08 ниже относятся к этим неизменённым backend inputs;
+нагрузка не повторялась только из-за переноса frontend. Новые UI/component
+результаты — отдельная проверка связки, не выдаются за старые 74/10.
+Receipts: integrated-*.log/json, integrated-components.json.gz и
+integration-qualification.json в tests/results/backend-audit-fixes-2026-11-15.
+
+## Финальный backend-аудит — квалификация 15 ноября
+
+Прикладной кандидат 46ffcc843125c3edf4e91fcea9b125ad27367c76 закрывает F01–F05:
+malformed UTF-16 отклоняется до JDBC; UTC ограничен годами 0001–9999;
+внешний wire требует RFC 3339 с секундами; неподдерживаемые ответы lookup
+выделяются для разбора. deliveryInFlight явно именует активные доставки.
+Схема/Flyway, fingerprints и сохранённые receipts не менялись.
+Объём и причинные регрессии — в backend-audit-followup-plan.md.
+
+| Проверка на Firebat1 | Свежий результат |
+| --- | --- |
+| Java | 110 backend unit + 88 PostgreSQL + 13 emulator unit + 17 PostgreSQL: 228 без ошибок и пропусков; оба JAR/Javadoc собраны |
+| SQL | 69 call sites, 533 cases, 1599 EXPLAIN ANALYZE/BUFFERS/WAL; fixtures откатились |
+| Frontend/API | TypeScript/Vite/codegen, 29 Node-проверок, 4 HTTP smoke; build graph, регенерация контрактов и Docker context проверены |
+| UI | 74 desktop/mobile и 10 component, без failed/flaky/skipped |
+| Восстановление и demo | 10 recovery, 6 demo; исполнение отдельно сверено в БД эмулятора |
+| NF08 | 5000 исходных, 20 клиентов, 30 s прогрева / 120 s замера, 2 CPU / 4 GiB; 56 824 запроса, read p95 97,93 ms / write 96,67 ms, ошибок 0 |
+| Целостность | Все 21 600 операций согласованы, очередь/pending/problems пусты, duplicateExecutions=0; все 16 600 новых операций завершены |
+| Внешнее исполнение | p95 всех новых операций 125,45 s, отдельно от API; drain 50,47 s |
+| Поставка | NGINX stable 1.30.6 и pinned JRE base, vendor OS updates при build; image IDs/source labels проверены |
+| Зависимости | OSV: 82 runtime modules, совпадений 0; final OS scan: frontend/PG — 0, Java OS — 30 Medium / 4 Low без vendor fix; High/Critical и fixable — 0 |
+
+Генератор NF08 находился на том же Firebat1 вне лимита контейнеров,
+обращался к локальному API. Публичные HTTPS/proxy в замер не входят.
+Один поздний ответ доставки проигнорирован по lease; итоговая сверка
+подтверждает отсутствие потерь и повторного исполнения.
+Оставшиеся vendor advisories не объявляются доказанной атакой на API;
+OS-only scan не является полным аудитом отдельно поставленных бинарников.
+
+Ревью не требует новых слоёв, Redis, брокера или перевода SQL на ORM.
+SQL observer сначала отказался при 12 подключениях тестовых apps;
+после их штатной остановки прошёл. Проверки не ослаблялись.
+Receipts: ignored tests/results/backend-audit-fixes-2026-11-15/qualification.json,
+java.json, sql-plans.json.gz, app-ui.json, components.json.gz, recovery.json.gz,
+demo-independent.json, nf08-summary.json/nf08.json.gz и final-*-os.json.
+
+PR #6 влит в main (36e4b47); PR #7 содержит только настройки форматирования.
+Код не форматируется; обязательный formatter gate/format-on-save выключены.
+Frontend PR #8 уже вошёл в main и сохраняется при интеграции backend.
+Публичный demo остаётся на 2e97ce4; новый deploy не выполняется.
+
+## Предыдущая квалификация 2e97ce4 — диагностика
 
 Неподдерживаемая wire-версия результата получает UNSUPPORTED_VERSION at version,
 неизвестный или недопустимый для результата статус — INVALID_STATUS at status.
@@ -120,6 +179,63 @@ system-integration-{backend,emulator,frontend}:e0360e0 и release.json с их I
 Это inputs будущего отдельно порученного --no-build deploy:
 перед запуском сверить IDs; после запуска проверить served artifact и публичные
 сценарии. Подготовка образов не является публичной приёмкой нового выпуска.
+
+## Повторное ревью React — исправления проверены 15 ноября
+
+Код `86edc6f` устраняет четыре замечания повторного ревью: дублирование create
+при изменении неизвестной команды, потерю формы при background session error,
+невалидный create receipt и повторное открытие глубокого окна истории.
+В `f806d3a` обновлены UI-10/UI-12 под явный повтор исходной отправки; проверки
+прежнего key/taskId и одной записи в настоящей БД сохранены и усилены блокировкой полей.
+
+| Проверка | Свежий результат |
+| --- | --- |
+| Production frontend | Orval, ESLint, strict TypeScript и Vite build проходят. |
+| Unit / assets | 56 unit и 2 проверки production assets проходят. |
+| Components | 110 PASS, 0 failed/flaky/skipped; добавлено 25 регрессий и соседних случаев. |
+| Прикладной UI/API | Подтверждены все 74 уникальных desktop/mobile сценария: 70 PASS в полном прогоне, 4 PASS в адресном повторе UI-10/UI-12 после обновления ожиданий. Первый прогон имел 4 failure, его отчёт сохранён. Flaky/skipped = 0. |
+| Отрицательные сценарии | До исправления 6 проверок воспроизводили четыре дефекта. После исправления проходят unknown create, повреждённый receipt, CSRF до POST/при повторе, явный 400, dirty/pending session 502, initial error, 401, смена роли и warm history entry/native Back. |
+| IAB | Production components с изолированным mock API: dirty draft сохранён при 502; два POST с одним key дали одно задание; receipt без taskId остаётся неизвестным; новая history entry открыта с scrollY=0 и событием 0, native Back возвращает к прежней записи. |
+| Served source | Все 96 TS/TSX/CSS файлов Vite 127.0.0.1:19673 совпали с диском и Git-кодом 86edc6f. |
+| Данные | 115 собственных фикстур удалены по замороженным UUID; хеши остальных строк обеих БД сохранены. Остались 706 заданий/705 операций, immutable audit triggers включены. |
+
+Повторная проверка владельцев состояния, connected consumers, API/CSRF/auth,
+монтирования форм и обоих направлений history не выявила новых подтверждённых
+замечаний в исправленном коде. Backend/contracts/runtime inputs не менялись;
+новый Java/NF08 gate не заявляется. Проверки выполнялись только локально,
+без merge и public deployment. Отчёты и снимки — `tests/results/react-review-fix/`.
+Ограничение offset API и подтверждённый пользователем уход из неизвестной команды
+остаются явными границами поведения, а не гарантией сохранения команды после закрытия формы.
+
+## Предыдущая квалификация основы React
+
+Ветка `feat/frontend-foundation`, база main `5aa1c06`, квалифицированный код —
+`9b81bdc`. Выполнены FR-00–FR-11 [плана](frontend-refactoring-plan.md);
+исходники подготовлены в [PR #8](https://github.com/FerrPOINT/system-integration/pull/8), FR-12 закрыт. После gate изменены Markdown и удалена одна пустая строка EOF в login-form;
+поток TSX-токенов идентичен, квалифицированные runtime inputs сохранены. Merge и public deployment не выполнялись.
+
+| Проверка | Свежий результат финального кода |
+| --- | --- |
+| Production frontend | Orval, полный ESLint React/Query/import/cycle, strict TypeScript и Vite build проходят. Экраны имеют отдельные lazy chunks. |
+| Unit / assets | 56 unit и 2 проверки production JS/CSS проходят. Test fixtures отсутствуют в payload, gzip распаковывается в точные исходные assets. |
+| Components | 85 checks под StrictMode: формы, receipt/read recovery, frozen decision basis, guard/focus/reload, route/chunk fallback и bounded feeds; failed/flaky/skipped = 0. |
+| Прикладной UI | Все 74 desktop/mobile сценария на реальном локальном API проходят; failed/flaky/skipped = 0. Отменённые StrictMode GET учитываются отдельно, polling по-прежнему проверяется точной дельтой запросов. |
+| Ленты | 20/100/1000/5000, полный проход 250 страниц/5000 записей, максимум 5 retained pages/100 DOM/cache записей и 5 GET на refetch/poll. Back после GC, оба направления и ошибки проверены. |
+| IAB | Native 1330×1244, 320/348/390 px и 390×480: реестры, detail/history/saved reconciliation, ошибка чтения, auth/roles, dirty modal/discard/focus, меню/фильтры и длинная лента. Стабильный Back сохранил позицию с delta 0. |
+| Served source | Все 96 TS/TSX/CSS файлов, отдаваемые Vite на 127.0.0.1:19673, совпали с диском и Git-кандидатом по содержимому и SHA-256. |
+| Локальный runtime | Изолированные backend/emulator пересобраны из включённой базы, image revision b904595; их Java/contracts/build inputs совпадают с 9b81bdc. Оба readiness endpoint возвращают UP. Это не новый полный Java/NF08 gate. |
+| Данные | После прогона удалено 457 созданных им фикстур по замороженным UUID; хеши всех остальных строк затронутых таблиц обеих БД совпали до/после. Сохранены 706 заданий/705 операций; immutable audit triggers включены. |
+
+Проверки выполнялись только в локальном workspace и system-integration-load.
+Финальные отчёты и снимки — `tests/results/frontend-foundation-final/` (ignored).
+Код разделён на app → features/{auth,tasks,operations} → shared; заменённые
+пути удалены, границы проверяет ESLint. Данные принадлежат Query, URL — фильтрам,
+form session — конкретной записи, auth policy — смене identity/private cache.
+
+При IAB-приёмке закреплены две дополнительные регрессии: body min-width больше
+доступной ширины с классическим scrollbar и массовый offset shift за retained
+окно. Первая устранена; во втором случае показывается явное сообщение и
+сохраняется доступ к старым записям. Offset API не гарантирует строгий live snapshot.
 
 ## Spring Data JDBC — выполнено
 

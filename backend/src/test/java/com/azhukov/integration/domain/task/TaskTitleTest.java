@@ -49,4 +49,14 @@ class TaskTitleTest {
         assertThrows(RuleViolation.class,() -> new TaskTitle("Имя",0));
         assertThrows(RuleViolation.class,() -> new TaskTitle("Имя",TaskTitle.MAX_REVISION+1));
     }
+    @Test
+    void malformedUtf16IsRejectedWithoutRejectingSupplementaryCharacters() {
+        for (String title : new String[]{"before\uD800after","before\uDC00after","\uD800\uD800","\uDC00\uD800"}) {
+            assertEquals(RuleViolation.Code.VALIDATION_FAILED,
+                assertThrows(RuleViolation.class,() -> new TaskTitle(title,1)).code());
+            assertThrows(RuleViolation.class,() -> new TaskTitle("Existing",1).rename(title,1));
+        }
+        for (String title : new String[]{"Имя 😀","𐀀".repeat(80),"Имя\u2003объекта"})
+            assertEquals(title,new TaskTitle(title,1).value());
+    }
 }

@@ -28,6 +28,8 @@ class ExchangeDiagnosticsTest extends PostgresTest {
         var op=login("operator");
         var empty=mvc.perform(get("/actuator/exchange").session(op.session())).andReturn();status(200,empty);
         assertEquals(0,body(empty).at("/deliveryQueue/operations").asLong());
+        assertEquals(0,body(empty).at("/feed/deliveryInFlight").asInt());
+        assertFalse(body(empty).get("feed").has("inFlight"));
         assertTrue(body(empty).at("/deliveryQueue/oldestCreatedAt").isNull());
         var task=created(owner,UUID.randomUUID());
         var before=count("task_history");

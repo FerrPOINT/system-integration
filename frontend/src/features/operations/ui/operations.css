@@ -1,0 +1,43 @@
+.issue-table { table-layout: fixed; }
+.issue-table th:nth-child(2) { width: 28%; }
+.issue-table th:nth-child(3) { width: 210px; }
+.issue-table td:first-child > a { color: var(--color-text-primary); font-weight: 600; text-decoration: none; }
+.issue-table td small { margin-top: 5px; }
+
+.issue-cards { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: minmax(0,1fr); gap: 16px; }
+.issue-status-filter { width: 220px; max-width: 100%; }
+.issue-summary-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
+.issue-summary-heading .base-action-group { gap: 12px 24px; }
+.issue-facts { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px 24px; }
+.issue-facts > div { display: grid; min-width: 0; align-content: start; gap: 4px; }
+.issue-facts dt { font-size: 12px; }
+.issue-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 420px); align-items: start; gap: var(--shell-page-block-gap); }
+.issue-workspace > * { min-width: 0; }
+.issue-workspace > :only-child { grid-column: 1 / -1; }
+.issue-workspace .comparison-grid > :only-child { grid-column: 1 / -1; }
+.issue-workspace .snapshot dl { grid-template-columns: 110px minmax(0, 1fr); gap: 10px 12px; }
+.issue-decision-reason { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 1100px) {
+  .issue-workspace { grid-template-columns: minmax(0, 1fr) minmax(320px, 380px); }
+  .issue-workspace .comparison-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  .issue-workspace { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .issue-summary-heading .base-action-group > a { display: inline-flex; align-items: center; min-height: 32px; }
+  .issue-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .issue-operation { grid-column: 1 / -1; }
+}
+.comparison-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--shell-page-block-gap); }
+.inline-action { display: grid; gap: 8px; }
+@media (max-width: 760px) {
+  .comparison-grid, .issue-cards { grid-template-columns: 1fr; }
+
+}
+.issue-cards { align-content: start; }
+@media (max-width: 760px) {
+  .issue-status-filter { width: 100%; }
+  .issue-status-filter .base-form-field { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; }
+  .issue-cards { gap: 8px; }
+}

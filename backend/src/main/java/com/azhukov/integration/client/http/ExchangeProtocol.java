@@ -2,6 +2,7 @@ package com.azhukov.integration.client.http;
 
 import com.azhukov.integration.client.ExternalExchangeClient.*;
 import com.azhukov.integration.domain.RuleViolation;
+import com.azhukov.integration.domain.UtcTimestamp;
 import com.azhukov.integration.domain.exchange.DeliveryAttempt;
 import com.azhukov.integration.domain.exchange.OperationIdentity;
 import com.azhukov.integration.domain.exchange.OperationResult;
@@ -9,7 +10,7 @@ import com.azhukov.integration.domain.exchange.OperationSnapshot;
 import com.azhukov.integration.domain.task.BusinessStatus;
 import com.azhukov.integration.domain.task.TaskInput;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -17,6 +18,9 @@ import java.util.UUID;
 import tools.jackson.databind.JsonNode;
 
 public final class ExchangeProtocol {
+    private static final Pattern UTC_TIME=Pattern.compile(
+        "[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?(?:[Zz]|\\+00:00)");
+
     public OperationIdentity acknowledgement(JsonNode body, OperationIdentity expected) {
         object(body, Set.of("operationId", "request", "acceptedAt"));
         var identity = identity(body);
@@ -154,8 +158,10 @@ public final class ExchangeProtocol {
 
     private static OffsetDateTime time(JsonNode body, String name) {
         try {
-            var value = OffsetDateTime.parse(text(body, name));
-            if (!value.getOffset().equals(ZoneOffset.UTC)) throw invalid();
+            String timestamp=text(body,name);
+            if (!UTC_TIME.matcher(timestamp).matches()) throw invalid();
+            var value = OffsetDateTime.parse(timestamp);
+            if (!UtcTimestamp.isSupported(value)) throw invalid();
             return value;
         } catch (RuntimeException error) { throw invalid("INVALID_UTC",name); }
     }

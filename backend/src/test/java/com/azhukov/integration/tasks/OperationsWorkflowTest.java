@@ -183,8 +183,20 @@ class OperationsWorkflowTest extends PostgresTest {
         }
         assertEquals(history,count("task_history"));
         assertEquals(receipts,count("command_receipts"));
+        for (String escape : new String[]{"\\uD800","\\uDC00"}) {
+            for (String action : new String[]{"retry","resolve"}) {
+                String input="{\"expectedIssueRevision\":"+revision+",\"reconciliationId\":\""+scenario.reconciliation()
+                    +"\",\"reason\":\"bad"+escape+"value\",\"action\":\"APPLY_EXTERNAL_RESULT\"}";
+                if (action.equals("retry")) input=input.replace(",\"action\":\"APPLY_EXTERNAL_RESULT\"","");
+                var rejected=mvc.perform(post("/api/exchange/issues/"+scenario.issue()+"/"+action)
+                    .session(scenario.op().session()).header("X-CSRF-TOKEN",scenario.op().csrf())
+                    .header("Idempotency-Key",UUID.randomUUID()).contentType("application/json").content(input)).andReturn();
+                status(400,rejected);assertEquals("VALIDATION_FAILED",body(rejected).get("code").asString());
+            }
+        }
+        assertEquals(history,count("task_history"));assertEquals(receipts,count("command_receipts"));
         assertEquals(revision,body(issue(scenario.op(),scenario.issue())).get("issueRevision").asLong());
-        var reason="Проверено\u2003оператором";
+        var reason="Проверено\u2003оператором 😀";
         var decision=command(scenario.op(),"resolve",scenario.issue(),UUID.randomUUID(),Map.of(
             "expectedIssueRevision",revision,"reconciliationId",scenario.reconciliation(),
             "action","APPLY_EXTERNAL_RESULT","reason",reason));
@@ -570,5 +582,33 @@ class OperationsWorkflowTest extends PostgresTest {
     private MvcResult command(Client op,String action,UUID issue,UUID key,Object body) throws Exception {
         return mvc.perform(post("/api/exchange/issues/"+issue+"/"+action).session(op.session()).header("X-CSRF-TOKEN",op.csrf())
             .header("Idempotency-Key",key).contentType("application/json").content(json.writeValueAsString(body))).andReturn();
+    }
+    @Test
+    void unsupportedLookupStatusesOpenProtocolIssuesButTemporaryFailureDoesNot() throws Exception {
+        var owner=login("initiator.one");
+        var op=login("operator");
+        for (int code : new int[]{503,201,202,204,302}) {
+            UUID task=created(owner,UUID.randomUUID());
+            UUID operation=jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?",UUID.class,task);
+            when(client.get(operation)).thenReturn(new ExchangeReply(code,null,false,null));
+            UUID key=UUID.randomUUID();
+            var result=reconcile(op,task,key);status(200,result);
+            assertEquals("UNAVAILABLE",body(result).get("outcome").asString());
+            assertEquals("UNAVAILABLE",body(result).get("externalAvailability").asString());
+            var issueId=body(result).get("issueId");
+            if (code==503) {
+                assertTrue(issueId==null || issueId.isNull());
+                assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM exchange_issues WHERE task_id=?",Integer.class,task));
+            } else {
+                assertNotNull(issueId);assertFalse(issueId.isNull());
+                assertEquals("PROTOCOL_ERROR",jdbc.queryForObject("SELECT kind FROM exchange_issues WHERE task_id=?",String.class,task));
+                assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE task_id=? AND event_type='ISSUE_OPENED'",Integer.class,task));
+            }
+            assertEquals("PENDING",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?",String.class,task));
+            int history=count("task_history");
+            var replay=reconcile(op,task,key);status(200,replay);assertEquals(body(result),body(replay));
+            assertEquals(history,count("task_history"));
+            verify(client,times(1)).get(operation);
+        }
     }
 }

@@ -233,4 +233,21 @@ class ExchangeProtocolTest {
         assertEquals("FIELD_TYPE at quantity",evidence.detail());
         assertFalse(evidence.detail().contains("secret-value"));
     }
+    @Test
+    void utcWireDatesRejectUnsupportedYearsAndIncompleteTimes() {
+        for (String invalid : new String[]{"+10000-01-01T00:00:00Z","+999999999-01-01T00:00:00Z",
+            "0000-01-01T00:00:00Z","2026-11-12T00:00Z","2026-11-12T00:00:00-00:00",
+            "2026-11-12T00:00:00.1234567890Z"}) {
+            var raw=json.readTree(result.replace("2026-11-12T00:00:00Z",invalid));
+            var error=assertThrows(IllegalArgumentException.class,() -> protocol.result(raw),invalid);
+            assertEquals("INVALID_UTC at completedAt",error.getMessage());
+            var acknowledgement=json.createObjectNode().put("operationId",identity.id().toString())
+                .set("request",json.valueToTree(identity.request())).put("acceptedAt",invalid);
+            assertThrows(IllegalArgumentException.class,() -> protocol.acknowledgement(acknowledgement,identity),invalid);
+        }
+        for (String valid : new String[]{"0001-01-01T00:00:00Z","9999-12-31T23:59:59.999999999Z",
+            "2026-11-12T00:00:00+00:00","2026-11-12t00:00:00z"})
+            assertEquals(java.time.OffsetDateTime.parse(valid),
+                protocol.result(json.readTree(result.replace("2026-11-12T00:00:00Z",valid))).completedAt());
+    }
 }

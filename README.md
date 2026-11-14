@@ -7,27 +7,28 @@
 
 ## Рабочая среда
 
-Текущая разработка и проверки выполняются на Firebat1 по SSH.
-Исходники и выбранный checkout определяются по [AGENTS.md](AGENTS.md);
-публичная демонстрация — [demo.azhukov-dev.ru](https://demo.azhukov-dev.ru/).
+Рабочую среду задаёт поручение: локальный Windows checkout или явно выбранный
+Firebat1 по SSH. Исходники и выбранный checkout проверяются по [AGENTS.md](AGENTS.md);
+фактическая среда квалификации указана в [текущей стадии](docs/current-stage.md).
+Публичная демонстрация — [demo.azhukov-dev.ru](https://demo.azhukov-dev.ru/).
 Демонстрационный runtime и изолированный тестовый system-integration-load —
 разные окружения: тесты и нагрузку не направляем на публичную БД.
 Точная версия и результаты приёмки указаны в [текущей стадии](docs/current-stage.md).
 
 ### Локальный Windows preview
 
-Команды ниже — необязательный способ локального preview на Windows,
-а не описание текущего запуска на Firebat1. Отдельные API, эмулятор и БД
+Команды ниже запускают локальный preview на Windows. Отдельные API, эмулятор и БД
 используют проект system-integration-load и порты 19680/19681/19632;
 Vite с HMR — [127.0.0.1:19673](http://127.0.0.1:19673/).
 После настройки Node/Corepack по [AGENTS.md](AGENTS.md):
 
 ```powershell
 docker compose -p system-integration-load -f compose.yml -f compose.load.yml --profile app up -d --no-build --wait postgres backend emulator
-node .local/toolchains/corepack/node_modules/corepack/dist/corepack.js pnpm --dir frontend dev
+Push-Location frontend
+try { corepack pnpm dev } finally { Pop-Location }
 ```
 
-Эти команды используют подготовленные серверные образы; изменение backend
+Эти команды используют уже собранные локальные образы; изменение backend
 требует их локальной сборки через общий host execution slot. Для полного
 Compose/UI-прогона Vite освобождает порт 19673 frontend-контейнеру.
 Приведённые ниже порты 195xx относятся к обычному Compose и публикации.
@@ -37,9 +38,10 @@ Compose/UI-прогона Vite освобождает порт 19673 frontend-к
 GET /actuator/exchange доступен на приватном backend с операторской сессией:
 anonymous получает 401, инициатор — 403. Frontend proxy его не публикует.
 Ответ содержит observedAt, workerEnabled, feed paused/lastSuccessfulRead/
-unavailableReads/invalidPages/inFlight и deliveryQueue operations/oldestCreatedAt.
+unavailableReads/invalidPages/deliveryInFlight и deliveryQueue operations/oldestCreatedAt.
 Очередь читается один раз по запросу и включает parked deliveries; это не всё
 business pending. Возраст oldestCreatedAt считается относительно observedAt.
+deliveryInFlight считает активные HTTP-доставки, а не чтение ленты.
 Feed counters локальны процессу; restart их обнуляет, а очередь остаётся в БД.
 si.exchange.enabled поддерживает true/false без учёта регистра; неоднозначные
 aliases yes/on/1 и ошибочные значения явно отклоняются при старте.
@@ -291,6 +293,12 @@ corepack pnpm test:assets
 corepack pnpm test:api
 ```
 
+Build включает generation, ESLint React/Query/import boundaries, строгий TypeScript
+и Vite. `test:api` также запускает unit projections/positions, URL/polling и
+отрицательные lint fixtures. Структура app → features/{auth,tasks,operations} →
+shared и владельцы состояния описаны в [архитектуре](docs/architecture.md#архитектура-react).
+Component runner и полный UI-прогон разделены в [инструкции тестов](tests/README.md).
+
 Проверка HTTP после сборки описана в [инструкции для тестов](tests/README.md).
 
 ## Генерация из OpenAPI
@@ -312,7 +320,11 @@ Gradle перед компиляцией генерирует Spring MVC инт�
 - Создатель остаётся владельцем задания. Оператор может взять открытую
   проблему на себя, в том числе перенять её у другого оператора.
   История хранит обоих ответственных и автора передачи.
-- Даты и периоды считаются в UTC. У задания нет дедлайна. Интерфейс показывает
+- Даты и периоды считаются в UTC, поддерживаются годы 0001–9999.
+  Внешний wire-формат — RFC 3339 с обязательными секундами, до девяти знаков
+  дробной части и UTC (Z либо +00:00); -00:00 как неизвестный offset не принимается.
+  Фильтры нормализуются штатным ISO-парсером Spring и проверяют тот же диапазон.
+  У задания нет дедлайна. Интерфейс показывает
   время создания и исполнения.
 - На серию доставки отведено пять автоматических вызовов, включая PUT, GET
   и прерванные захваты. Задержки между ними — 2/5/15/60 с. После исчерпания

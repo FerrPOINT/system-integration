@@ -74,7 +74,10 @@ public class HttpExternalExchangeClient implements ExternalExchangeClient {
                     ExchangeProtocol.diagnostics(reply.body(),invalid));
             }
         }
-        return new Lookup(Availability.UNAVAILABLE,null,null,reply.body());
+        if (reply.status()==0 || (reply.status()>=500 && reply.status()<=599))
+            return new Lookup(Availability.UNAVAILABLE,null,null,reply.body());
+        return new Lookup(Availability.UNAVAILABLE,null,
+            "Сверка получила неподдерживаемый ответ HTTP "+reply.status(),reply.body());
     }
 
     private ExchangeReply send(HttpRequest.Builder request) {

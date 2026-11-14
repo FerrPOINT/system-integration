@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Request } from '@playwright/test';
 import type { Task } from '../../frontend/build/generated/openapi/client';
 import { login, selectChoice, waitForRegistry } from './support';
 
@@ -14,6 +14,15 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
   const source: Task = await (await page.request.get('/api/tasks/' + receipt.taskId)).json();
   const items = Array.from({ length: 45 }, (_, index) => ({ ...source, taskId: crypto.randomUUID(), title: 'Запись ленты ' + index }));
   const requests: { page: number; size: number; status: string | null }[] = [];
+  const attempts = new Map<Request, typeof requests[number]>();
+  const aborted = new Set<typeof requests[number]>();
+  page.on('requestfailed', request => {
+    const window = attempts.get(request);
+    if (window) {
+      expect(request.failure()?.errorText).toBe('net::ERR_ABORTED');
+      aborted.add(window);
+    }
+  });
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   let fail = true;
@@ -21,6 +30,7 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
     const query = new URL(route.request().url()).searchParams;
     const window = { page: Number(query.get('page')), size: Number(query.get('size')), status: query.get('businessStatus') };
     requests.push(window);
+    attempts.set(route.request(), window);
     if (window.page === 1 && fail) {
       await held;
       await route.fulfill({ status: 503, json: { code: 'SERVICE_UNAVAILABLE', status: 503 } });
@@ -40,7 +50,7 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
     await expect(cards).toHaveCount(20);
     await expect(page.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
     await footer.scrollIntoViewIfNeeded();
-    await expect(footer.getByRole('status')).toContainText('Загружаем ещё');
+    await expect(footer.getByRole('status')).toContainText('Загрузка…');
     await page.mouse.wheel(0, 150);
     expect(requests.filter(window => window.page === 1)).toHaveLength(1);
     release();
@@ -54,10 +64,12 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
     await expect(cards).toHaveCount(40);
     await footer.scrollIntoViewIfNeeded();
     await expect(cards).toHaveCount(45);
-    await expect(footer).toHaveText('Показано 45 из 45');
+    await expect(footer).toHaveText('1–45 из 45');
     const hrefs = await cards.locator('a').evaluateAll(links => links.map(link => link.getAttribute('href')));
     expect(hrefs).toEqual(items.map(item => '/tasks/' + item.taskId));
-    expect(requests.map(window => window.page)).toEqual([0, 1, 1, 2]);
+    expect([...aborted].every(window => window.page === 0)).toBe(true);
+    expect(aborted.size).toBeLessThanOrEqual(1);
+    expect(requests.filter(window => !aborted.has(window)).map(window => window.page)).toEqual([0, 1, 1, 2]);
     expect(requests.every(window => window.size === 20)).toBe(true);
 
     // A whole card is a native link; both browser Back and the detail arrow keep the feed and position.
@@ -84,17 +96,18 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
     await selectChoice(page, 'Результат', 'Отклонено');
     await page.getByRole('button', { name: 'Готово', exact: true }).click();
     await expect(cards).toHaveCount(2);
-    await expect(footer).toHaveText('Показано 2 из 2');
+    await expect(footer).toHaveText('1–2 из 2');
     expect(requests.at(-1)).toEqual({ page: 0, size: 20, status: 'REJECTED' });
   } finally { release(); await page.unrouteAll({ behavior: 'wait' }); }
 });
 
 test('UI-19: narrow phones use one scroll surface and compact, accessible controls', async ({ page }) => {
   await login(page, 'operator');
-  for (const [width, height] of [[320, 568], [348, 672], [390, 844], [390, 480]]) {
+  // A 320 px Windows viewport with a classic scrollbar leaves 305 px for content.
+  for (const [width, height] of [[305, 568], [320, 568], [348, 672], [390, 844], [390, 480]]) {
     await page.setViewportSize({ width, height });
     await waitForRegistry(page);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     const metrics = await page.evaluate(() => {
       const header = document.querySelector('.app-header')!.getBoundingClientRect();
       const tools = document.querySelector('.list-tools')!.getBoundingClientRect();

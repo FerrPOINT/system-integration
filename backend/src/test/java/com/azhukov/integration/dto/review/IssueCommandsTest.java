@@ -29,4 +29,19 @@ class IssueCommandsTest {
                 IssueResolution.Action.ACKNOWLEDGE_DIFFERENCE,reason).reason());
         }
     }
+    @Test
+    void malformedUtf16CannotEnterEitherOperatorCommand() {
+        var reconciliation=UUID.randomUUID();
+        for (String reason : new String[]{"before\uD800after","before\uDC00after","\uDC00\uD800"}) {
+            assertEquals(RuleViolation.Code.VALIDATION_FAILED,
+                assertThrows(RuleViolation.class,() -> new IssueCommands.Retry(1,reason,reconciliation)).code());
+            assertEquals(RuleViolation.Code.VALIDATION_FAILED,
+                assertThrows(RuleViolation.class,() -> new IssueCommands.Resolve(1,reconciliation,
+                    IssueResolution.Action.ACKNOWLEDGE_DIFFERENCE,reason)).code());
+        }
+        String valid="Проверено 😀";
+        assertEquals(valid,new IssueCommands.Retry(1,valid,reconciliation).reason());
+        assertEquals(valid,new IssueCommands.Resolve(1,reconciliation,
+            IssueResolution.Action.ACKNOWLEDGE_DIFFERENCE,valid).reason());
+    }
 }
