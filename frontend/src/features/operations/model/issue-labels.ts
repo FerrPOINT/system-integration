@@ -1,4 +1,4 @@
-import type { IssueKind } from '../../../build/generated/openapi/client';
+import type { IssueKind } from '../../../../build/generated/openapi/client';
 
 export const issueKindLabels: Record<IssueKind, string> = {
   DELIVERY_UNCERTAIN: 'Доставка не подтверждена', DELIVERY_DELAYED: 'Лимит попыток исчерпан', PROTOCOL_ERROR: 'Ошибка протокола',

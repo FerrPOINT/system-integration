@@ -13,9 +13,9 @@ import { BackLink } from '../shared/ui/back-link';
 import { TaskList } from '../features/tasks/ui/task-list-page';
 import { NewTask } from '../features/tasks/ui/task-create-dialog';
 import { TaskCard } from '../features/tasks/ui/task-details-page';
-import { IssueList } from '../features/operations/issue-list';
-import { IssueCard } from '../features/operations/issue-details';
-import { ReconciliationCard } from '../features/operations/reconciliation-details';
+import { IssueList } from '../features/operations/ui/issue-list-page';
+import { IssueCard } from '../features/operations/ui/issue-details-page';
+import { ReconciliationCard } from '../features/operations/ui/reconciliation-page';
 
 export function App() {
   const appearance = <ThemePicker {...useThemePreference()} />;

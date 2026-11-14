@@ -1,17 +1,15 @@
 import './operations.css';
-import { ErrorMessage } from '../../shared/ui/error-message';
-import { BackLink } from '../../shared/ui/back-link';
-import { Notice } from '../../shared/ui/notice';
-import { Card, CardContent, CardTitle } from '../../shared/ui/card';
-import { PageHeader } from '../../shared/ui/page-header';
-import { Button } from '../../shared/ui/button';
+import { ErrorMessage } from '../../../shared/ui/error-message';
+import { BackLink } from '../../../shared/ui/back-link';
+import { Notice } from '../../../shared/ui/notice';
+import { Card, CardContent, CardTitle } from '../../../shared/ui/card';
+import { PageHeader } from '../../../shared/ui/page-header';
+import { Button } from '../../../shared/ui/button';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import { getTaskReconciliation } from '../../../build/generated/openapi/client';
-import { exchangeKeys } from './api/exchange-keys';
-import { data } from '../../shared/api/http';
-import { timestamp } from '../../shared/lib/format/timestamp';
-import { Loading } from '../../shared/ui/feedback';
+import { reconciliationOptions } from '../api/exchange-queries';
+import { timestamp } from '../../../shared/lib/format/timestamp';
+import { Loading } from '../../../shared/ui/feedback';
 import { ReconcileButton } from './reconcile-button';
 import { Snapshot } from './exchange-snapshot';
 
@@ -19,8 +17,11 @@ const outcomes = { MATCH: 'Состояния совпадают', DIFFERENCE: '
 
 export function ReconciliationCard() {
   const { taskId = '', reconciliationId = '' } = useParams();
-  const snapshot = useQuery({ queryKey: exchangeKeys.reconciliation(taskId, reconciliationId), staleTime: Infinity,
-    queryFn: ({ signal }) => data(getTaskReconciliation(taskId, reconciliationId, { signal })) });
+  return <SavedReconciliation key={taskId + ':' + reconciliationId} taskId={taskId} reconciliationId={reconciliationId} />;
+}
+
+function SavedReconciliation({ taskId, reconciliationId }: { taskId: string; reconciliationId: string }) {
+  const snapshot = useQuery(reconciliationOptions(taskId, reconciliationId));
   if (snapshot.isPending) return <Loading />;
   if (!snapshot.data) return <><BackLink to={'/tasks/' + taskId}>К заданию</BackLink><ErrorMessage error={snapshot.error} />
     <Button onClick={() => snapshot.refetch()}>Повторить</Button></>;

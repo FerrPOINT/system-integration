@@ -10,9 +10,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import type { GetSession200 } from '../../../../build/generated/openapi/client';
 import { Loading, RefreshButton } from '../../../shared/ui/feedback';
-import { deliveryLabels } from '../model/task-labels';
+import { deliveryLabels, rejectionLabels } from '../model/task-labels';
 import { timestamp } from '../../../shared/lib/format/timestamp';
-import { ReconcileButton } from '../../operations/reconcile-button';
+import { ReconcileButton } from '../../operations/reconciliation';
 import { taskRefreshInterval } from '../model/refresh-interval';
 import { BusinessBadge } from './task-presenters';
 import { useListReturn } from '../../../shared/lib/router/use-list-return';
@@ -48,7 +48,7 @@ function TaskDetails({ id, user }: { id: string; user: GetSession200 }) {
         <dt>Создано</dt><dd><time dateTime={item.createdAt}>{timestamp(item.createdAt, { showZone: false })}</time></dd>
         <dt>ID операции</dt><dd className="technical">{item.operationId}</dd>
         {item.result && <><dt>Завершено</dt><dd>{timestamp(item.result.completedAt)}</dd>
-          {item.result.rejectionCode && <><dt>Причина отказа</dt><dd>Количество превышает 100 единиц</dd></>}</>}
+          {item.result.rejectionCode && <><dt>Причина отказа</dt><dd>{rejectionLabels[item.result.rejectionCode]}</dd></>}</>}
       </dl>
       {user.role === 'INITIATOR' && editing ? <RenameForm task={item} onClose={() => setEditing(false)} /> :
         <ActionGroup align="start">

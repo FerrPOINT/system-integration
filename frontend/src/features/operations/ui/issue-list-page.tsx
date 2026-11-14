@@ -1,26 +1,25 @@
 import './operations.css';
-import { ErrorMessage } from '../../shared/ui/error-message';
-import { Notice } from '../../shared/ui/notice';
-import { EmptyState } from '../../shared/ui/empty-state';
-import { Card, CardContent } from '../../shared/ui/card';
-import { Table } from '../../shared/ui/table';
-import { PageHeader } from '../../shared/ui/page-header';
-import { FormField } from '../../shared/ui/form-field';
-import { Select } from '../../shared/ui/select';
-import { Button } from '../../shared/ui/button';
+import { ErrorMessage } from '../../../shared/ui/error-message';
+import { Notice } from '../../../shared/ui/notice';
+import { EmptyState } from '../../../shared/ui/empty-state';
+import { Card, CardContent } from '../../../shared/ui/card';
+import { Table } from '../../../shared/ui/table';
+import { PageHeader } from '../../../shared/ui/page-header';
+import { FormField } from '../../../shared/ui/form-field';
+import { Select } from '../../../shared/ui/select';
+import { Button } from '../../../shared/ui/button';
 import { ChevronRight } from 'lucide-react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { listExchangeIssues } from '../../../build/generated/openapi/client';
-import type { IssueStatus, Issue } from '../../../build/generated/openapi/client';
-import { exchangeKeys } from './api/exchange-keys';
-import { data } from '../../shared/api/http';
-import { timestamp } from '../../shared/lib/format/timestamp';
-import { Loading, Pagination, RefreshButton } from '../../shared/ui/feedback';
-import { usePagination } from '../../shared/lib/pagination/use-pagination';
-import { useMediaQuery } from '../../shared/ui/use-media-query';
-import { issueKindLabels as kinds } from './issue-labels';
-import { useCollectionQuery } from '../../shared/lib/collections/use-collection-query';
-import { FeedFooter } from '../../shared/ui/feed-footer';
+import type { IssueStatus, Issue } from '../../../../build/generated/openapi/client';
+import { exchangeKeys } from '../api/exchange-keys';
+import { readIssuePage } from '../api/exchange-queries';
+import { timestamp } from '../../../shared/lib/format/timestamp';
+import { Loading, Pagination, RefreshButton } from '../../../shared/ui/feedback';
+import { usePagination } from '../../../shared/lib/pagination/use-pagination';
+import { useMediaQuery } from '../../../shared/ui/use-media-query';
+import { issueKindLabels as kinds } from '../model/issue-labels';
+import { useCollectionQuery } from '../../../shared/lib/collections/use-collection-query';
+import { FeedFooter } from '../../../shared/ui/feed-footer';
 
 const identifyIssue = (issue: Issue) => issue.issueId;
 
@@ -33,7 +32,7 @@ export function IssueList() {
   const status = search.get('status') || 'OPEN';
   const valid = validPage && ['OPEN', 'RESOLVED'].includes(status);
   const { query: issues, items: issuesItems, meta: issuesPage } = useCollectionQuery({ key: exchangeKeys.issueList(status as IssueStatus), page, size, feed: mobile, enabled: valid,
-    read: (page, size, signal) => data(listExchangeIssues({ page, size, status: status as IssueStatus }, { signal })), identify: identifyIssue });
+    read: (page, size, signal) => readIssuePage({ page, size, status: status as IssueStatus }, signal), identify: identifyIssue });
   return <>
     <div className="list-tools base-page-stack"><PageHeader title="Разбор обмена" context={mobile ? issuesPage && `Всего: ${issuesPage.totalItems}` : 'Доставка, конфликты и решения операторов.'} actions={<RefreshButton pending={issues.isFetching} disabled={!valid} onClick={() => issues.refetch()} />} />
     <div className="issue-status-filter"><FormField id="issue-status" label="Состояние разбора">{attrs => <Select {...attrs} value={status}

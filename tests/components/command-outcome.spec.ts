@@ -4,13 +4,14 @@ import { selectChoice } from '../e2e/support';
 const taskId = '00000000-0000-4000-8000-000000000001';
 async function mockApi(page: Page, role = 'INITIATOR') {
   const state = { title: 'Original task', signedIn: true, failRead: false, failSession: false, failCsrf: false, loseWrite: false,
-    commands: [] as { method: string; key: string | undefined; body: unknown }[], logins: 0, logouts: 0, assigned: false, resolved: false };
+    commands: [] as { method: string; key: string | undefined; body: unknown }[], logins: 0, logouts: 0, assigned: false, resolved: false,
+    revision: 1, latestSnapshot: 'snapshot' };
   const task = () => ({ taskId, operationId: taskId, ownerId: '00000000-0000-4000-8000-000000000003', title: state.title,
     titleRevision: 1, request: { reference: 'REQ-000001', quantity: 25 }, createdAt: '2026-11-14T00:00:00Z', deliveryStatus: 'ACKNOWLEDGED', businessStatus: 'SUCCEEDED' });
   const snapshot = () => ({ reconciliationId: 'snapshot', taskId, operationId: taskId, checkedAt: '2026-11-14T00:00:00Z', checkedBy: task().ownerId,
     outcome: 'UNAVAILABLE', local: { request: task().request, deliveryStatus: task().deliveryStatus, businessStatus: task().businessStatus }, externalAvailability: 'UNAVAILABLE' });
-  const issue = () => ({ issueId: taskId, taskId, operationId: taskId, issueRevision: state.assigned ? 2 : 1, kind: 'RECONCILIATION_DIFFERENCE',
-    status: state.resolved ? 'RESOLVED' : 'OPEN', summary: 'Fixture discrepancy', openedAt: '2026-11-14T00:00:00Z', latestReconciliationId: 'snapshot',
+  const issue = () => ({ issueId: taskId, taskId, operationId: taskId, issueRevision: state.revision, kind: 'RECONCILIATION_DIFFERENCE',
+    status: state.resolved ? 'RESOLVED' : 'OPEN', summary: 'Fixture discrepancy', openedAt: '2026-11-14T00:00:00Z', latestReconciliationId: state.latestSnapshot,
     assignedTo: state.assigned ? task().ownerId : undefined,
     allowedActions: state.resolved ? [] : [...(state.assigned ? [] : ['TAKE_OWNERSHIP']), 'RECONCILE', 'ACKNOWLEDGE_DIFFERENCE'],
     resolution: state.resolved ? { action: 'ACKNOWLEDGE_DIFFERENCE', reason: 'Verified fixture', reconciliationId: 'snapshot', decidedAt: '2026-11-14T00:00:00Z', decidedBy: task().ownerId } : undefined });
@@ -117,6 +118,44 @@ test('operator decision draft survives cancelled departure and requires explicit
   await page.getByRole('link', { name: 'Задания', exact: true }).click();
   await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Все задания', exact: true })).toBeVisible();
+});
+
+test('refetch preserves a decision draft and requires explicit adoption of the new basis', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  await page.goto('/tests/command-outcome.html?screen=issue');
+  await selectChoice(page, 'Действие', 'Завершить разбор');
+  await page.getByRole('textbox', { name: 'Причина решения', exact: true }).fill('Preserved explanation');
+  state.revision = 2; state.latestSnapshot = 'new-snapshot';
+  await page.getByRole('button', { name: 'Обновить', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Черновик сохранён.' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Причина решения', exact: true })).toHaveValue('Preserved explanation');
+  await expect(page.getByRole('button', { name: 'Завершить разбор', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Использовать актуальную сверку' }).click();
+  await page.getByRole('button', { name: 'Завершить разбор', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Решение сохранено.' })).toBeVisible();
+  expect(state.commands).toHaveLength(1);
+  expect(state.commands[0].body).toEqual({ expectedIssueRevision: 2, reconciliationId: 'new-snapshot', action: 'ACKNOWLEDGE_DIFFERENCE', reason: 'Preserved explanation' });
+});
+
+test('external resolution keeps an unsubmitted draft until the operator discards it', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  await page.goto('/tests/command-outcome.html?screen=issue');
+  await selectChoice(page, 'Действие', 'Завершить разбор');
+  const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
+  await reason.fill('Unsubmitted explanation');
+  state.resolved = true; state.revision = 2;
+  await page.getByRole('button', { name: 'Обновить', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
+  await expect(reason).toHaveValue('Unsubmitted explanation');
+  await expect(page.getByRole('alert').filter({ hasText: 'Черновик сохранён.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Завершить разбор', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Закрыть черновик', exact: true }).click();
+  await page.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
+  await expect(reason).toBeFocused();
+  await page.getByRole('button', { name: 'Закрыть черновик', exact: true }).click();
+  await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
+  await expect(reason).toHaveCount(0);
+  expect(state.commands).toHaveLength(0);
 });
 
 test('unknown rename outcome repeats the original input and idempotency key', async ({ page }) => {

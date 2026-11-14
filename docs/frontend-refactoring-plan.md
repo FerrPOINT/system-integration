@@ -41,6 +41,12 @@
 - CSS перенесён из shell к tasks/operations/auth и общим layout primitives.
   Статическое сравнение PostCSS с предыдущим коммитом подтвердило сохранение
   всех 147 пар selector/media/declarations. Это не заменяет итоговую визуальную проверку.
+- FR-08: operations разделён на api/model/ui с узким публичным действием сверки.
+  Инвалидация использует taskId/issueId квитанции и списки, не затрагивая чужие
+  detail или неизменяемые saved snapshots; global issue не обновляет tasks.
+  Draft basis фиксируется при начале ввода, обновляется только явным действием,
+  а закрытие разбора извне сохраняет черновик до discard. Scoped lint/typecheck,
+  три unit boundaries и 22 component checks прошли; итоговая приёмка впереди.
 - FR-06–FR-12: обязательные работы ещё не завершены. Полный build/test gate,
   IAB и публикация итогового кандидата ещё не выполнены.
 
