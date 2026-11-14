@@ -8,8 +8,21 @@ import './ui/controls.css';
 import './ui/patterns.css';
 import './app/styles.css';
 
-const router = createBrowserRouter([{ path: '*', element: <><App /><ScrollRestoration getKey={location =>
-  ['/tasks', '/issues'].includes(location.pathname) ? location.pathname + location.search : location.key} /></> }]);
+const router = createBrowserRouter([
+  {
+    path: '*',
+    element: (
+      <>
+        <App />
+        <ScrollRestoration
+          getKey={(location) =>
+            ['/tasks', '/issues'].includes(location.pathname) ? location.pathname + location.search : location.key
+          }
+        />
+      </>
+    ),
+  },
+]);
 const container = document.getElementById('root');
 
 if (!container) {

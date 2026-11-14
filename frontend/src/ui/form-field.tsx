@@ -18,13 +18,11 @@ export function FormField({
   children: (attrs: {
     id: string;
     required?: boolean;
-    "aria-invalid"?: boolean;
-    "aria-describedby"?: string;
+    'aria-invalid'?: boolean;
+    'aria-describedby'?: string;
   }) => ReactNode;
 }) {
-  const describedBy =
-    [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(" ") ||
-    undefined;
+  const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined;
   return (
     <div className="base-form-field">
       <Label htmlFor={id}>
@@ -34,8 +32,8 @@ export function FormField({
       {children({
         id,
         required,
-        "aria-invalid": error ? true : undefined,
-        "aria-describedby": describedBy,
+        'aria-invalid': error ? true : undefined,
+        'aria-describedby': describedBy,
       })}
       {hint && (
         <p id={`${id}-hint`} className="base-field-hint">
@@ -43,12 +41,7 @@ export function FormField({
         </p>
       )}
       {error && (
-        <Notice
-          role="alert"
-          tone="danger"
-          appearance="inline"
-          id={`${id}-error`}
-        >
+        <Notice role="alert" tone="danger" appearance="inline" id={`${id}-error`}>
           {error}
         </Notice>
       )}

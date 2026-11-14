@@ -17,7 +17,14 @@ export default defineConfig({
     timezoneId: 'Asia/Novosibirsk',
   },
   projects: [
-    { name: 'desktop', testIgnore: ['mobile-feed.spec.ts', 'choice-fields.spec.ts', 'pagination-navigation.spec.ts'], use: { browserName: 'chromium', viewport: { width: 1440, height: 1000 } } },
-    { name: 'mobile', use: { browserName: 'chromium', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
+    {
+      name: 'desktop',
+      testIgnore: ['mobile-feed.spec.ts', 'choice-fields.spec.ts', 'pagination-navigation.spec.ts'],
+      use: { browserName: 'chromium', viewport: { width: 1440, height: 1000 } },
+    },
+    {
+      name: 'mobile',
+      use: { browserName: 'chromium', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    },
   ],
 });

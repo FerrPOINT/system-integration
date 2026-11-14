@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { selectChoice } from './support';
 
-test.beforeEach(async ({ page }) => { await page.goto('/tests/choice-form.html'); });
+test.beforeEach(async ({ page }) => {
+  await page.goto('/tests/choice-form.html');
+});
 
 test('R08: required, FormData and controlled/uncontrolled reset preserve one native owner', async ({ page }) => {
   await expect(page.locator('[data-base-choice-bridge]')).toHaveCount(2);
@@ -32,7 +34,9 @@ test('R08: disabled prop and native fieldset omit values without losing required
   await expect(page.getByRole('alert')).toHaveText('Выберите значение');
 });
 
-test('R08: keyboard skips disabled options, Tab leaves the popup, unavailable values remain explicit', async ({ page }) => {
+test('R08: keyboard skips disabled options, Tab leaves the popup, unavailable values remain explicit', async ({
+  page,
+}) => {
   const controlled = page.getByRole('combobox', { name: 'Controlled', exact: true });
   await controlled.click();
   await expect(page.getByRole('option', { name: 'Alpha', exact: true })).toBeFocused();

@@ -8,14 +8,20 @@ const faultModes = ['UNAVAILABLE', 'DROP_RESPONSE_AFTER_EXECUTION', 'DUPLICATE_R
 
 async function fault(method, ref, value) {
   if (!/^REQ-[0-9]{6}$/.test(ref)) throw new Error('Expected REQ- and six digits');
-  const response = await fetch(external + '/test/faults/' + ref, { method, signal: AbortSignal.timeout(10_000),
-    headers: { 'Content-Type': 'application/json' }, body: value ? JSON.stringify({ mode: value }) : undefined });
+  const response = await fetch(external + '/test/faults/' + ref, {
+    method,
+    signal: AbortSignal.timeout(10_000),
+    headers: { 'Content-Type': 'application/json' },
+    body: value ? JSON.stringify({ mode: value }) : undefined,
+  });
   if (response.status !== 204) throw new Error(`Fault command failed: HTTP ${response.status}`);
 }
 
 async function login(username) {
   if (!process.env.SI_DEMO_PASSWORD) throw new Error('SI_DEMO_PASSWORD is required');
-  const session = new ApiSession(origin); await session.login(username, process.env.SI_DEMO_PASSWORD); return session;
+  const session = new ApiSession(origin);
+  await session.login(username, process.env.SI_DEMO_PASSWORD);
+  return session;
 }
 
 if (command === 'fault') {
@@ -40,12 +46,21 @@ if (command === 'fault') {
     { title: 'Демо: запоздалый промежуточный снимок', quantity: 25, fault: 'DELAY_RESULT' },
   ];
   for (const [index, item] of cases.entries()) {
-    item.reference = `REQ-${900001 + index}`; item.owner = index % 2;
+    item.reference = `REQ-${900001 + index}`;
+    item.owner = index % 2;
     if (item.fault) await fault('PUT', item.reference, item.fault);
     const key = `00000000-0000-4000-8000-${String(900001 + index).padStart(12, '0')}`;
-    item.taskId = (await initiators[item.owner].command('POST', '/api/tasks', {
-      title: item.title, request: { reference: item.reference, quantity: item.quantity },
-    }, key)).taskId;
+    item.taskId = (
+      await initiators[item.owner].command(
+        'POST',
+        '/api/tasks',
+        {
+          title: item.title,
+          request: { reference: item.reference, quantity: item.quantity },
+        },
+        key,
+      )
+    ).taskId;
   }
   // Five calls plus 82 seconds of backoff and HTTP deadlines.
   const deadline = Date.now() + 120_000;
@@ -57,7 +72,7 @@ if (command === 'fault') {
         let found = false;
         for (let page = 0; ; page++) {
           const issues = await operator.get('/api/exchange/issues?status=OPEN&page=' + page);
-          found = issues.items.some(issue => issue.taskId === item.taskId && issue.kind === 'DELIVERY_DELAYED');
+          found = issues.items.some((issue) => issue.taskId === item.taskId && issue.kind === 'DELIVERY_DELAYED');
           if (found || !issues.hasNext) break;
         }
         ready &&= found;
@@ -66,17 +81,30 @@ if (command === 'fault') {
     }
     if (ready) break;
     if (Date.now() >= deadline) throw new Error('The demo scenarios did not reach their expected states');
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  const dropped = cases.find(item => item.fault === 'DROP_RESPONSE_AFTER_EXECUTION');
-  dropped.reconciliation = await operator.command('POST', `/api/tasks/${dropped.taskId}/reconciliations`, undefined,
-    '00000000-0000-4000-8000-000000900004');
+  const dropped = cases.find((item) => item.fault === 'DROP_RESPONSE_AFTER_EXECUTION');
+  dropped.reconciliation = await operator.command(
+    'POST',
+    `/api/tasks/${dropped.taskId}/reconciliations`,
+    undefined,
+    '00000000-0000-4000-8000-000000900004',
+  );
   await mkdir(new URL('results/', import.meta.url), { recursive: true });
   const result = { origin, external, preparedAt: new Date().toISOString(), cases };
   await writeFile(new URL('results/demo.json', import.meta.url), JSON.stringify(result, null, 2));
   console.log('Prepared six cases. Accounts: initiator.one, initiator.two, operator. Password: SI_DEMO_PASSWORD.');
-  console.log(cases.map(item => ({ title: item.title, taskId: item.taskId, operationId: item.task.operationId,
-    delivery: item.task.deliveryStatus, result: item.task.businessStatus })));
+  console.log(
+    cases.map((item) => ({
+      title: item.title,
+      taskId: item.taskId,
+      operationId: item.task.operationId,
+      delivery: item.task.deliveryStatus,
+      result: item.task.businessStatus,
+    })),
+  );
 } else {
-  throw new Error('Usage: node tests/demo.mjs seed | fault REQ-900003 UNAVAILABLE | clear REQ-900003 | inspect <operation-id>');
+  throw new Error(
+    'Usage: node tests/demo.mjs seed | fault REQ-900003 UNAVAILABLE | clear REQ-900003 | inspect <operation-id>',
+  );
 }

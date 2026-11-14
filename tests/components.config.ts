@@ -7,7 +7,7 @@ export default defineConfig({
   ...base,
   testMatch: ['choice-fields.spec.ts', 'pagination-navigation.spec.ts'],
   testIgnore: [],
-  projects: base.projects?.map(project => ({ ...project, testIgnore: [] })),
+  projects: base.projects?.map((project) => ({ ...project, testIgnore: [] })),
   outputDir: './results/components',
   reporter: [['list'], ['json', { outputFile: './results/components.json' }]],
   use: { ...base.use, baseURL: origin },
