@@ -42,7 +42,7 @@ export function IssueList() {
         </CardContent></li></Card>)}</ul> :
         <Card><Table className="issue-table" data-page-items><caption className="sr-only">Реестр разборов обмена</caption>
           <thead data-page-heading><tr><th scope="col">Проблема</th><th scope="col">Ответственный</th><th scope="col">Открыт (UTC)</th></tr></thead>
-          <tbody>{issues.data.items.slice(0, size).map(issue => <tr key={issue.issueId} data-page-item>
+          <tbody>{issues.data.items.slice(0, size).map(issue => <tr key={issue.issueId} className="base-linked-row" data-page-item>
             <td><Link data-issue-link className="base-truncate" title={kinds[issue.kind]} to={'/issues/' + issue.issueId}>{kinds[issue.kind]}</Link>
               <small className="base-truncate" title={issue.summary}>{issue.summary}</small></td>
             <td><span className={'base-truncate' + (issue.assignedTo ? ' technical' : ' muted')} title={issue.assignedTo}>{issue.assignedTo || 'Не назначен'}</span></td>

@@ -317,6 +317,11 @@ border-bottom: 1px solid var(--color-border);
 .base-table tbody tr:last-child {
 border-bottom: 0;
 }
+/* The first cell's native link covers the row, preserving browser link actions. */
+.base-table .base-linked-row { position: relative; cursor: pointer; }
+.base-table .base-linked-row > td:first-child > a::after { content: ""; position: absolute; inset: 0; }
+.base-table .base-linked-row > td:first-child > a:focus-visible { outline: none; }
+.base-table .base-linked-row:focus-within { outline: 2px solid var(--color-focus); outline-offset: -2px; }
 .base-table tr:hover {
 background: color-mix(
       in srgb,
