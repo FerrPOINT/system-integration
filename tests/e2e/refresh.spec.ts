@@ -78,7 +78,10 @@ test('UI-14: a completed task receives another operator audit entry without reop
   const { taskId } = await created.json();
   await page.goto('/tasks/' + taskId);
   await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
-  await expect(page.getByText('Принят внешний результат: SUCCEEDED', { exact: true })).toBeVisible();
+  const applied = page.locator('[data-event-id]').filter({ hasText: 'Принят внешний результат: SUCCEEDED' });
+  await expect(applied.getByText('Получен результат исполнителя', { exact: true })).toBeVisible();
+  await applied.getByText('Подробности обмена', { exact: true }).click();
+  await expect(applied.getByText('Принят внешний результат: SUCCEEDED', { exact: true })).toBeVisible();
   await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
   expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
   const operator = new ApiSession(baseURL);
@@ -95,6 +98,9 @@ test('UI-14: a completed task receives another operator audit entry without reop
   expect(history.items.some((event: { summary: string }) => event.summary === 'Сверка: MATCH')).toBe(true);
   // Real HTTP can finish after runFor returns; let the paused browser flush query notifications.
   await page.clock.runFor(100);
-  await expect(page.getByText('Сверка: MATCH', { exact: true })).toBeVisible();
+  const reconciled = page.locator('[data-event-id]').filter({ hasText: 'Сверка: MATCH' });
+  await expect(reconciled.getByText('Выполнена сверка с исполнителем', { exact: true })).toBeVisible();
+  await reconciled.getByText('Подробности обмена', { exact: true }).click();
+  await expect(reconciled.getByText('Сверка: MATCH', { exact: true })).toBeVisible();
   await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
 });

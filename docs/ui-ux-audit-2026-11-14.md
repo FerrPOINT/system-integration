@@ -1,5 +1,10 @@
 # UI/UX аудит — 14 ноября 2026
 
+Исторический срез: замечания ниже относятся к указанной версии, а не к текущему main.
+Статус последующих исправлений — в [текущей стадии](current-stage.md) и
+[плане frontend](frontend-refactoring-plan.md). Ссылки на удалённые исходники
+закреплены на проверенном историческом коммите.
+
 Проверен локальный интерфейс `http://127.0.0.1:19673` после слияния
 [PR #1](https://github.com/FerrPOINT/system-integration/pull/1) в `main`
 (`069825d`). Отдельным срезом упрощена пагинация. Публичная версия не проверялась
@@ -140,8 +145,8 @@ backend с сохранением тома, сверить revision и пове�
 В списке разборов ссылка назад также всегда ведёт в `/issues`, поэтому
 завершённый разбор возвращает пользователя к открытым.
 
-**Владелец:** ссылки из [реестра/карточки задания](../frontend/src/features/tasks/task-details.tsx)
-и [разборов](../frontend/src/features/operations/issue-details.tsx).
+**Владелец:** ссылки из [реестра/карточки задания](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/tasks/task-details.tsx)
+и [разборов](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/operations/issue-details.tsx).
 Передавать адрес возврата вместе с переходом в карточку через состояние маршрута;
 для прямого URL использовать явный корень соответствующего списка. Проверять
 страницу, фильтры и браузерные Back/Forward. Не сохранять этот контекст глобально.
@@ -152,7 +157,7 @@ backend с сохранением тома, сверить revision и пове�
 в «Задания» и вернуться браузерным Back. Подтверждения нет, поле пустое.
 Команда решения при этой проверке не отправлялась.
 
-**Владелец:** `DecisionForm` в [issue-details.tsx](../frontend/src/features/operations/issue-details.tsx).
+**Владелец:** `DecisionForm` в [issue-details.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/operations/issue-details.tsx).
 Использовать существующие механизмы блокировки маршрута/закрытия и предупреждения
 при перезагрузке, уже применённые в создании. Сохранить текст при ошибке команды,
 защиту pending и возможность явно отказаться от черновика.
@@ -164,7 +169,7 @@ backend с сохранением тома, сверить revision и пове�
 названия задания. Для сопоставления приходится открывать карточки по очереди.
 
 **Владелец:** DTO `Issue` в [контракте](../contracts/internal-api.openapi.yaml)
-и [IssueList](../frontend/src/features/operations/issue-list.tsx).
+и [IssueList](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/operations/issue-list.tsx).
 Добавить краткую идентичность связанного задания в выдачу списка и показать
 номер заявки/название. Общую проблему ленты явно отличать от проблемы задания.
 Не делать отдельный запрос задания для каждой карточки.
@@ -179,7 +184,7 @@ backend с сохранением тома, сверить revision и пове�
 **Владелец:** создание подписей в
 [ExchangeService](../backend/src/main/java/com/azhukov/integration/service/ExchangeService.java),
 [ReviewService](../backend/src/main/java/com/azhukov/integration/service/ReviewService.java),
-контракт представления акторов и отображение [истории](../frontend/src/features/tasks/task-details.tsx).
+контракт представления акторов и отображение [истории](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/tasks/task-details.tsx).
 Использовать понятные названия событий и отображаемое имя автора. Технические
 методы, коды и идентификаторы оставить доступными в диагностике. Не переписывать
 сохранённые валидные события и не заменять подстроки в произвольном тексте.
@@ -194,7 +199,7 @@ backend с сохранением тома, сверить revision и пове�
 После возврата фокуса с модалки заголовок также может уйти за край этой панели.
 
 **Владелец:** ограничение `max-height:45%` в
-[styles.css](../frontend/src/app/styles.css). На коротких экранах дать фильтрам
+[styles.css](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/app/styles.css). На коротких экранах дать фильтрам
 явный отдельный режим/панель с доступными полями и закрытием, затем пересчитывать
 список. Не решать это увеличением фиксированной высоты всей страницы.
 Снимок: `filters-mobile-short.png`.
@@ -214,7 +219,7 @@ UI-17 и проверки URL, адаптивной пагинации, тем �
 Уменьшенная панель пагинации вернула 28 px, но это всё ещё одна запись за раз.
 
 **Владелец:** мобильная карточка и компоновка реестра в
-[task-list.tsx](../frontend/src/features/tasks/task-list.tsx).
+[task-list.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/tasks/task-list.tsx).
 Следующий срез: компактнее собрать номер заявки/количество/дату и сократить
 декоративные интервалы, сохранив отдельные состояния доставки и исполнения,
 читаемые даты и доступные действия. После изменения снова измерить вместимость.
@@ -226,7 +231,7 @@ UI-17 и проверки URL, адаптивной пагинации, тем �
 В модальном создании возврат фокуса уже реализован корректно.
 
 **Владелец:** `RenameForm`/`TaskCard` в
-[task-details.tsx](../frontend/src/features/tasks/task-details.tsx). После отмены возвращать
+[task-details.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/tasks/task-details.tsx). После отмены возвращать
 фокус на «Изменить название», после успешного сохранения — на видимый заголовок
 или тот же триггер. При аудите название задания не менялось.
 

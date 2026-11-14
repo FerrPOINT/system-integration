@@ -2,13 +2,14 @@ import { useEffect } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { usePageSize } from './use-page-size';
 import { isCurrentLocation } from '../router/is-current-location';
+import { isPageIndex } from './page-index';
 
 export function usePagination(mode: 'pages' | 'feed' = 'pages') {
   const location = useLocation();
   const [search, setSearch] = useSearchParams();
   const page = Number(search.get('page') ?? 0);
   const size = Number(search.get('size') ?? 20);
-  const valid = Number.isSafeInteger(page) && page >= 0 && Number.isSafeInteger(size) && size >= 1 && size <= 100;
+  const valid = isPageIndex(page) && Number.isSafeInteger(size) && size >= 1 && size <= 100;
   const { viewportRef, measuredSize } = usePageSize(page, mode === 'pages');
   useEffect(() => {
     if (!valid) return;

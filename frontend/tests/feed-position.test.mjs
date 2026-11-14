@@ -43,6 +43,7 @@ test('invalid and unavailable browser storage are explicit; reading is pure', ()
     JSON.stringify({ version: 2, position }),
     ...[
       { ...position, page: -1 },
+      { ...position, page: 2147483648 },
       { ...position, index: 20 },
       { ...position, id: 3 },
       { ...position, scrollY: null },

@@ -621,13 +621,19 @@ REPEATABLE READ с общими предикатами. UI-09 проверяет
 ## Чтение, кэш и повтор команд
 
 TaskService использует TaskReadRepository для карточки, истории и реестра.
-SpringDataTaskReadRepository объединяет узкие generated TaskRows/HistoryRows
-и штатный Query/Criteria для optional-фильтров; COUNT получает те же предикаты
+SpringDataTaskReadRepository объединяет узкие TaskRows/HistoryRows
+и штатный Query/Criteria для optional-фильтров. HistoryRows использует bounded
+@Query с JOIN логина автора; остальные простые SELECT/COUNT генерируются Spring Data.
+Поля read-проекции не меняют сохранённую историю. COUNT получает те же предикаты
 без пагинации. Отдельной read-БД, JPA, Hibernate и ORM-связей нет.
 Плоские TaskReadRow/HistoryReadRow описывают существующие таблицы.
 ReadMappingConfiguration добавляет чтение PostgreSQL json/jsonb как текста,
 сохраняя стандартные и dialect-конвертеры. TaskResultReader — общий владелец
 расшифровки outcome; промежуточный внешний snapshot для UI не декодируется.
+Адаптер округляет обе границы `[from, to)` вверх до микросекунд PostgreSQL,
+сохраняя точные сравнения API с наносекундными границами. IssueView добавляет
+текущее название/номер заявки к уже загруженному состоянию разбора, без N+1
+и без изменения доменной Issue или сохранённых ответов команд.
 
 Команды, блокировки, batch и сложные проекции сохраняют ручной SQL.
 Причина — конкретные гарантии запроса и атомарности, а не признак «для UI».

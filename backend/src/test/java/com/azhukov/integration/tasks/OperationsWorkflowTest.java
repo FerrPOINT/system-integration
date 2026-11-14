@@ -93,6 +93,18 @@ class OperationsWorkflowTest extends PostgresTest {
             var card = issue(op, UUID.fromString(row.get("issueId").asString()));
             status(200, card);
             assertEquals(body(card), row, "List and card must expose the same evidence and actions");
+            if (row.has("taskId")) {
+                var taskId = UUID.fromString(row.get("taskId").asString());
+                assertEquals(
+                        jdbc.queryForObject("SELECT title FROM tasks WHERE id=?", String.class, taskId),
+                        row.get("taskTitle").asString());
+                assertEquals(
+                        jdbc.queryForObject("SELECT request_reference FROM tasks WHERE id=?", String.class, taskId),
+                        row.get("requestReference").asString());
+            } else {
+                assertFalse(row.has("taskTitle"));
+                assertFalse(row.has("requestReference"));
+            }
         }
         var empty = mvc.perform(get("/api/exchange/issues").param("page", "1").session(op.session())).andReturn();
         status(200, empty);

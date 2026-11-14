@@ -28,7 +28,9 @@ Java 25 и Spring Boot. Текущая структура пакетов опи�
 - repository — прикладные контракты хранения. TaskReadRepository и его
   repository/springdata адаптер читают карточку, counted-реестр и историю.
   Плоские persistence records и Pageable не покидают адаптер; узкие Spring Data
-  интерфейсы не имеют save/delete/findAll. Domain остаётся без аннотаций хранения.
+  интерфейсы не имеют save/delete/findAll. HistoryRows использует один bounded
+  @Query с JOIN автора: это read-проекция без N+1, ручной SQL остаётся внутри
+  read-адаптера и входит в наблюдаемые SQL-планы. Domain остаётся без аннотаций хранения.
   repository/jdbc владеет ручным SQL команд, обмена и сложных проекций.
   TaskRepository хранит команды/историю; ExchangeRepository — очередь, попытки
   и курсор. repository/mapping содержит общий TaskResultReader без SQL.

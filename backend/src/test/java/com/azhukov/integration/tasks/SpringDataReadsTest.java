@@ -85,6 +85,52 @@ class SpringDataReadsTest extends PostgresTest {
     }
 
     @Test
+    void subMicrosecondFilterBoundsKeepHalfOpenSemantics() {
+        var at = OffsetDateTime.parse("2026-11-10T12:00:00Z");
+        var fixtures = new ArrayList<Fixture>();
+        for (UUID owner : List.of(first, second))
+            for (int nanos : List.of(0, 1000, 2000)) {
+                var id = UUID.randomUUID();
+                insert(id, owner, BusinessStatus.PENDING, at.plusNanos(nanos));
+                fixtures.add(new Fixture(id, owner, BusinessStatus.PENDING, at.plusNanos(nanos)));
+            }
+        for (Actor actor : List.of(new Actor(first, Actor.Role.INITIATOR), new Actor(operator, Actor.Role.OPERATOR))) {
+            for (int nanos : List.of(0, 1, 499, 500, 999, 1000, 1001, 1500, 2000))
+                for (boolean lower : List.of(false, true)) {
+                    var bound = at.plusNanos(nanos);
+                    var expected =
+                            fixtures.stream()
+                                    .filter(f -> actor.isOperator() || f.owner().equals(actor.id()))
+                                    .filter(f -> lower ? !f.at().isBefore(bound) : f.at().isBefore(bound))
+                                    .map(Fixture::id)
+                                    .collect(java.util.stream.Collectors.toSet());
+                    var result = tasks.list(actor, 0, 20, null, lower ? bound : null, lower ? null : bound);
+                    assertEquals(
+                            expected,
+                            result.items().stream()
+                                    .map(com.azhukov.integration.domain.task.Task::id)
+                                    .collect(java.util.stream.Collectors.toSet()),
+                            "nanos=" + nanos + ", lower=" + lower);
+                    assertEquals(expected.size(), result.totalItems());
+                }
+            var empty = tasks.list(actor, 0, 20, null, at.plusNanos(1), at.plusNanos(2));
+            assertEquals(0, empty.totalItems());
+            assertTrue(empty.items().isEmpty());
+        }
+    }
+
+    @Test
+    void subMicrosecondBoundsCanCarryAcrossTheLastSupportedUtcYear() {
+        var at = OffsetDateTime.parse("9999-12-31T23:59:59.999999Z");
+        var id = UUID.randomUUID();
+        insert(id, first, BusinessStatus.PENDING, at);
+        var actor = new Actor(first, Actor.Role.INITIATOR);
+        assertEquals(1, tasks.list(actor, 0, 20, null, null, at.plusNanos(1)).totalItems());
+        assertEquals(0, tasks.list(actor, 0, 20, null, at.plusNanos(1), null).totalItems());
+        assertEquals(0, tasks.list(actor, 0, 20, null, at.plusNanos(1), at.plusNanos(999)).totalItems());
+    }
+
+    @Test
     void countAndRowsStayOnOneSnapshotDuringConcurrentCommit() throws Exception {
         var actor = new Actor(first, Actor.Role.INITIATOR);
         var at = OffsetDateTime.parse("2026-11-10T12:00:00Z");
@@ -276,6 +322,7 @@ class SpringDataReadsTest extends PostgresTest {
             assertEquals(uid(100 + kinds.length - 1 - page), entry.eventId());
             assertEquals(kinds[kinds.length - 1 - page], entry.type());
             assertEquals(first, entry.actorUserId());
+            assertEquals("initiator.one", entry.actorUsername());
             assertEquals(at.toInstant(), entry.occurredAt().toInstant());
             assertEquals(uid(70), entry.attemptId());
             assertEquals(2, entry.resultVersion());
