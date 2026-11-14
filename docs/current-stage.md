@@ -1,5 +1,39 @@
 # Текущая стадия
 
+## Настройки форматирования — без изменения исходников
+
+В PR #7 поверх main после PR #6 подготовлены только настройки:
+Spotless 8.11.0 / google-java-format 2.0.0 (AOSP, 4 пробела, 120 колонок)
+для рукописной Java обоих приложений и Prettier 3.10.1 (2 пробела, 120)
+для frontend и JS/TS-тестов, .editorconfig и настройки редактора.
+Версии закреплены; generated/build/results/lockfile/миграции исключены.
+Общий проход отложен до отдельного поручения пользователя.
+В diff нет изменений прикладных исходников, тестов и SQL относительно main
+после PR #6; frontend PR #8 сохраняется.
+Format-on-save выключен, enforceCheck=false не добавляет проверку текущего
+стиля к Gradle check. Команды будущего общего прохода описаны в README;
+новых CI/hooks нет. Текущие исходники не требуется форматировать для сборки.
+Проверены закреплённый Prettier на строке в памяти, ignore generated/results/lockfile,
+выключенный format-on-save и dry-run граф check/bootJar обоих backend без formatter tasks.
+Diff относительно main содержит ровно 12 файлов настроек/docs/lockfile; Java/TS/JS/CSS,
+тесты, SQL, контракты и Dockerfiles не меняются. Существующие frontend scripts,
+runtime/dev dependencies, кроме добавленного Prettier, сохранены.
+Публичный runtime — 2e97ce4.
+
+### Публичная квалификация 14 ноября
+
+Demo обновлён из PR #6 до 2e97ce4, включая актуальный на 14 ноября frontend.
+Все три image revision/IDs сверены с candidate; публичные JS/CSS совпали
+с образом. В IAB проверены вход, реестр с адаптивным size, карточка и
+компактная история. Прошли пять public/API-проверок: три роли, чужая карточка,
+secure cookie, logout, приватные служебные маршруты и gzip.
+PostgreSQL 18.6 → 18.7: counts/digests 14 business/migration таблиц
+не изменились. Рабочий том сохранён; reset/seed/dump не выполнялись.
+Семь соседних контейнеров сохранили ID/image/StartedAt.
+Receipts — tests/results/public-2026-11-14 (ignored) и runtime release.json.
+Предыдущие immutable образы и rollback override сохранены. PR #6 влит в main; этот публичный runtime остаётся на 2e97ce4.
+
+
 ## Интеграция с актуальным main
 
 Во время приёмки backend в main вошёл frontend PR #8 (673c7ec).
@@ -51,7 +85,7 @@ Receipts: ignored tests/results/backend-audit-fixes-2026-11-15/qualification.jso
 java.json, sql-plans.json.gz, app-ui.json, components.json.gz, recovery.json.gz,
 demo-independent.json, nf08-summary.json/nf08.json.gz и final-*-os.json.
 
-PR #6 готов к разрешённому merge, затем отдельно PR #7 с настройками.
+PR #6 влит в main (36e4b47); PR #7 содержит только настройки форматирования.
 Код не форматируется; обязательный formatter gate/format-on-save выключены.
 Frontend PR #8 уже вошёл в main и сохраняется при интеграции backend.
 Публичный demo остаётся на 2e97ce4; новый deploy не выполняется.
@@ -77,7 +111,7 @@ Frontend PR #8 уже вошёл в main и сохраняется при инт
 поправки повторно не запускались. Образы e0360e0 ниже относятся к основному
 этапу и не содержат исправление P2: перед deploy нужен backend, собранный
 из актуального commit PR, и отдельная проверка запущенного приложения.
-Merge и публичный deploy не выполнялись.
+Публичный выпуск 2e97ce4 проверен отдельно выше; merge PR не выполнялся.
 Компактный отчёт поправки — tests/results/backend-followup/diagnostic-fix.json
 (ignored); исходники и тесты — [PR #6](https://github.com/FerrPOINT/system-integration/pull/6).
 
@@ -87,8 +121,8 @@ Merge и публичный deploy не выполнялись.
 Работа выполнена на Firebat1 в ветке fix/backend-audit-followup.
 Свежий frontend 6f6dbe0 полностью включён в базу. Квалифицированный runtime
 основного этапа — e0360e081d7b0b245647694731449d2d372ce5f2; интеграция
-67de759 меняла только документацию. Последующая поправка P2 описана выше. Исходники подготовлены к merge; public runtime
-ac5c207 продолжает работать, merge и публичный deploy в этот этап не входят.
+67de759 меняла только документацию. Последующая поправка P2 описана выше. На конец основного этапа исходники были подготовлены к merge, public runtime
+оставался на ac5c207. Последующий публичный выпуск указан выше.
 
 U+0000 отклоняется с VALIDATION_FAILED до записи: TaskTitle, причины
 retry/resolve и OpenAPI согласованы. RED-тесты воспроизвели исходный дефект.

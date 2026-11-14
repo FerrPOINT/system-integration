@@ -1,0 +1,6 @@
+**/node_modules/
+**/build/
+**/dist/
+**/results/
+.local/
+**/pnpm-lock.yaml
