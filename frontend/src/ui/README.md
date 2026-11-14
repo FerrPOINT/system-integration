@@ -48,7 +48,8 @@ Disclosure — только panel, без неиспользуемого Resourc
 CSS-правила выбранных семейств из Base находятся в patterns.css; Tailwind utility
 классы заменены эквивалентными обычными CSS-правилами.
 Подсказки и required принадлежат FormField, содержимое и side effects — экрану.
-BackLink составляет штатные Button и React Router Link.
+BackLink составляет штатные Button и React Router Link: стрелка в кнопке
+44 × 44 px, назначение возврата задаётся доступным именем и title.
 
 Brand в app/Brand.tsx один для входа и шапки: Base IconMark и SVG ArrowRightLeft
 из уже используемого Lucide. Цвета и размеры знака задаёт Base; текстовых
