@@ -22,6 +22,7 @@ dependencies {
 
 def internalApi = tasks.named('openApiGenerate', GenerateTask) {
     rootProject.configureContract(delegate, 'internal-api', 'internal')
+    inputs.file(rootProject.layout.projectDirectory.file('contracts/external-exchange.openapi.yaml'))
 }
 def externalApi = tasks.register('generateExchangeApi', GenerateTask) {
     rootProject.configureContract(delegate, 'external-exchange', 'external')

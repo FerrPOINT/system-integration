@@ -36,11 +36,16 @@ test('Java apps own their task graphs and regenerate only consumers of a changed
     for (const task of tasks) assert.ok(unchanged.includes('> Task ' + task + ' UP-TO-DATE'), task);
     appendFileSync(join(fixture, 'contracts/external-exchange.openapi.yaml'), '\n# synthetic invalidation probe\n');
     const changed = run(...tasks);
-    assert.ok(changed.includes('> Task :backend:openApiGenerate UP-TO-DATE'));
-    for (const task of [tasks[1], tasks[2]]) {
+    // Internal API references external schemas, so it is a real consumer too.
+    for (const task of tasks) {
       assert.ok(changed.includes('> Task ' + task + '\n'), task);
       assert.ok(!changed.includes('> Task ' + task + ' UP-TO-DATE'), task);
     }
+    appendFileSync(join(fixture,'contracts/internal-api.openapi.yaml'),'\n# internal-only invalidation probe\n');
+    const internalOnly=run(...tasks);
+    assert.ok(!internalOnly.includes('> Task '+tasks[0]+' UP-TO-DATE'));
+    for (const task of [tasks[1],tasks[2]])
+      assert.ok(internalOnly.includes('> Task '+task+' UP-TO-DATE'),task);
   } finally {
     assert.ok(resolve(fixture).startsWith(resolve(root, '.local') + '/gradle-check-'));
     rmSync(fixture, { recursive: true });

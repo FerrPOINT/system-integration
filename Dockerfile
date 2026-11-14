@@ -7,7 +7,7 @@ COPY emulator/build.gradle emulator/build.gradle
 RUN chmod +x gradlew
 
 FROM java-build AS backend-build
-COPY contracts/internal-api.openapi.yaml contracts/
+COPY contracts/internal-api.openapi.yaml contracts/external-exchange.openapi.yaml contracts/
 COPY backend/src backend/src
 RUN --mount=type=cache,target=/root/.gradle \
     ./gradlew --no-daemon --max-workers=1 '-Dorg.gradle.jvmargs=-Xmx512m -XX:ActiveProcessorCount=2' :backend:bootJar
