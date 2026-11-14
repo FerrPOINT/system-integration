@@ -2,7 +2,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from jdbc_inventory import collect
+from jdbc_inventory import collect, text_block_constant
 
 class JdbcInventoryTest(unittest.TestCase):
     def collect_source(self,source):
@@ -46,6 +46,16 @@ class Repository {
         rows=self.collect_source(source)
         self.assertEqual(['Repository.run/2:1'],list(rows))
         self.assertEqual('text',next(iter(rows.values()))['expression'])
+
+    def test_text_block_constants_survive_formatter_line_wraps(self):
+        value='SELECT i.* FROM exchange_issues i'
+        for separator in [' ', '\n        ', '\n\t']:
+            source='private static final String ISSUE_SELECT'+separator+'='+separator+'"""\n    '+value+'\n    """;'
+            self.assertEqual(value,text_block_constant(source,'ISSUE_SELECT'))
+        with self.assertRaisesRegex(ValueError,'Expected one'):
+            text_block_constant('String other = "SELECT 1";','ISSUE_SELECT')
+        with self.assertRaisesRegex(ValueError,'Expected one'):
+            text_block_constant('ISSUE_SELECT = """one"""; ISSUE_SELECT = """two""";','ISSUE_SELECT')
 
     def test_overloaded_history_methods_and_multiple_calls_have_distinct_ids(self):
         source='''class Repository {

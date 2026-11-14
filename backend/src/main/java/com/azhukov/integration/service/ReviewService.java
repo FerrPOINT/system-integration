@@ -13,6 +13,7 @@ import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.dto.CommandType;
 import com.azhukov.integration.dto.Page;
 import com.azhukov.integration.dto.review.IssueCommands;
+import com.azhukov.integration.dto.review.IssueView;
 import com.azhukov.integration.repository.ExchangeRepository;
 import com.azhukov.integration.repository.ReviewRepository;
 import com.azhukov.integration.repository.TaskRepository;
@@ -50,13 +51,13 @@ public class ReviewService {
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public Issue get(Actor user, UUID id) {
+    public IssueView get(Actor user, UUID id) {
         requireOperator(user);
-        return loadContext(id, user, false).view(user.id());
+        return issueView(loadContext(id, user, false), user);
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public Page<Issue> list(Actor user, int page, int size, Issue.Status status) {
+    public Page<IssueView> list(Actor user, int page, int size, Issue.Status status) {
         requireOperator(user);
         Page.requireValid(page, size);
         var rows = issues.list(page, size, status);
@@ -82,7 +83,7 @@ public class ReviewService {
                                     || (snapshotId != null && saved == null)
                                     || (saved != null && !saved.value().taskId().equals(taskId)))
                                 throw RuleViolation.notFound();
-                            return toContext(row, state, saved).view(user.id());
+                            return issueView(toContext(row, state, saved), user);
                         })
                         .toList();
         return new Page<>(items, page, size, total);
@@ -260,6 +261,14 @@ public class ReviewService {
                             Map.of("issueId", id, "reconciliationId", input.reconciliationId()));
                     return resolution;
                 });
+    }
+
+    private static IssueView issueView(ReviewContext context, Actor user) {
+        var task = context.state() == null ? null : context.state().task();
+        return new IssueView(
+                context.view(user.id()),
+                task == null ? null : task.request().reference(),
+                task == null ? null : task.title().value());
     }
 
     private record Target(UUID id, Object input) {}

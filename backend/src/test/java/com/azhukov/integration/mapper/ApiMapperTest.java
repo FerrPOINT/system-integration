@@ -90,23 +90,38 @@ class ApiMapperTest {
                 for (var type : HistoryType.values()) {
                     var entry =
                             new HistoryEntry(
-                                    id, id, operation, time, actor, owner, type, "История", operation, 2, id, operation,
-                                    owner, id);
+                                    id,
+                                    id,
+                                    operation,
+                                    time,
+                                    actor,
+                                    owner,
+                                    type,
+                                    "История",
+                                    operation,
+                                    2,
+                                    id,
+                                    operation,
+                                    owner,
+                                    id,
+                                    "initiator.one");
                     var value = mapper.history(entry);
                     assertAll(
-                            () -> assertEquals(id, value.getEventId()), () -> assertEquals(id, value.getTaskId()),
+                            () -> assertEquals(id, value.getEventId()),
+                            () -> assertEquals(id, value.getTaskId()),
                             () -> assertEquals(operation, value.getOperationId()),
-                                    () -> assertEquals(time, value.getOccurredAt()),
+                            () -> assertEquals(time, value.getOccurredAt()),
                             () -> assertEquals(actor.name(), value.getActor().name()),
-                                    () -> assertEquals(owner, value.getActorUserId()),
+                            () -> assertEquals(owner, value.getActorUserId()),
+                            () -> assertEquals("initiator.one", value.getActorUsername()),
                             () -> assertEquals(type.name(), value.getType().name()),
-                                    () -> assertEquals("История", value.getSummary()),
+                            () -> assertEquals("История", value.getSummary()),
                             () -> assertEquals(operation, value.getAttemptId()),
-                                    () -> assertEquals(2, value.getResultVersion().getValue()),
+                            () -> assertEquals(2, value.getResultVersion().getValue()),
                             () -> assertEquals(id, value.getIssueId()),
-                                    () -> assertEquals(operation, value.getReconciliationId()),
+                            () -> assertEquals(operation, value.getReconciliationId()),
                             () -> assertEquals(owner, value.getPreviousAssigneeId()),
-                                    () -> assertEquals(id, value.getAssignedTo()));
+                            () -> assertEquals(id, value.getAssignedTo()));
                 }
             var sparse =
                     new HistoryEntry(
@@ -123,7 +138,9 @@ class ApiMapperTest {
                             null,
                             null,
                             null,
+                            null,
                             null);
+            assertNull(mapper.history(sparse).getActorUsername());
             assertNull(mapper.history(sparse).getResultVersion());
             assertThrows(IllegalArgumentException.class, () -> mapper.historyVersion(3));
         }
@@ -197,6 +214,14 @@ class ApiMapperTest {
                             operation,
                             resolution);
             var value = mapper.issue(issue);
+            assertNull(value.getTaskTitle());
+            assertNull(value.getRequestReference());
+            var enriched =
+                    mapper.issueView(new com.azhukov.integration.dto.review.IssueView(issue, "REQ-000001", "Задание"));
+            assertEquals("REQ-000001", enriched.getRequestReference());
+            assertEquals("Задание", enriched.getTaskTitle());
+            assertEquals(value.getAllowedActions(), enriched.getAllowedActions());
+            assertEquals(value.getIssueId(), enriched.getIssueId());
             assertEquals(7L, value.getIssueRevision());
             assertEquals(owner, value.getAssignedTo());
             assertEquals(List.of(Issue.AllowedActionsEnum.RECONCILE), value.getAllowedActions());

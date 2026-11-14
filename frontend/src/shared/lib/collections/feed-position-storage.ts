@@ -1,3 +1,5 @@
+import { isPageIndex } from '../pagination/page-index.ts';
+
 export const FEED_PAGE_LIMIT = 5;
 const prefix = 'system-integration.feed-position.';
 const positionLimit = 32;
@@ -21,8 +23,7 @@ export function readPosition(
     if (
       record?.version !== 1 ||
       !p ||
-      !Number.isSafeInteger(p.page) ||
-      p.page < 0 ||
+      !isPageIndex(p.page) ||
       !Number.isInteger(p.index) ||
       p.index < 0 ||
       p.index >= size ||

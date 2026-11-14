@@ -69,3 +69,35 @@ test('UI-17: filters keep the header unscrolled and remain reachable on short sc
     else await expect(page.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
   }
 });
+
+test('UTC URL filters validate calendars and normalize the actual API request', async ({ page }) => {
+  loadUiEnvironment();
+  await login(page, 'operator');
+  const reads: URL[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === '/api/tasks' && request.method() === 'GET') reads.push(url);
+  });
+  for (const value of ['2026-02-30T00:00:00Z', '+010000-01-01T00:00:00Z', '2026-11-14T00:00:00-00:00']) {
+    reads.length = 0;
+    await page.goto('/tasks?' + new URLSearchParams({ createdFrom: value }));
+    await expect(page.getByRole('alert')).toContainText('Некорректные параметры');
+    await expect(page.locator('section.paged-list')).toHaveAttribute('aria-busy', 'false');
+    expect(reads).toHaveLength(0);
+  }
+  for (const [createdFrom, createdTo, normalizedFrom] of [
+    ['2026-11-14T07:30:00+07:00', '2026-11-15T00:00:00Z', '2026-11-14T00:30:00Z'],
+    ['2026-11-14T00:00:00.000000001Z', '2026-11-14T00:00:00.000000002Z', '2026-11-14T00:00:00.000000001Z'],
+  ]) {
+    const response = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === '/api/tasks' && url.searchParams.get('createdFrom') === normalizedFrom;
+    });
+    await page.goto('/tasks?' + new URLSearchParams({ createdFrom, createdTo }));
+    expect((await response).status()).toBe(200);
+    await waitForRegistry(page);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    expect(reads.at(-1)?.searchParams.get('createdFrom')).toBe(normalizedFrom);
+    expect(reads.at(-1)?.searchParams.get('createdTo')).toBe(createdTo);
+  }
+});

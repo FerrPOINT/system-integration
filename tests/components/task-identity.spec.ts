@@ -86,6 +86,7 @@ test('local cancel and route departure require discard and restore focus on canc
   await page.getByRole('button', { name: 'Отмена', exact: true }).click();
   await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
   await expect(title).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Изменить название', exact: true })).toBeFocused();
   await page.getByRole('button', { name: 'Изменить название' }).click();
   await expect(title).toHaveValue('Task A');
 });
@@ -142,4 +143,17 @@ test('native reload warns before discarding a draft', async ({ page }) => {
   expect(dialog.type()).toBe('beforeunload');
   await dialog.dismiss();
   await expect(page.getByRole('textbox', { name: 'Новое название' })).toHaveValue('Reload draft');
+});
+
+test('clean cancellation and accepted rename return focus to their trigger', async ({ page }) => {
+  await page.goto('/tests/task-identity.html');
+  const trigger = page.getByRole('button', { name: 'Изменить название', exact: true });
+  await trigger.click();
+  await page.getByRole('button', { name: 'Отмена', exact: true }).click();
+  await expect(trigger).toBeFocused();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  await trigger.click();
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Новое название' })).toHaveCount(0);
+  await expect(trigger).toBeFocused();
 });

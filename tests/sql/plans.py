@@ -18,7 +18,7 @@ def bind(sql, values):
  chunks=sql.split('?')
  if len(chunks)-1!=len(values):raise ValueError((sql,values))
  return ''.join(a+sql_literal(b) for a,b in zip(chunks,values))+chunks[-1]
-from jdbc_inventory import collect
+from jdbc_inventory import collect, text_block_constant
 
 inventory=collect(['backend/src/main/java','emulator/src/main/java'])
 # Frozen pre-Spring-Data reads are comparison probes, not current JDBC call sites.
@@ -92,7 +92,7 @@ for operator,status,lower,upper in itertools.product([False,True],[None,'PENDING
  for offset in [0,9000,20000]:
   add('JdbcTaskRepository.list/6:1','SELECT * FROM tasks'+conditions+' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',values+[20,offset],variant+f',offset={offset}')
  add('JdbcTaskRepository.countTasks/4:1','SELECT count(*) FROM tasks'+conditions,values,variant)
-issue_select=re.search(r'ISSUE_SELECT = """(.*?)"""',Path(inventory['JdbcReviewRepository.get/2:1']['file']).read_text(),re.S).group(1)
+issue_select=text_block_constant(Path(inventory['JdbcReviewRepository.get/2:1']['file']).read_text(),'ISSUE_SELECT')
 for locked in [False,True]:
  add('JdbcReviewRepository.get/2:1',issue_select+' WHERE i.id = ?'+(' FOR UPDATE OF i' if locked else ''),[I],f'lock={locked}')
 for status,offset in itertools.product([None,'OPEN','RESOLVED'],[0,900,2000]):

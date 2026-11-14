@@ -18,6 +18,7 @@ record HistoryReadRow(
         @Column("occurred_at") OffsetDateTime occurredAt,
         HistoryEntry.Actor actor,
         @Column("actor_user_id") UUID actorUserId,
+        @Column("actor_username") String actorUsername,
         @Column("event_type") HistoryType eventType,
         String summary,
         String details) {
@@ -37,7 +38,8 @@ record HistoryReadRow(
                 refs.issueId(),
                 refs.reconciliationId(),
                 refs.previousAssigneeId(),
-                refs.assignedTo());
+                refs.assignedTo(),
+                actorUsername);
     }
 
     private record Details(

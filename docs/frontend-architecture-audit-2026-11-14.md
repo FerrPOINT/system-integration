@@ -1,5 +1,11 @@
 # Аудит архитектуры React frontend — 14 ноября 2026
 
+Исторический срез: замечания ниже относятся к указанной версии, а не к текущему main.
+Статус последующих исправлений — в [текущей стадии](current-stage.md) и
+[плане frontend](frontend-refactoring-plan.md). Ссылки на удалённые исходники
+закреплены на проверенном историческом коммите.
+Итог последующего общего цикла — [аудит 15 ноября](iterative-audit-2026-11-15.md).
+
 ## Вывод
 
 Текущий frontend имеет полезную основу: TypeScript strict, функциональные
@@ -162,7 +168,7 @@ taskId. При смене ID сбрасываются editing, черновик 
 ### FA-02. Исключение рендера уводит в стандартный технический экран
 
 **Источник:** [main.tsx](../frontend/src/main.tsx):11 и
-[App.tsx](../frontend/src/app/App.tsx):84. У единственного route object нет
+[App.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/app/App.tsx):84. У единственного route object нет
 ErrorBoundary/errorElement; ErrorMessage отображает ошибки запросов и не ловит
 исключения дочернего React-дерева.
 
@@ -258,7 +264,7 @@ Query key и queryFn одного чтения хранятся вместе и 
 ### FA-06. RouterProvider скрывает внутри себя второе описание маршрутов
 
 **Источники:** [main.tsx](../frontend/src/main.tsx):11,
-[App.tsx](../frontend/src/app/App.tsx):20–25,84–93.
+[App.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/app/App.tsx):20–25,84–93.
 Data Router знает один wildcard, а настоящие URL и роли описаны в descendant
 Routes. Такая комбинация работает, в том числе для useBlocker, но лишает
 реальные страницы route-level data/lazy/error границ Data Router.
