@@ -2,6 +2,7 @@ package com.azhukov.integration.service;
 
 import com.azhukov.integration.domain.Actor;
 import com.azhukov.integration.domain.RuleViolation;
+import com.azhukov.integration.domain.UtcTimestamp;
 import com.azhukov.integration.domain.task.BusinessStatus;
 import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.domain.task.Task;
@@ -15,7 +16,6 @@ import com.azhukov.integration.repository.TaskRepository;
 import com.azhukov.integration.repository.TaskReadRepository;
 import com.azhukov.integration.service.idempotency.IdempotencyService;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,10 +36,10 @@ public class TaskService {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Page<Task> list(Actor user, int page, int size, BusinessStatus status, OffsetDateTime from, OffsetDateTime to) {
         Page.requireValid(page,size);
-        if ((from != null && !from.getOffset().equals(ZoneOffset.UTC)) ||
-            (to != null && !to.getOffset().equals(ZoneOffset.UTC)) ||
+        if ((from != null && !UtcTimestamp.isSupported(from)) ||
+            (to != null && !UtcTimestamp.isSupported(to)) ||
             (from != null && to != null && !to.isAfter(from)))
-            throw RuleViolation.invalid("Укажите корректный период в UTC: начало включено, конец исключён");
+            throw RuleViolation.invalid("Укажите корректный период в UTC с годом 0001–9999: начало включено, конец исключён");
         return reads.page(user,page,size,status,from,to);
     }
 

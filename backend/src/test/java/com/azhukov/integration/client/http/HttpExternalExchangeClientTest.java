@@ -120,11 +120,12 @@ class HttpExternalExchangeClientTest {
             new Case(200,snapshot,"PRESENT",false),new Case(200,"{}","UNAVAILABLE",true),
             new Case(404,missing,"NOT_FOUND",false),new Case(404,"{}","UNAVAILABLE",true),
             new Case(400,"{}","UNAVAILABLE",true),new Case(503,"{}","UNAVAILABLE",false),
-            new Case(302,"{}","UNAVAILABLE",false))) {
+            new Case(201,"{}","UNAVAILABLE",true),new Case(202,"{}","UNAVAILABLE",true),
+            new Case(204,"","UNAVAILABLE",true),new Case(302,"{}","UNAVAILABLE",true))) {
             try (var source=source(request -> {
                 byte[] body=probe.body().getBytes(StandardCharsets.UTF_8);
                 request.getResponseHeaders().add("Content-Type","application/json");
-                request.sendResponseHeaders(probe.status(),body.length);
+                request.sendResponseHeaders(probe.status(),body.length==0 ? -1 : body.length);
                 try (var output=request.getResponseBody()) { output.write(body); }
             }); var http=transport(source.origin())) {
                 var client=new HttpExternalExchangeClient(http,json,settings(source.origin()));

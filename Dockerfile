@@ -18,8 +18,9 @@ COPY emulator/src emulator/src
 RUN --mount=type=cache,target=/root/.gradle \
     ./gradlew --no-daemon --max-workers=1 '-Dorg.gradle.jvmargs=-Xmx512m -XX:ActiveProcessorCount=2' :emulator:bootJar
 
-FROM eclipse-temurin:25.0.5_8-jre AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+FROM eclipse-temurin:25.0.5_8-jre@sha256:a640968ae55027b322cedd5f8228b01a84baff0b9e9360e47601c6a111ba1699 AS runtime
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 ARG VCS_REF=development
 LABEL org.opencontainers.image.revision=$VCS_REF

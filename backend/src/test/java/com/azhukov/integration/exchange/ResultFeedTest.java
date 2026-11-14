@@ -152,6 +152,38 @@ class ResultFeedTest extends PostgresTest {
         } finally { server.stop(0); }
     }
 
+    @Test
+    void unsupportedExternalDateCreatesOneIssueWithoutBlockingAValidNeighbor() throws Exception {
+        var owner=login("initiator.one");
+        var badTask=created(owner,java.util.UUID.randomUUID());
+        var goodTask=created(owner,java.util.UUID.randomUUID());
+        var badOperation=jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?",java.util.UUID.class,badTask);
+        var goodOperation=jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?",java.util.UUID.class,goodTask);
+        var bad=json.createObjectNode().put("operationId",badOperation.toString())
+            .set("request",json.createObjectNode().put("reference","REQ-000001").put("quantity",25))
+            .put("version",2).put("status","SUCCEEDED").put("completedAt","+10000-01-01T00:00:00Z");
+        var good=bad.deepCopy().put("operationId",goodOperation.toString()).put("completedAt","2026-11-12T00:00:00Z");
+        var page=new AtomicReference<>(json.writeValueAsString(json.createArrayNode()
+            .add(json.createObjectNode().put("cursor",1).set("result",bad))
+            .add(json.createObjectNode().put("cursor",2).set("result",good))));
+        var server=source(new AtomicInteger(),page,new AtomicInteger(200));
+        try (var http=transport(server);var worker=new ExchangeCoordinator(exchange,new HttpExternalExchangeClient(http,json,settings(server)))) {
+            worker.receive();
+            assertEquals(2,exchange.cursor());assertEquals(1,count("exchange_issues"));
+            assertEquals("PENDING",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?",String.class,badTask));
+            assertNull(jdbc.queryForObject("SELECT accepted_result::text FROM tasks WHERE id=?",String.class,badTask));
+            assertEquals("SUCCEEDED",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?",String.class,goodTask));
+            assertTrue(jdbc.queryForObject("SELECT evidence::text FROM exchange_issues",String.class).contains("INVALID_UTC at completedAt"));
+            var history=count("task_history");
+            page.set(json.writeValueAsString(json.createArrayNode()
+                .add(json.createObjectNode().put("cursor",3).set("result",bad))
+                .add(json.createObjectNode().put("cursor",4).set("result",good))));
+            worker.receive();
+            assertEquals(4,exchange.cursor());assertEquals(1,count("exchange_issues"));
+            assertEquals(history,count("task_history"));
+        } finally { server.stop(0); }
+    }
+
     private static ExchangeHttpProperties settings(HttpServer server) {
         return new ExchangeHttpProperties(origin(server),Duration.ofSeconds(1),Duration.ofSeconds(2),DataSize.ofKilobytes(256));
     }

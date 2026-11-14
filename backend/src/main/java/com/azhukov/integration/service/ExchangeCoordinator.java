@@ -33,7 +33,7 @@ public class ExchangeCoordinator implements AutoCloseable {
 
     /** Process-local observations; restart resets counters, while the delivery queue stays in PostgreSQL. */
     public record FeedDiagnostics(boolean paused,Instant lastSuccessfulRead,int consecutiveFailures,
-                                  long unavailableReads,long invalidPages,int inFlight) {}
+                                  long unavailableReads,long invalidPages,int deliveryInFlight) {}
     public FeedDiagnostics diagnostics() {
         return new FeedDiagnostics(feedPaused,lastSuccessfulRead,feedFailures,unavailableReads.sum(),invalidPages.sum(),inFlight.get());
     }
