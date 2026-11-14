@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "generate:api": "orval",
     "dev": "orval && vite --host 127.0.0.1 --strictPort",
-    "build": "orval && tsc --noEmit && vite build",
+    "build": "orval && eslint src tests --max-warnings=0 && tsc --noEmit && vite build",
     "test:api": "node --test tests/*.test.mjs",
     "test:assets": "node --test tests/build-assets.mjs"
   },

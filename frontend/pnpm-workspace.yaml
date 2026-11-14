@@ -2,10 +2,10 @@ allowBuilds:
   esbuild: true
 overrides:
   # Lint utilities use their supported TS 6 API; app typechecking stays on TS 7.
-  '@typescript-eslint/utils>typescript:peer': '-'
-  '@typescript-eslint/typescript-estree>typescript:peer': '-'
-  '@typescript-eslint/tsconfig-utils>typescript:peer': '-'
-  '@typescript-eslint/project-service>typescript:peer': '-'
+  '@typescript-eslint/utils@8.72.2>typescript:peer': '-'
+  '@typescript-eslint/typescript-estree@8.72.2>typescript:peer': '-'
+  '@typescript-eslint/tsconfig-utils@8.72.2>typescript:peer': '-'
+  '@typescript-eslint/project-service@8.72.2>typescript:peer': '-'
 packageExtensions:
   '@typescript-eslint/utils@8.72.2':
     dependencies:

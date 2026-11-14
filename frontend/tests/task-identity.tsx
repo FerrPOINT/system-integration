@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider, useNavigate } from 'react-router-dom';
@@ -37,4 +38,4 @@ function Harness() {
   </main>;
 }
 const router = createMemoryRouter([{ path: '/tasks/:id', element: <Harness /> }], { initialEntries: ['/tasks/' + tasks[0].taskId] });
-createRoot(document.getElementById('root')!).render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>);
+createRoot(document.getElementById('root')!).render(<StrictMode><QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider></StrictMode>);

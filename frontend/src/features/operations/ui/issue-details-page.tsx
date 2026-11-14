@@ -7,7 +7,6 @@ import { PageHeader } from '../../../shared/ui/page-header';
 import { Button } from '../../../shared/ui/button';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import { data } from '../../../shared/api/http';
 import { timestamp } from '../../../shared/lib/format/timestamp';
 import { Loading, RefreshButton } from '../../../shared/ui/feedback';
 import { issueKindLabels as kinds } from '../model/issue-labels';

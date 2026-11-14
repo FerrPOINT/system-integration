@@ -52,6 +52,12 @@
   26 checks команд/пагинационной навигации и 10 новых проверок render/chunk
   recovery, direct URL, role gates и not-found прошли. Отдельные build chunks,
   фокус/Back и поведение с реальным backend подтверждаются в FR-12.
+- FR-10: стандартные React recommended/Query rules, TS import/cycle и layer
+  boundaries включены в обычный build. Десять positive/negative lint tests
+  проверяют реальные TS cycles, public contracts и API boundary, в том числе
+  dynamic imports. Lint/typecheck без suppressions проходят; peer conflicts нет.
+  StrictMode включён в приложении и fixtures: 48 state/command и 10 primitive/
+  pagination checks прошли. Финальная интегрированная проверка ещё не выполнена.
 - FR-06–FR-12: обязательные работы ещё не завершены. Полный build/test gate,
   IAB и публикация итогового кандидата ещё не выполнены.
 

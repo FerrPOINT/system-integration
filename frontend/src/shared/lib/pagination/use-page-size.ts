@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 export function fitPageSize(height: number, rowHeight: number, gap: number, columns: number) {
   return Math.min(100, Math.max(1, Math.floor((height + gap) / (rowHeight + gap))) * columns);
@@ -9,8 +9,14 @@ export function usePageSize(page: number, enabled = true) {
   const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
   const [size, setSize] = useState<number | null>(null);
   const metrics = useRef({ width: 0, rowHeight: 0 });
+  const viewportRef = useCallback((node: HTMLDivElement | null) => {
+    // Changing layout mode detaches the old measurement before URL reconciliation.
+    // Feed mode does not retain a measured DOM viewport or a stale desktop size.
+    setViewport(enabled ? node : null);
+    setSize(null);
+  }, [enabled]);
   useLayoutEffect(() => {
-    if (!viewport || !enabled) { setSize(null); return; }
+    if (!viewport || !enabled) return;
     metrics.current = { width: 0, rowHeight: 0 };
     let frame = 0;
     function measure() {
@@ -48,5 +54,5 @@ export function usePageSize(page: number, enabled = true) {
     return () => { cancelAnimationFrame(frame); resize.disconnect(); changes.disconnect(); };
   }, [viewport, enabled]);
   useLayoutEffect(() => { if (enabled) viewport?.scrollTo({ top: 0 }); }, [viewport, page, enabled]);
-  return { viewportRef: setViewport, measuredSize: size };
+  return { viewportRef, measuredSize: enabled ? size : null };
 }

@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
@@ -17,4 +18,4 @@ const initial = screen === 'list' ? '/tasks?size=10' : screen === 'issue' ? '/is
 const router = createMemoryRouter(appRoutes, { initialEntries: [initial] });
 // Security assertion only: expose keys, never credentials or private payloads.
 Object.assign(window, { fixturePrivateKeyCount: () => queryClient.getQueryCache().getAll().filter(query => query.queryKey[0] !== 'session').length });
-createRoot(document.getElementById('root')!).render(<QueryClientProvider client={queryClient}><RouterProvider router={router} /></QueryClientProvider>);
+createRoot(document.getElementById('root')!).render(<StrictMode><QueryClientProvider client={queryClient}><RouterProvider router={router} /></QueryClientProvider></StrictMode>);

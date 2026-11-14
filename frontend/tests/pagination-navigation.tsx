@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider, useNavigate } from 'react-router-dom';
 import { usePagination } from '../src/shared/lib/pagination/use-pagination';
@@ -45,4 +46,4 @@ const router = createBrowserRouter([
   { path: '/destination', element: <h1>Destination</h1> },
   { path: '*', element: <Source /> },
 ]);
-createRoot(document.getElementById('root')!).render(<RouterProvider router={router} />);
+createRoot(document.getElementById('root')!).render(<StrictMode><RouterProvider router={router} /></StrictMode>);

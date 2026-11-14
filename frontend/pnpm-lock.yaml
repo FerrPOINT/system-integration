@@ -172,10 +172,10 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@typescript-eslint/utils>typescript:peer': '-'
-  '@typescript-eslint/typescript-estree>typescript:peer': '-'
-  '@typescript-eslint/tsconfig-utils>typescript:peer': '-'
-  '@typescript-eslint/project-service>typescript:peer': '-'
+  '@typescript-eslint/utils@8.72.2>typescript:peer': '-'
+  '@typescript-eslint/typescript-estree@8.72.2>typescript:peer': '-'
+  '@typescript-eslint/tsconfig-utils@8.72.2>typescript:peer': '-'
+  '@typescript-eslint/project-service@8.72.2>typescript:peer': '-'
 
 packageExtensionsChecksum: sha256-jvD3Yn2wW3V9KSqcM0C2jNIBMOljF8+XxT3eOx25izI=
 

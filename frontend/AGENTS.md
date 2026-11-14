@@ -44,3 +44,12 @@ auth владеет сменой сессии и очисткой private cache,
 для обмена. Общие helpers находятся в shared/lib, tokens/controls/patterns —
 в shared/styles. Возвращайте query proxy отдельно от items/meta; не копируйте
 серверные записи в локальный state и не разворачивайте query result целиком.
+
+Обычный build включает ESLint и строгий TypeScript с проверкой неиспользуемого
+кода. Перед коммитом используйте lint/typecheck и затронутые tests; полный
+build/test gate выполняется на интегрированном этапе. Negative lint fixtures
+находятся в architecture-fixtures и выполняются только через test:api;
+в production и общий lint src/tests они не входят. Type-only DTO imports
+разрешены, generated requests принадлежат API, а URL parser получает только
+канонический BusinessStatus enum. Narrow public paths закреплены в eslint.config.js.
+StrictMode остаётся включённым; исправляйте cleanup/lifecycle, а не отключайте его.

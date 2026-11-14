@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Select } from '../src/shared/ui/select';
@@ -30,4 +31,4 @@ function ChoiceForm() {
     <output role="status">{JSON.stringify(entries)}</output>
   </main>;
 }
-createRoot(document.getElementById('root')!).render(<ChoiceForm />);
+createRoot(document.getElementById('root')!).render(<StrictMode><ChoiceForm /></StrictMode>);
