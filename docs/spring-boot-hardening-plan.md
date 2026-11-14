@@ -1,6 +1,6 @@
 # План доработок backend и emulator по Spring Boot
 
-Дата: 14.11.2026. Статус: повторный аудит завершён, реализация не начата.
+Дата: 14.11.2026. Статус: этапы A–E реализованы; общая квалификация и итоговый аудит F выполняются.
 База: `cffcf96cc022d13c5e78221239eca94ef53dc725`, совпадает с GitHub main.
 Рабочий checkout: Firebat1, `/opt/dev/system-integration/.local/structure`.
 

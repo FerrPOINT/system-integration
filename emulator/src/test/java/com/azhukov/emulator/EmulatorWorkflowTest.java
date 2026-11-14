@@ -139,6 +139,35 @@ class EmulatorWorkflowTest {
     }
 
     @Test
+    void missingCursorUsesTheSameProblemContractAsInvalidValues() throws Exception {
+        for (String path:java.util.List.of("/result-events","/result-events?after=-1","/result-events?after=0&limit=101")) {
+            var response=mvc.perform(get(path)).andReturn().getResponse();
+            assertEquals(400,response.getStatus());
+            assertTrue(response.getContentType().startsWith("application/problem+json"));
+            assertEquals("VALIDATION_FAILED",json.readTree(response.getContentAsString()).get("code").asString());
+        }
+        assertEquals(200,mvc.perform(get("/result-events?after=0&limit=100")).andReturn().getResponse().getStatus());
+    }
+
+    @Test
+    void exhaustedPoolIsUnavailableAndTheSameReadRecoversAfterConnectionsReturn() throws Exception {
+        var pool=jdbc.getDataSource().unwrap(com.zaxxer.hikari.HikariDataSource.class);
+        var held=new java.util.ArrayList<java.sql.Connection>();
+        try {
+            for (int n=0;n<pool.getMaximumPoolSize();n++) held.add(pool.getConnection());
+            var response=mvc.perform(get("/result-events?after=0")).andReturn().getResponse();
+            assertEquals(503,response.getStatus());
+            assertTrue(response.getContentType().startsWith("application/problem+json"));
+            assertEquals("UNAVAILABLE",json.readTree(response.getContentAsString()).get("code").asString());
+            assertFalse(response.getContentAsString().contains("JDBC"));
+        } finally {
+            for (var connection:held) connection.close();
+        }
+        assertEquals(200,mvc.perform(get("/result-events?after=0")).andReturn().getResponse().getStatus());
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM operations",Integer.class));
+    }
+
+    @Test
     void invalidQuantityTypesCannotBecomeAnAcceptedOperation() throws Exception {
         for (String quantity : java.util.List.of("25.5", "\"25\"", "null", "0", "1001")) {
             var response = mvc.perform(put("/operations/" + UUID.randomUUID()).contentType("application/json")

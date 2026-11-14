@@ -1,6 +1,11 @@
 package com.azhukov.integration.exchange;
 
 import com.azhukov.integration.client.http.HttpExternalExchangeClient;
+import com.azhukov.integration.config.ExchangeHttpConfiguration;
+import com.azhukov.integration.config.ExchangeHttpProperties;
+import java.net.http.HttpClient;
+import java.time.Duration;
+import org.springframework.util.unit.DataSize;
 import com.azhukov.integration.service.ExchangeCoordinator;
 import com.azhukov.integration.service.ExchangeService;
 import com.azhukov.integration.support.PostgresTest;
@@ -26,7 +31,7 @@ class ResultFeedTest extends PostgresTest {
     void emptyFeedKeepsItsIdleDelayWithoutWritingTheCursor() throws Exception {
         var requests=new AtomicInteger();
         var server=source(requests,new AtomicReference<>("[]"),new AtomicInteger(200));
-        try (var client=new HttpExternalExchangeClient(json,origin(server)); var worker=new ExchangeCoordinator(exchange,client)) {
+        try (var http=transport(server); var worker=new ExchangeCoordinator(exchange,new HttpExternalExchangeClient(http,json,settings(server)))) {
             clearInvocations(observedSql);
             worker.receive();
             worker.receive();
@@ -46,7 +51,8 @@ class ResultFeedTest extends PostgresTest {
         var requests = new AtomicInteger();
         var page = new AtomicReference<>("[{\"cursor\":8},{\"cursor\":7}]");
         var server = source(requests, page, new AtomicInteger(200));
-        try (var client = new HttpExternalExchangeClient(json, origin(server))) {
+        try (var http=transport(server)) {
+            var client=new HttpExternalExchangeClient(http,json,settings(server));
             try (var worker = new ExchangeCoordinator(exchange, client)) {
                 worker.receive();
                 worker.receive();
@@ -71,13 +77,20 @@ class ResultFeedTest extends PostgresTest {
     void temporaryFeedFailureDoesNotAdvanceOrSpin() throws Exception {
         var requests = new AtomicInteger();
         var server = source(requests, new AtomicReference<>("{}"), new AtomicInteger(503));
-        try (var client = new HttpExternalExchangeClient(json, origin(server)); var worker = new ExchangeCoordinator(exchange, client)) {
+        try (var http=transport(server); var worker=new ExchangeCoordinator(exchange,new HttpExternalExchangeClient(http,json,settings(server)))) {
             worker.receive();
             worker.receive();
             assertEquals(1, requests.get());
             assertEquals(0, exchange.cursor());
             assertEquals(0, count("exchange_issues"));
         } finally { server.stop(0); }
+    }
+
+    private static ExchangeHttpProperties settings(HttpServer server) {
+        return new ExchangeHttpProperties(origin(server),Duration.ofSeconds(1),Duration.ofSeconds(2),DataSize.ofKilobytes(256));
+    }
+    private static HttpClient transport(HttpServer server) {
+        return new ExchangeHttpConfiguration().exchangeHttpClient(settings(server));
     }
 
     private HttpServer source(AtomicInteger requests, AtomicReference<String> page, AtomicInteger status) throws Exception {
@@ -93,5 +106,5 @@ class ResultFeedTest extends PostgresTest {
         return server;
     }
 
-    private URI origin(HttpServer server) { return URI.create("http://127.0.0.1:" + server.getAddress().getPort()); }
+    private static URI origin(HttpServer server) { return URI.create("http://127.0.0.1:" + server.getAddress().getPort()); }
 }

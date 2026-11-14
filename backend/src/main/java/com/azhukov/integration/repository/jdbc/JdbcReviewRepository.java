@@ -1,8 +1,6 @@
 package com.azhukov.integration.repository.jdbc;
 
 import com.azhukov.integration.domain.RuleViolation;
-import com.azhukov.integration.domain.exchange.ExchangeState;
-import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.review.*;
 import com.azhukov.integration.repository.ReviewRepository;
 import com.azhukov.integration.json.ContentFingerprint;
@@ -60,18 +58,11 @@ public class JdbcReviewRepository implements ReviewRepository {
             reason,json.writeValueAsString(evidence),id);
     }
 
-    public void observe(ExchangeState state,OperationResult result) {
-        UUID issue=jdbc.queryForObject("""
+    public UUID observationIssue(UUID task) {
+        return jdbc.queryForObject("""
             SELECT id FROM exchange_issues WHERE task_id = ? AND status = 'OPEN' AND kind IN ('PROTOCOL_ERROR','DELIVERY_DELAYED')
             ORDER BY opened_at DESC LIMIT 1
-            """,UUID.class,state.task().id());
-        jdbc.update("""
-            INSERT INTO task_history(id,task_id,operation_id,actor,event_type,summary,details,observed_result,observation_fingerprint)
-            VALUES (?,?,?,'SYSTEM','RESULT_IGNORED','Внешний снимок сохранён как наблюдение до решения оператора',?::jsonb,?::jsonb,?)
-            ON CONFLICT(operation_id,observation_fingerprint) WHERE observation_fingerprint IS NOT NULL DO NOTHING
-            """,UUID.randomUUID(),state.task().id(),result.operationId(),
-            json.writeValueAsString(Map.of("issueId",issue,"resultVersion",result.version())),
-            json.writeValueAsString(result),ContentFingerprint.of(json,result));
+            """,UUID.class,task);
     }
 
     private static final String ISSUE_SELECT = """

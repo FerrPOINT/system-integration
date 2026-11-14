@@ -15,11 +15,8 @@ dependencies {
     implementation 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
 
-    testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'com.tngtech.archunit:archunit:1.5.1'
-    testImplementation 'org.springframework:spring-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
-    testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
@@ -28,12 +25,14 @@ def internalApi = tasks.named('openApiGenerate', GenerateTask) {
 }
 def externalApi = tasks.register('generateExchangeApi', GenerateTask) {
     rootProject.configureContract(delegate, 'external-exchange', 'external')
+    globalProperties.set([models: '', modelDocs: 'false', modelTests: 'false'])
 }
 
 sourceSets.main.java {
     srcDir(internalApi.flatMap { it.outputDir.dir('src/main/java') })
-    srcDir(externalApi.flatMap { it.outputDir.dir('src/main/java') })
 }
+
+sourceSets.test.java.srcDir(externalApi.flatMap { it.outputDir.dir('src/main/java') })
 
 tasks.named('bootJar') {
     archiveFileName = 'system-integration.jar'

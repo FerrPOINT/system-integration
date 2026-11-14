@@ -35,6 +35,13 @@ Java 25 и Spring Boot. Текущая структура пакетов опи�
 
 ## Spring и транзакции
 
+- HTTP transport принадлежит ExchangeHttpConfiguration/ExchangeHttpProperties:
+  один Spring-managed HttpClient, deadline всего тела и bounded чтение байтов.
+  Ошибка размера — ошибка протокола; неопределённый исход PUT требует GET.
+  Единственный SQL-владелец task_history, включая наблюдения, — JdbcTaskRepository;
+  audit-log появляется только после commit реально вставленной записи.
+- Generated MVC API используют useSpringBuiltInValidation. В backend external
+  модели нужны только test source set; у эмулятора external server API остаётся в main.
 - Constructor injection; штатная автоконфигурация Boot. Lombok
   @RequiredArgsConstructor/@Slf4j применяем для простого DI и логирования;
   конструкторы с валидацией/жизненным циклом остаются явными. Domain records

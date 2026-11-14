@@ -1,6 +1,7 @@
 package com.azhukov.integration.repository;
 
 import com.azhukov.integration.domain.Actor;
+import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.BusinessStatus;
 import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.domain.task.Task;
@@ -16,6 +17,7 @@ public interface TaskRepository {
     long countTasks(Actor user, BusinessStatus status, OffsetDateTime from, OffsetDateTime to);
     Task insert(UUID owner, CreateTask input);
     void rename(UUID id, String title, long revision);
+    void observe(Task task, UUID issue, OperationResult result, String summary);
     void history(Task task, UUID actorId, HistoryType type, String summary);
     void history(Task task, UUID actorId, HistoryType type, String summary, Object details);
     List<HistoryEntry> history(UUID id, int page, int size);

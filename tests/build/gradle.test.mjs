@@ -20,12 +20,18 @@ test('Java apps own their task graphs and regenerate only consumers of a changed
       copyFileSync(join(root, name), join(fixture, name));
     }
     cpSync(join(root, 'gradle/wrapper'), join(fixture, 'gradle/wrapper'), { recursive: true });
-    assert.ok(!run(':backend:bootJar', '--dry-run').includes(':emulator:'));
+    const backendJar=run(':backend:bootJar','--dry-run');
+    assert.ok(!backendJar.includes(':emulator:'));
+    assert.ok(!backendJar.includes(':backend:generateExchangeApi'),'Production JAR cannot depend on test-only generation');
+    assert.ok(run(':backend:compileTestJava','--dry-run').includes(':backend:generateExchangeApi'));
     assert.ok(!run(':emulator:bootJar', '--dry-run').includes(':backend:'));
     run(...tasks);
     for (const output of ['backend/build/generated/openapi/internal/src/main/java',
       'backend/build/generated/openapi/external/src/main/java', 'emulator/build/generated/openapi/external/src/main/java'])
       assert.ok(existsSync(join(fixture, output)), output);
+    assert.ok(!existsSync(join(fixture,'backend/build/generated/openapi/external/src/main/java/com/azhukov/integration/contract/external/api')),
+      'Backend needs external models for tests, not unused server interfaces');
+    assert.ok(existsSync(join(fixture,'emulator/build/generated/openapi/external/src/main/java/com/azhukov/integration/contract/external/api/ExchangeApi.java')));
     const unchanged = run(...tasks);
     for (const task of tasks) assert.ok(unchanged.includes('> Task ' + task + ' UP-TO-DATE'), task);
     appendFileSync(join(fixture, 'contracts/external-exchange.openapi.yaml'), '\n# synthetic invalidation probe\n');

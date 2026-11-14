@@ -16,7 +16,8 @@ import org.springframework.stereotype.Service;
 public class ExchangeCoordinator implements AutoCloseable {
     private final ExchangeService tasks;
     private final ExternalExchangeClient client;
-    private final ExecutorService senders = Executors.newFixedThreadPool(4, Thread.ofVirtual().name("delivery-",0).factory());
+    private static final int MAX_IN_FLIGHT=4;
+    private final ExecutorService senders = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("delivery-",0).factory());
     private Instant nextRead = Instant.MIN;
     private int feedFailures;
     private boolean feedPaused;
@@ -27,7 +28,7 @@ public class ExchangeCoordinator implements AutoCloseable {
         boolean exhausted=false;
         try {
             while (!exhausted && claimed<32) {
-                while (pending.size()<4 && claimed<32) {
+                while (pending.size()<MAX_IN_FLIGHT && claimed<32) {
                     var claim=tasks.claim();
                     if (claim==null) { exhausted=true; break; }
                     claimed++;
