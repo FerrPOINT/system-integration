@@ -77,7 +77,7 @@ export function useCollection<T>({ key, page, size, feed, enabled, read, identif
     const old = snapshot.current?.key === storageKey ? snapshot.current.position : undefined;
     // Disable native anchoring on this viewport; adjustment belongs to this controller
     // and works the same way in browsers without CSS scroll anchoring.
-    if (!restoring && old && pages?.length) alignPosition(viewport.current, old);
+    const alignment = !restoring && old && pages?.length ? alignPosition(viewport.current, old) : undefined;
     // Router scroll restoration and the committed DOM must settle before measuring.
     const frame = requestAnimationFrame(() => {
       if (!isCurrentLocation(location) || !viewport.current) return;
@@ -109,7 +109,13 @@ export function useCollection<T>({ key, page, size, feed, enabled, read, identif
         setRestoration({ ...current, phase: 'ready', notice: result === 'restored' ? undefined : changed });
         const position = capturePosition(viewport.current, pages, identify);
         if (position) { snapshot.current = { key: storageKey, position }; writePosition(storageKey, position); }
-      } else capture();
+      } else {
+        if (old && alignment === 'missing') {
+          alignPosition(viewport.current, nearestPosition(old, pages, identify));
+          setRestoration(value => value.key === storageKey && value.notice === changed ? value : { ...current, notice: changed });
+        }
+        capture();
+      }
     });
     return () => cancelAnimationFrame(frame);
   }, [feed, enabled, location, storageKey, pages, identify, restoring, current, saved.position, isError, isFetching, hasNextPage, fetchNextPage, capture]);

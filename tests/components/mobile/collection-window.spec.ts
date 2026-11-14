@@ -148,6 +148,21 @@ test('refetch with a concurrent insertion preserves the visible record and offse
   await expect.poll(async () => Math.abs((await page.locator('[data-record-id="' + anchor.id + '"]').boundingBox())!.y - anchor.top)).toBeLessThan(2);
 });
 
+test('a large concurrent shift reports the unavailable anchor and keeps older records accessible', async ({ page }) => {
+  const state = await server(page, 1000);
+  await page.goto('/tests/collection-window.html'); await ready(page);
+  for (let count = 0; count < 7; count++) await forward(page);
+  const anchor = await visibleAnchor(page); state.front = 120;
+  await page.getByRole('button', { name: 'Обновить', exact: true }).evaluate((button: HTMLButtonElement) => button.click());
+  await expect(page.getByText('Всего: 1120', { exact: true })).toBeVisible(); await ready(page);
+  await expect(page.locator('[data-record-id="' + anchor.id + '"]')).toHaveCount(0);
+  await expect(page.getByText('Список изменился. Позиция восстановлена по доступным записям.', { exact: true })).toBeAttached();
+  expect((await info(page)).cached).toBeLessThanOrEqual(100);
+  for (let count = 0; count < 6; count++) await forward(page);
+  await expect(page.locator('[data-record-id="' + anchor.id + '"]')).toBeAttached();
+  expect((await info(page)).cached).toBeLessThanOrEqual(100);
+});
+
 test('both paging directions stop after an error and retry only the failed read', async ({ page }) => {
   const state = await server(page, 1000);
   await page.goto('/tests/collection-window.html'); await ready(page);
