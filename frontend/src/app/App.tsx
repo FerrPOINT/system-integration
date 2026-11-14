@@ -13,7 +13,9 @@ import { useMediaQuery } from '../ui/use-media-query';
 import { ThemePicker, useThemePreference } from './theme';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, NavLink, Route, Routes } from 'react-router-dom';
-import { clearSession, readSession, csrf, data, keys } from './api';
+import { clearSession, readSession, keys } from './api';
+import { data } from '../shared/api/http';
+import { csrf } from '../shared/api/csrf';
 import { logIn, logOut } from '../../build/generated/openapi/client';
 import type { GetSession200 } from '../../build/generated/openapi/client';
 import { Loading } from '../ui/Feedback';
@@ -43,7 +45,6 @@ function Login({ appearance }: { appearance: ReactNode }) {
   const login = useMutation({
     mutationFn: async (form: FormData) => {
       await data(logIn({ username: String(form.get('username')), password: String(form.get('password')) }, await csrf()));
-      await csrf();
     },
     onSuccess: () => client.invalidateQueries({ queryKey: keys.session }),
   });
@@ -66,7 +67,9 @@ function Login({ appearance }: { appearance: ReactNode }) {
 function Shell({ user, appearance }: { user: GetSession200; appearance: ReactNode }) {
   const mobile = useMediaQuery('(max-width: 760px)');
   const logout = useMutation({
-    mutationFn: async () => { await data(logOut(await csrf())); await csrf(); },
+    // Every write obtains a fresh CSRF token before sending; logout acknowledgement
+    // must clear private state without waiting for another optional token read.
+    mutationFn: async () => { await data(logOut(await csrf())); },
     onSuccess: clearSession,
   });
   const controls = <>{appearance}<div className="account"><span>{user.username}<small>{user.role === 'OPERATOR' ? 'Оператор' : 'Инициатор'}</small></span>

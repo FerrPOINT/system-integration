@@ -8,12 +8,15 @@ import { PageHeader } from '../../ui/page-header';
 import { FormField } from '../../ui/form-field';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
-import { useState } from 'react';
+import { CommandRefresh } from '../../ui/command-refresh';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { getTask, listTaskHistory, renameTask } from '../../../build/generated/openapi/client';
 import type { GetSession200, Task } from '../../../build/generated/openapi/client';
-import { ApiError, csrf, data, keys } from '../../app/api';
+import { keys } from '../../app/api';
+import { ApiError, data } from '../../shared/api/http';
+import { csrf } from '../../shared/api/csrf';
 import { Loading, Pagination, RefreshButton } from '../../ui/Feedback';
 import { useCommandKey } from '../../app/use-command-key';
 import { deliveryLabels, timestamp } from '../../app/format';
@@ -25,9 +28,17 @@ import { useMediaQuery } from '../../ui/use-media-query';
 import { useCollectionQuery } from '../../app/use-collection-query';
 import { useListReturn } from '../../app/use-list-return';
 import { FeedFooter } from '../../ui/feed-footer';
+import { DiscardDialog } from '../../ui/dialog';
+import { useFormNavigationGuard } from '../../shared/lib/forms/use-form-navigation-guard';
 
 export function TaskCard({ user }: { user: GetSession200 }) {
   const { id = '' } = useParams();
+  // A form session belongs to one task, even when both records are already cached.
+  // Revision updates for that same task must preserve its draft and expected revision.
+  return <TaskDetails key={id} id={id} user={user} />;
+}
+
+function TaskDetails({ id, user }: { id: string; user: GetSession200 }) {
   const returnTo = useListReturn('/tasks');
   const task = useQuery({
     queryKey: keys.task(id),
@@ -68,25 +79,36 @@ function RenameForm({ task, onClose }: { task: Task; onClose: () => void }) {
   const client = useQueryClient();
   const command = useCommandKey();
   const [revision] = useState(task.titleRevision);
+  const [dirty, setDirty] = useState(false);
+  const titleInput = useRef<HTMLInputElement>(null);
+  const [initialTitle] = useState(task.title);
+  const refresh = useMutation({ mutationFn: () => client.invalidateQueries({ queryKey: keys.tasks }, { throwOnError: true }) });
+  const refreshTask = () => refresh.mutate(undefined, { onSuccess: onClose });
   const rename = useMutation({
     mutationFn: async (form: FormData) => {
       const input = { title: String(form.get('title')), expectedTitleRevision: revision };
       return data(renameTask(task.taskId, input, { ...await csrf(), 'Idempotency-Key': command.forInput(input) }));
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       // A replayed receipt may be older than the task: read current state after every success.
-      await client.invalidateQueries({ queryKey: keys.tasks }, { throwOnError: true });
-      command.reset(); onClose();
+      command.reset(); guard.release(); refreshTask();
     },
   });
   const conflict = rename.error instanceof ApiError && rename.error.status === 409;
-  return <form className="base-form edit-form" onSubmit={event => { event.preventDefault(); rename.mutate(new FormData(event.currentTarget)); }}>
-    <FormField id="field-title" label="Новое название" required>{attrs => <Input {...attrs} name="title" maxLength={160} pattern=".*\S.*" defaultValue={task.title} autoFocus />}</FormField>
+  const guard = useFormNavigationGuard({ dirty, pending: rename.isPending });
+  return <><form className="base-form edit-form" onSubmit={event => { event.preventDefault(); if (!rename.isPending && !rename.isSuccess) rename.mutate(new FormData(event.currentTarget)); }}>
+    <fieldset className="base-form-fieldset base-form" disabled={rename.isPending || rename.isSuccess}>
+    <FormField id="field-title" label="Новое название" required>{attrs => <Input {...attrs} ref={titleInput} name="title" maxLength={160} pattern=".*\S.*" defaultValue={initialTitle} autoFocus
+      onChange={event => setDirty(event.target.value !== initialTitle)} />}</FormField>
+    </fieldset>
     <ErrorMessage error={rename.error} />
-    <ActionGroup align="start"><Button variant="default" disabled={rename.isPending || conflict}>Сохранить</Button>
-      <Button type="button" onClick={async () => { await client.invalidateQueries({ queryKey: keys.task(task.taskId) }); onClose(); }}>
-        {conflict ? 'Обновить карточку' : 'Отмена'}</Button></ActionGroup>
-  </form>;
+    <CommandRefresh message="Название сохранено." error={refresh.error} pending={refresh.isPending} onRetry={refreshTask} />
+    <ActionGroup align="start">
+      {!rename.isSuccess && <Button variant="default" disabled={rename.isPending || conflict}>Сохранить</Button>}
+      <Button type="button" disabled={rename.isPending} onClick={() => guard.requestClose(conflict ? () => { guard.release(); refreshTask(); } : onClose)}>
+        {conflict ? 'Обновить карточку' : rename.isSuccess ? 'Закрыть' : 'Отмена'}</Button>
+    </ActionGroup>
+  </form><DiscardDialog open={guard.open} returnFocusRef={titleInput} onCancel={guard.cancel} onDiscard={guard.discard} /></>;
 }
 
 function History({ id, canReview, refreshInterval }: { id: string; canReview: boolean; refreshInterval: number | false }) {

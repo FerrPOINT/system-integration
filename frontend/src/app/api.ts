@@ -1,34 +1,7 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
-import { getCsrfToken, getSession } from '../../build/generated/openapi/client';
-import type { Problem, GetSession200, ListTasksParams, IssueStatus } from '../../build/generated/openapi/client';
-
-export class ApiError extends Error {
-  constructor(readonly status: number, readonly problem?: Problem) {
-    const messages: Partial<Record<Problem['code'], string>> = {
-      INVALID_CREDENTIALS: 'Неверный логин или пароль',
-      SERVICE_UNAVAILABLE: 'Сервис временно недоступен. Повторите запрос позже',
-      SESSION_REQUIRED: 'Сессия завершена. Войдите снова',
-      CSRF_INVALID: 'Защитный токен устарел. Повторите действие',
-      ACCESS_DENIED: 'Недостаточно прав для этого действия',
-    };
-    super((problem && messages[problem.code]) || problem?.detail || problem?.title || 'Не удалось выполнить запрос');
-  }
-}
-
-type Response = { status: number; data: unknown };
-type Success<T> = Extract<T, { status: 200 | 201 | 204 }>;
-
-export async function data<T extends Response>(request: Promise<T>): Promise<Success<T>['data']> {
-  const response = await request;
-  if (response.status < 200 || response.status >= 300) {
-    throw new ApiError(response.status, response.data as Problem);
-  }
-  return response.data as Success<T>['data'];
-}
-
-export async function csrf() {
-  return { 'X-CSRF-TOKEN': (await data(getCsrfToken())).token };
-}
+import { getSession } from '../../build/generated/openapi/client';
+import type { GetSession200, ListTasksParams, IssueStatus } from '../../build/generated/openapi/client';
+import { ApiError, data } from '../shared/api/http';
 
 export const keys = {
   session: ['session'] as const,

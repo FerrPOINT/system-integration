@@ -1,5 +1,5 @@
 import { Notice } from '../ui/notice';
-import { ApiError } from './api';
+import { ApiError } from '../shared/api/http';
 
 export function ErrorMessage({ error }: { error: Error | null }) {
   if (!error) return null;

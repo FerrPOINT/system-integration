@@ -15,6 +15,9 @@ export default defineConfig({
       client: 'fetch',
       headers: true,
       clean: true,
+      override: {
+        mutator: { path: './src/shared/api/http.ts', name: 'http' },
+      },
     },
   },
 });

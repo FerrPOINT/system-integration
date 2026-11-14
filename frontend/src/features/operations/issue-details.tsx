@@ -8,12 +8,15 @@ import { FormField } from '../../ui/form-field';
 import { Select } from '../../ui/select';
 import { Textarea } from '../../ui/textarea';
 import { Button } from '../../ui/button';
-import { useState } from 'react';
+import { CommandRefresh } from '../../ui/command-refresh';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { getExchangeIssue, resolveExchangeIssue, retryExchange, takeExchangeIssue } from '../../../build/generated/openapi/client';
 import type { Issue, ResolutionAction, Result } from '../../../build/generated/openapi/client';
-import { csrf, data, keys } from '../../app/api';
+import { keys } from '../../app/api';
+import { data } from '../../shared/api/http';
+import { csrf } from '../../shared/api/csrf';
 import { businessLabels, timestamp } from '../../app/format';
 import { useCommandKey } from '../../app/use-command-key';
 import { Loading, RefreshButton } from '../../ui/Feedback';
@@ -22,6 +25,8 @@ import { useRefreshExchange } from './use-refresh-exchange';
 import { ReconcileButton } from './reconcile-button';
 import { Snapshot } from './exchange-snapshot';
 import { useListReturn } from '../../app/use-list-return';
+import { DiscardDialog } from '../../ui/dialog';
+import { useFormNavigationGuard } from '../../shared/lib/forms/use-form-navigation-guard';
 
 type DecisionAction = 'RETRY' | ResolutionAction;
 
@@ -86,22 +91,25 @@ export function IssueCard() {
 
 function IssueActions({ issue }: { issue: Issue }) {
   const refresh = useRefreshExchange();
+  const update = useMutation({ mutationFn: refresh });
   const command = useCommandKey();
   const take = useMutation({
     mutationFn: async () => {
       const input = { expectedIssueRevision: issue.issueRevision };
       return data(takeExchangeIssue(issue.issueId, input, { ...await csrf(), 'Idempotency-Key': command.forInput({ id: issue.issueId, input }) }));
     },
-    onSuccess: async () => { await refresh(); command.reset(); },
+    onSuccess: () => { command.reset(); update.mutate(undefined, { onSuccess: () => take.reset() }); },
   });
   const decisions = issue.allowedActions.filter((action): action is DecisionAction => action === 'RETRY' || action === 'APPLY_EXTERNAL_RESULT' || action === 'ACKNOWLEDGE_DIFFERENCE');
   return <div className="base-page-stack">
     {issue.allowedActions.some(action => action === 'TAKE_OWNERSHIP' || action === 'RECONCILE') && <ActionGroup align="start">
-      {issue.allowedActions.includes('TAKE_OWNERSHIP') && <Button onClick={() => take.mutate()} disabled={take.isPending}>
+      {issue.allowedActions.includes('TAKE_OWNERSHIP') && <Button onClick={() => take.mutate()} disabled={take.isPending || take.isSuccess}>
         {take.isPending ? 'Сохраняем…' : issue.assignedTo ? 'Перенять разбор' : 'Взять разбор'}</Button>}
       {issue.taskId && issue.allowedActions.includes('RECONCILE') && <ReconcileButton taskId={issue.taskId} />}
     </ActionGroup>}
     <ErrorMessage error={take.error} />
+    <CommandRefresh message="Ответственный назначен." error={update.error} pending={update.isPending}
+      onRetry={() => update.mutate(undefined, { onSuccess: () => take.reset() })} />
     {decisions.length > 0 ? <DecisionForm issue={issue} actions={decisions} /> :
       <Notice appearance="inline">{issue.taskId
         ? 'Чтобы принять решение, выполните свежую сверку. Автоматические попытки приостановленной доставки не возобновляются без решения оператора.'
@@ -112,8 +120,13 @@ function IssueActions({ issue }: { issue: Issue }) {
 function DecisionForm({ issue, actions }: { issue: Issue; actions: DecisionAction[] }) {
   const [action, setAction] = useState<DecisionAction | ''>('');
   const [reason, setReason] = useState('');
+  const reasonInput = useRef<HTMLTextAreaElement>(null);
   const command = useCommandKey();
   const refresh = useRefreshExchange();
+  const update = useMutation({ mutationFn: refresh });
+  const refreshDecision = () => update.mutate(undefined, {
+    onSuccess: () => { decide.reset(); setReason(''); setAction(''); },
+  });
   const decide = useMutation({
     mutationFn: async () => {
       if (!action || !actions.includes(action)) throw new Error('Выберите доступное действие');
@@ -123,21 +136,23 @@ function DecisionForm({ issue, actions }: { issue: Issue; actions: DecisionActio
       if (action === 'RETRY') return data(retryExchange(issue.issueId, input, headers));
       return data(resolveExchangeIssue(issue.issueId, { ...input, reconciliationId: issue.latestReconciliationId, action }, headers));
     },
-    onSuccess: async () => { await refresh(); command.reset(); setReason(''); setAction(''); },
+    onSuccess: () => { command.reset(); guard.release(); refreshDecision(); },
   });
-  return <form aria-label="Решение оператора" aria-busy={decide.isPending} onSubmit={event => { event.preventDefault(); decide.mutate(); }}>
-    <fieldset className="base-form-fieldset base-form" disabled={decide.isPending}>
+  const guard = useFormNavigationGuard({ dirty: Boolean(action || reason), pending: decide.isPending });
+  return <><form aria-label="Решение оператора" aria-busy={decide.isPending} onSubmit={event => { event.preventDefault(); if (!decide.isPending && !decide.isSuccess) decide.mutate(); }}>
+    <fieldset className="base-form-fieldset base-form" disabled={decide.isPending || decide.isSuccess}>
     <FormField id="decision-action" label="Действие" required>{attrs => <Select {...attrs} value={action} placeholder="Выберите действие"
-      onValueChange={value => setAction(value as DecisionAction)} options={actions.map(value => ({ value, label: actionLabels[value] }))} />}</FormField>
+      onValueChange={value => { guard.protect(); setAction(value as DecisionAction); }} options={actions.map(value => ({ value, label: actionLabels[value] }))} />}</FormField>
     {action === 'RETRY' && <Notice appearance="inline">Обмен продолжится с тем же ID операции и исходным запросом.</Notice>}
     {action === 'APPLY_EXTERNAL_RESULT' && <Notice appearance="inline">Результат последней сверки будет применён к заданию, разбор завершится.</Notice>}
     {action === 'ACKNOWLEDGE_DIFFERENCE' && <Notice>Локальный результат сохранится. Если доставка приостановлена, она будет окончательно остановлена.</Notice>}
-    <FormField id="decision-reason" label="Причина решения" required hint="До 500 символов. Укажите, что проверили и почему выбрали это действие.">{attrs => <Textarea {...attrs} value={reason} maxLength={500} rows={3} onChange={event => setReason(event.target.value)} />}</FormField>
+    <FormField id="decision-reason" label="Причина решения" required hint="До 500 символов. Укажите, что проверили и почему выбрали это действие.">{attrs => <Textarea {...attrs} ref={reasonInput} value={reason} maxLength={500} rows={3} onChange={event => { guard.protect(); setReason(event.target.value); }} />}</FormField>
     <ErrorMessage error={decide.error} />
     <Button variant="default" disabled={decide.isPending || !reason.trim() || !action || !actions.includes(action)}>
       {decide.isPending ? 'Сохраняем решение…' : action ? actionLabels[action] : 'Применить решение'}</Button>
     </fieldset>
-  </form>;
+    <CommandRefresh message="Решение сохранено." error={update.error} pending={update.isPending} onRetry={refreshDecision} />
+  </form><DiscardDialog open={guard.open} returnFocusRef={reasonInput} onCancel={guard.cancel} onDiscard={guard.discard} /></>;
 }
 
 function ReceivedResult({ value }: { value: Result }) {
