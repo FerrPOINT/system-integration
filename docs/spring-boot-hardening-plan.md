@@ -1,8 +1,9 @@
 # План доработок backend и emulator по Spring Boot
 
 Дата: 14.11.2026. Статус: A–F выполнены и проверены. Квалифицированный код — f891edb;
-результаты — в docs/current-stage.md. Merge и публичный deploy не выполнялись.
-База: `cffcf96cc022d13c5e78221239eca94ef53dc725`, совпадает с GitHub main.
+PR #4 слит, main ac5c207 установлен на публичное демо и прошёл live-приёмку.
+Результаты квалификации и выпуска — в [текущей стадии](current-stage.md).
+База исходного аудита: `cffcf96cc022d13c5e78221239eca94ef53dc725`.
 Рабочий checkout: Firebat1, `/opt/dev/system-integration/.local/structure`.
 
 ## 1. Вывод и границы
