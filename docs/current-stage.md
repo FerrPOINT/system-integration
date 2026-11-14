@@ -13,7 +13,12 @@ Spotless 8.11.0 / google-java-format 2.0.0 (AOSP, 4 пробела, 120 коло
 Format-on-save выключен, enforceCheck=false не добавляет проверку текущего
 стиля к Gradle check. Команды будущего общего прохода описаны в README;
 новых CI/hooks нет. Текущие исходники не требуется форматировать для сборки.
-Настройки проверяются без перезаписи файлов. Публичный runtime — 2e97ce4.
+Проверены закреплённый Prettier на строке в памяти, ignore generated/results/lockfile,
+выключенный format-on-save и dry-run граф check/bootJar обоих backend без formatter tasks.
+Diff относительно main содержит ровно 12 файлов настроек/docs/lockfile; Java/TS/JS/CSS,
+тесты, SQL, контракты и Dockerfiles не меняются. Существующие frontend scripts,
+runtime/dev dependencies, кроме добавленного Prettier, сохранены.
+Публичный runtime — 2e97ce4.
 
 ### Публичная квалификация 14 ноября
 
