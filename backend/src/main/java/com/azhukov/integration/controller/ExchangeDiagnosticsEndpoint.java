@@ -22,8 +22,11 @@ public class ExchangeDiagnosticsEndpoint {
     private final boolean enabled;
 
     public ExchangeDiagnosticsEndpoint(ExchangeCoordinator coordinator,ExchangeService exchange,
-                                       @Value("${si.exchange.enabled:true}") boolean enabled) {
-        this.coordinator=coordinator;this.exchange=exchange;this.enabled=enabled;
+                                       @Value("${si.exchange.enabled:true}") String enabled) {
+        // ConditionalOnProperty matches only these literals; Boolean conversion also accepts yes/on/1.
+        if (!"true".equalsIgnoreCase(enabled) && !"false".equalsIgnoreCase(enabled))
+            throw new IllegalArgumentException("si.exchange.enabled must be true or false");
+        this.coordinator=coordinator;this.exchange=exchange;this.enabled=Boolean.parseBoolean(enabled);
     }
 
     public record Diagnostics(Instant observedAt,boolean workerEnabled,

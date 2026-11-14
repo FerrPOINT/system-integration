@@ -41,6 +41,8 @@ unavailableReads/invalidPages/inFlight и deliveryQueue operations/oldestCreated
 Очередь читается один раз по запросу и включает parked deliveries; это не всё
 business pending. Возраст oldestCreatedAt считается относительно observedAt.
 Feed counters локальны процессу; restart их обнуляет, а очередь остаётся в БД.
+si.exchange.enabled поддерживает true/false без учёта регистра; неоднозначные
+aliases yes/on/1 и ошибочные значения явно отклоняются при старте.
 Readiness зависит от приложения/БД, не от доступности исполнителя.
 
 API возвращает серверный X-Request-ID; caller ID игнорируется. Ошибки HTTP

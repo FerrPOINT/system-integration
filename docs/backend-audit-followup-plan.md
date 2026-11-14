@@ -38,7 +38,9 @@ create/rename и разрешённых retry/resolve; нет частичных
 BA-03: ошибочные ответы, корректный соседний случай, исторические snapshots,
 тот же/different fingerprint, потеря ответа и bounded body.
 BA-04: ошибка/успех/rollback, разные запросы, clearing MDC, нет секретов.
-BA-05: пустая/занятая очередь, paused/unavailable/recovered feed, запрет
+BA-05: si.exchange.enabled принимает только true/false, точно совпадая с
+ConditionalOnProperty; неподдерживаемые aliases отклоняются. Пустая/занятая
+очередь, paused/unavailable/recovered feed, запрет
 инициатору и anonymous; readiness не зависит от доступности исполнителя.
 BA-06: управляемый concurrent commit между SELECT, без sleep-зависимой гонки.
 BA-08: точная версия PostgreSQL и image labels, все ошибки и пропуски
