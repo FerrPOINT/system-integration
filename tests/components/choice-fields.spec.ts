@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { selectChoice } from './support';
+import { selectChoice } from '../e2e/support';
 
 test.beforeEach(async ({ page }) => { await page.goto('/tests/choice-form.html'); });
 
