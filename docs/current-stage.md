@@ -1,20 +1,34 @@
 # Текущая стадия
 
-## Основание React — итоговая квалификация выполняется
+## Основание React — локальная квалификация пройдена
 
-Ветка `feat/frontend-foundation`, база main `5aa1c06`. Локальная среда —
-`C:/git/azhukov/mini-crm/system-integration`, Vite `127.0.0.1:19673` и отдельный
-Compose `system-integration-load`. Выполнены исходные этапы FR-00–FR-11
-[плана](frontend-refactoring-plan.md); FR-12 остаётся открытым до полного gate,
-IAB, проверки runtime inputs и публикации ветки/PR. Исторические результаты
-ниже не являются приёмкой нового frontend-кандидата. Merge/deploy не поручены.
+Ветка `feat/frontend-foundation`, база main `5aa1c06`, квалифицированный код —
+`9b81bdc`. Выполнены FR-00–FR-11 [плана](frontend-refactoring-plan.md);
+исходники подготовлены в [PR #8](https://github.com/FerrPOINT/system-integration/pull/8), FR-12 закрыт. Последующие изменения документации не меняют
+квалифицированные runtime inputs. Merge и public deployment не выполнялись.
 
-Предметный код разделён на auth/tasks/operations с api/model/ui, общие
-механизмы — shared, композиция — app. Scoped проверки подтвердили сохранение
-черновиков, разделение receipt/read errors, guard, stale operator basis,
-lazy/error recovery и StrictMode. Мобильное окно ограничено 100 записями;
-полный проход по 5000, обратная загрузка, Back после GC и polling бюджет проходят.
-Итоговые counts и ручная приёмка будут зафиксированы после единого прогона.
+| Проверка | Свежий результат финального кода |
+| --- | --- |
+| Production frontend | Orval, полный ESLint React/Query/import/cycle, strict TypeScript и Vite build проходят. Экраны имеют отдельные lazy chunks. |
+| Unit / assets | 56 unit и 2 проверки production JS/CSS проходят. Test fixtures отсутствуют в payload, gzip распаковывается в точные исходные assets. |
+| Components | 85 checks под StrictMode: формы, receipt/read recovery, frozen decision basis, guard/focus/reload, route/chunk fallback и bounded feeds; failed/flaky/skipped = 0. |
+| Прикладной UI | Все 74 desktop/mobile сценария на реальном локальном API проходят; failed/flaky/skipped = 0. Отменённые StrictMode GET учитываются отдельно, polling по-прежнему проверяется точной дельтой запросов. |
+| Ленты | 20/100/1000/5000, полный проход 250 страниц/5000 записей, максимум 5 retained pages/100 DOM/cache записей и 5 GET на refetch/poll. Back после GC, оба направления и ошибки проверены. |
+| IAB | Native 1330×1244, 320/348/390 px и 390×480: реестры, detail/history/saved reconciliation, ошибка чтения, auth/roles, dirty modal/discard/focus, меню/фильтры и длинная лента. Стабильный Back сохранил позицию с delta 0. |
+| Served source | Все 96 TS/TSX/CSS файлов, отдаваемые Vite на 127.0.0.1:19673, совпали с диском и Git-кандидатом по содержимому и SHA-256. |
+| Локальный runtime | Изолированные backend/emulator пересобраны из включённой базы, image revision b904595; их Java/contracts/build inputs совпадают с 9b81bdc. Оба readiness endpoint возвращают UP. Это не новый полный Java/NF08 gate. |
+| Данные | После прогона удалено 457 созданных им фикстур по замороженным UUID; хеши всех остальных строк затронутых таблиц обеих БД совпали до/после. Сохранены 706 заданий/705 операций; immutable audit triggers включены. |
+
+Проверки выполнялись только в локальном workspace и system-integration-load.
+Финальные отчёты и снимки — `tests/results/frontend-foundation-final/` (ignored).
+Код разделён на app → features/{auth,tasks,operations} → shared; заменённые
+пути удалены, границы проверяет ESLint. Данные принадлежат Query, URL — фильтрам,
+form session — конкретной записи, auth policy — смене identity/private cache.
+
+При IAB-приёмке закреплены две дополнительные регрессии: body min-width больше
+доступной ширины с классическим scrollbar и массовый offset shift за retained
+окно. Первая устранена; во втором случае показывается явное сообщение и
+сохраняется доступ к старым записям. Offset API не гарантирует строгий live snapshot.
 
 ## Spring Data JDBC — выполнено
 

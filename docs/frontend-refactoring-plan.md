@@ -1,77 +1,34 @@
 # План доработки архитектуры frontend
 
-Статус: **реализация начата, итоговая квалификация не выполнена**.
-Основание — [архитектурный аудит от 14 ноября 2026](frontend-architecture-audit-2026-11-14.md).
-Исходная ревизия — main `6c335b65c82e35d5bfc95cb5c4d07ac4895618f8`.
-Перед выполнением повторно сверить HEAD, инструкции и изменения после этой ревизии.
+Статус: **FR-00–FR-12 и FA-01–FA-11 выполнены и проверены**.
+Исходники — [PR #8](https://github.com/FerrPOINT/system-integration/pull/8); квалифицированный код `9b81bdc`.
+Основание — [аудит от 14 ноября 2026](frontend-architecture-audit-2026-11-14.md).
+Исходный main — `6c335b65c82e35d5bfc95cb5c4d07ac4895618f8`;
+в ветку `feat/frontend-foundation` включён актуальный main `5aa1c06`.
+Backend/OpenAPI в этой работе не изменяются. Среда — локальный Vite 19673
+и отдельный Compose system-integration-load, без public deployment.
 
-Текущая ветка: `feat/frontend-foundation`. Промежуточные результаты:
+| Этап | Реализованный результат | Постоянное доказательство |
+| --- | --- | --- |
+| FR-00 | Совместимый lint toolchain, раздельный discovery | lint-toolchain.test.mjs, components.config.ts и playwright.config.ts. |
+| FR-01 | Form session по taskId, revision той же записи сохраняет draft | task-identity.spec.ts: cold/warm A/B, равные revision и same-ID refetch. |
+| FR-02 | Единственный Orval mutator, сохранённый HTTP status и AbortError | frontend/tests/api-client.test.mjs и http-boundary.test.mjs. |
+| FR-03 | Receipt и follow-up reads разделены | command-outcome.spec.ts: create/rename/reconcile/take/decision, auth и неизвестный исход. |
+| FR-04 | Root/route error boundaries с безопасным восстановлением | error-boundary.spec.ts и реальные lazy routes в command-outcome.spec.ts. |
+| FR-05 | Общий dirty/pending/navigation/reload guard | task-identity.spec.ts, command-outcome.spec.ts и task-modal.spec.ts. |
+| FR-06 | app/features/shared, auth policy и per-provider QueryClient | eslint.config.js с положительными/отрицательными boundary fixtures. |
+| FR-07 | tasks: api/model/ui, формы/история/фильтры/presenters | task-search.test.mjs, refresh-interval.test.mjs и прикладные UI specs. |
+| FR-08 | operations: api/model/ui, frozen decision basis и узкая инвалидация | exchange-boundaries.test.mjs и command-outcome.spec.ts. |
+| FR-09 | Одно типизированное дерево маршрутов, React.lazy и Suspense | Direct URL, role/not-found/chunk recovery; build создаёт отдельные chunks экранов. |
+| FR-10 | React/Query/import/cycle gates, strict TS и StrictMode | Десять lint probes, обычный build и все component fixtures под StrictMode. |
+| FR-11 | maxPages=5, до 100 записей, previous pages и record anchor | collection-window.spec.ts, feed-position.test.mjs и collection-projection.test.mjs. |
+| FR-12 | Итоговый gate, runtime/source parity, IAB, документация и PR | 85 component / 74 E2E / 56 unit / 2 assets и IAB; результаты в current-stage. |
 
-- FR-00: каталоги component/E2E разделены; discovery сохранил 74 и 10 исходных
-  проверок. Совместимость lint подтверждена тремя положительными/отрицательными
-  probe tests, peer conflicts отсутствуют.
-- FR-01: ошибка сначала воспроизведена постоянным тестом на исходном коде;
-  граница по taskId исправлена. Восемь новых component checks прошли в двух профилях.
-- FR-02: Orval использует один mutator; старые HTTP/CSRF определения удалены,
-  потребители переведены. Typecheck и 32 проверки клиента/транспорта прошли.
-  Проверка политики 401 и всех пользовательских сценариев остаётся в итоговом gate.
-- FR-03: у записи и последующей актуализации отдельные observable операции;
-  16 component checks подтвердили create/rename/reconcile/take/decision,
-  повтор неизвестного исхода и login/logout на двух профилях. CSRF получается
-  перед каждой следующей командой; лишний post-auth GET убран из её подтверждения.
-- FR-04: корневой fallback подключён; regression fixture проверяет обычные
-  ошибки и отказ lazy-компонента — 10 component checks прошли.
-  Интеграция вложенной границы ожидает FR-09.
-- FR-05: один общий navigation guard применён к трём формам; проверены local
-  cancel, route departure/discard, focus, pending, reload и same-ID параметры.
-  Расширенные task/command specs: 32 проверки прошли вместе, две проверки
-  native reload прошли отдельным повтором после исправления ожидания в runner.
-  Полная интеграция с новым router и правилами operator capabilities ещё впереди.
-- FR-06: общие UI/стили/helpers перенесены в shared, auth policy и команды —
-  в features/auth; QueryClient создаётся providers, без глобального экземпляра.
-  Предметные key factories выделены раньше FR-07/FR-08, app/api.ts удалён.
-  Typecheck, scoped lint и 34 component checks прошли после переноса.
-- FA-10: generic collection page и memo projection отделены от query proxy
-  уже при переносе в shared; все три потребителя обновлены. Проверка pure projection
-  проходит. Ограничение окна, нагрузка и интегрированные проверки остаются в FR-11.
-- FR-07: tasks разделён на api/model/ui; формы, история, фильтры и представление
-  реестра имеют отдельные точки поиска. Query options и инвалидация принадлежат API,
-  URL parser и режим списка — model. Все 34 затронутые component checks прошли
-  после переноса; scoped lint/typecheck и пять parser/polling tests зелёные.
-- CSS перенесён из shell к tasks/operations/auth и общим layout primitives.
-  Статическое сравнение PostCSS с предыдущим коммитом подтвердило сохранение
-  всех 147 пар selector/media/declarations. Это не заменяет итоговую визуальную проверку.
-- FR-08: operations разделён на api/model/ui с узким публичным действием сверки.
-  Инвалидация использует taskId/issueId квитанции и списки, не затрагивая чужие
-  detail или неизменяемые saved snapshots; global issue не обновляет tasks.
-  Draft basis фиксируется при начале ввода, обновляется только явным действием,
-  а закрытие разбора извне сохраняет черновик до discard. Scoped lint/typecheck,
-  три unit boundaries и 22 component checks прошли; итоговая приёмка впереди.
-- FR-09: один Route Object tree заменил descendant Routes; auth gate передаёт
-  readonly session, modal context типизирован, экраны используют React.lazy.
-  26 checks команд/пагинационной навигации и 10 новых проверок render/chunk
-  recovery, direct URL, role gates и not-found прошли. Отдельные build chunks,
-  фокус/Back и поведение с реальным backend подтверждаются в FR-12.
-- FR-10: стандартные React recommended/Query rules, TS import/cycle и layer
-  boundaries включены в обычный build. Десять positive/negative lint tests
-  проверяют реальные TS cycles, public contracts и API boundary, в том числе
-  dynamic imports. Lint/typecheck без suppressions проходят; peer conflicts нет.
-  StrictMode включён в приложении и fixtures: 48 state/command и 10 primitive/
-  pagination checks прошли. Финальная интегрированная проверка ещё не выполнена.
-- FR-11: useCollection ограничивает Query cache и DOM пятью страницами/100 записями;
-  сохранён previous page и доступ к вытесненной области. Профили реестра и polling
-  истории 20/100/1000/5000 проходят; полный проход 5000 записей прочитал 250 страниц
-  без пропусков и повторных загрузок следующих страниц. Refetch читает максимум
-  пять страниц. Проверены Back после GC, конкурентная вставка, удаление anchor,
-  сокращение списка, ошибки обоих направлений/восстановления, недоступный storage
-  и viewport высотой 2600 px. Scoped lint/typecheck и четыре unit checks проходят.
-- FR-12: обязательная итоговая квалификация ещё не завершена. Полный build/test gate,
-  IAB и публикация итогового кандидата ещё не выполнены.
-
-После fetch origin/main обнаружена новая база `5aa1c06` (девять коммитов после
-исходной ревизии): Spring Data read adapters и документация. Изменений frontend
-и OpenAPI нет. Эта база включается в task branch перед структурным переносом;
-соответствие итогового локального runtime проверяется отдельно в FR-12.
+Итоговый код дополнительно устраняет два воспроизведённых при IAB-приёмке случая:
+жёсткий body min-width при классическом scrollbar на 320 px и отсутствие
+сообщения, когда массовая вставка сместила record ID за retained offset-окно.
+Оба закреплены RED/GREEN регрессиями; соседний случай небольшой вставки
+сохраняет ID/offset, а вытесненная запись остаётся доступна при дальнейшем scroll.
 
 Выбор lint: Babel парсит TSX без compiler API TypeScript, а существующий tsc
 проверяет типы на 7.0.2. React/Query/import правила остаются стандартными plugins.
@@ -685,7 +642,7 @@ shared/ui/feed-footer, mobile-feed/adaptive-pagination/refresh E2E
 
 ## 5. Матрица закрытия аудита
 
-| Замечание | Этапы | Обязательное доказательство |
+| Замечание | Этапы | Подтверждённое доказательство |
 | --- | --- | --- |
 | FA-01 | FR-01, FR-05 | Тёплые A/B, разные/равные revisions, refetch той же записи, discard и команда правильного ID. |
 | FA-02 | FR-04, FR-09 | Исключение/failed chunk, контролируемый fallback и восстановление без потери Shell. |

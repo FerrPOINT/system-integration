@@ -58,3 +58,8 @@ build/test gate выполняется на интегрированном эт�
 разрешены, generated requests принадлежат API, а URL parser получает только
 канонический BusinessStatus enum. Narrow public paths закреплены в eslint.config.js.
 StrictMode остаётся включённым; исправляйте cleanup/lifecycle, а не отключайте его.
+
+На узком экране проверяйте scrollWidth относительно documentElement.clientWidth:
+innerWidth включает классический scrollbar. Не задавайте body жёсткий минимум,
+который превышает доступную ширину. UI-19 покрывает 305 px содержимого для
+320 px viewport с полосой; ручная IAB-приёмка проверяет настоящий scrollbar.

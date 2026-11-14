@@ -127,7 +127,7 @@ P1 — исправить до дальнейшего расширения по�
 
 ### FA-01. Идентичность формы не следует за идентичностью задания
 
-**Источник:** [task-details.tsx](../frontend/src/features/tasks/task-details.tsx),
+**Источник:** [task-details.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/tasks/task-details.tsx),
 строки 29–84: TaskCard хранит editing, RenameForm получает изменяемый task,
 но фиксирует revision через useState и заполняет uncontrolled input через
 defaultValue. Ключа по taskId на предметной границе нет.
@@ -182,10 +182,10 @@ ErrorBoundary/errorElement; ErrorMessage отображает ошибки за�
 
 ### FA-03. Успех команды зависит от последующего сетевого чтения
 
-**Источники:** [task-create.tsx](../frontend/src/features/tasks/task-create.tsx):27,
-[task-details.tsx](../frontend/src/features/tasks/task-details.tsx):76,
-[reconcile-button.tsx](../frontend/src/features/operations/reconcile-button.tsx):16,
-[use-refresh-exchange.ts](../frontend/src/features/operations/use-refresh-exchange.ts):6.
+**Источники:** [task-create.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/tasks/task-create.tsx):27,
+[task-details.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/tasks/task-details.tsx):76,
+[reconcile-button.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/operations/reconcile-button.tsx):16,
+[use-refresh-exchange.ts](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/operations/use-refresh-exchange.ts):6.
 В onSuccess ожидаются fetchQuery и/или invalidateQueries с throwOnError.
 Очистка формы, receipt/key и переход выполняются после этих чтений.
 
@@ -207,7 +207,7 @@ ErrorBoundary/errorElement; ErrorMessage отображает ошибки за�
 ### FA-04. Ошибка декодирования теряет транспортную семантику
 
 **Источники:** [orval.config.ts](../frontend/orval.config.ts),
-[api.ts](../frontend/src/app/api.ts):21–24,67–76; generated getTask декодирует
+[api.ts](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/app/api.ts):21–24,67–76; generated getTask декодирует
 JSON.parse до возврата status. Generated-файл является результатом, не местом
 ручного исправления.
 
@@ -229,10 +229,10 @@ HTTP-ответ, expireSession видит только ошибки ApiError(401
 
 ### FA-05. app — одновременно верхний и нижний слой
 
-**Источники:** [api.ts](../frontend/src/app/api.ts),
-[use-collection-query.ts](../frontend/src/app/use-collection-query.ts),
-[task-list.tsx](../frontend/src/features/tasks/task-list.tsx),
-[feed-footer.tsx](../frontend/src/ui/feed-footer.tsx):2.
+**Источники:** [api.ts](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/app/api.ts),
+[use-collection-query.ts](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/app/use-collection-query.ts),
+[task-list.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/tasks/task-list.tsx),
+[feed-footer.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/ui/feed-footer.tsx):2.
 
 В app/api.ts находятся transport errors/data(), CSRF, ключи всех предметных
 областей, session lifecycle и QueryClient. Features делают 34 относительных
@@ -295,9 +295,9 @@ cleanup, а не отключая проверки ради прежнего ч�
 
 ### FA-08. Жизненный цикл изменяемых форм не согласован
 
-**Источники:** [task-create.tsx](../frontend/src/features/tasks/task-create.tsx):35–43,
-[issue-details.tsx](../frontend/src/features/operations/issue-details.tsx):112–140,
-[task-details.tsx](../frontend/src/features/tasks/task-details.tsx):82–88.
+**Источники:** [task-create.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/tasks/task-create.tsx):35–43,
+[issue-details.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/operations/issue-details.tsx):112–140,
+[task-details.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/tasks/task-details.tsx):82–88.
 
 NewTask защищает dirty/pending через useBlocker/useBeforeUnload и блокирует
 поля. DecisionForm хранит причину и действие, но не защищает навигацию/перезагрузку,
@@ -316,9 +316,9 @@ NewTask защищает dirty/pending через useBlocker/useBeforeUnload и 
 
 ### FA-09. У бесконечной истории отсутствует бюджет перечитывания
 
-**Источники:** [use-collection-query.ts](../frontend/src/app/use-collection-query.ts):12–27,
-[task-details.tsx](../frontend/src/features/tasks/task-details.tsx):92–97 и
-[refresh-interval.ts](../frontend/src/features/tasks/refresh-interval.ts).
+**Источники:** [use-collection-query.ts](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/app/use-collection-query.ts):12–27,
+[task-details.tsx](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/tasks/task-details.tsx):92–97 и
+[refresh-interval.ts](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/features/tasks/refresh-interval.ts).
 История опрашивается каждые 3 или 10 секунд. Infinite query хранит все страницы
 и при refetch последовательно перечитывает их. В изолированной пробе пять
 загруженных страниц дали пять чтений на один refetch. Это подтверждённая модель
@@ -337,7 +337,7 @@ Map по ID убирает дубликат на границе offset-стра�
 
 ### FA-10. Общий wrapper несёт лишнюю связь с предметным DTO
 
-**Источник:** [use-collection-query.ts](../frontend/src/app/use-collection-query.ts):2–5,25–27.
+**Источник:** [use-collection-query.ts](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/app/use-collection-query.ts):2–5,25–27.
 Универсальная коллекция описана через Omit<HistoryPage, 'items'>, хотя обслуживает
 и задачи, и разборы. Возвращается spread всего query result, а массив строится
 заново при каждом вызове.
@@ -353,8 +353,8 @@ Map по ID убирает дубликат на границе offset-стра�
 
 ### FA-11. Оформление feature-экранов принадлежит app/styles.css
 
-**Источники:** [styles.css](../frontend/src/app/styles.css):28–75,110–169,
-[patterns.css](../frontend/src/ui/patterns.css). Общие tokens/controls отделены
+**Источники:** [styles.css](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/app/styles.css):28–75,110–169,
+[patterns.css](https://github.com/FerrPOINT/system-integration/blob/6c335b65c82e35d5bfc95cb5c4d07ac4895618f8/frontend/src/ui/patterns.css). Общие tokens/controls отделены
 и происхождение Base документировано — это стоит сохранить. Но файл оболочки
 также управляет task/issue tables, snapshots, фильтрами, историей и мобильной
 композицией всех сценариев.
