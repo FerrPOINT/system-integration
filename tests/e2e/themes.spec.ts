@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, selectChoice } from './support';
+import { login, openAccountMenu, selectChoice } from './support';
 
 const themeLabels: Record<string, string> = { dark: 'Тёмная', light: 'Светлая', gray: 'Серая' };
 const key = 'system-integration.theme';
@@ -40,7 +40,9 @@ test('UI-02: theme survives navigation and logout, synchronizes tabs and preserv
   const picker = page.getByRole('combobox', { name: 'Цветовая тема', exact: true });
   await selectChoice(page, 'Цветовая тема', themeLabels['gray']);
   await login(page);
+  await openAccountMenu(page);
   await expect(picker).toHaveAttribute('data-value', 'gray');
+  if (info.project.name === 'mobile') await page.keyboard.press('Escape');
   if (info.project.name === 'mobile') {
     const brand = await page.locator('.app-header > .brand-link').boundingBox();
     expect(brand!.width).toBeGreaterThan(150);
@@ -60,14 +62,15 @@ test('UI-02: theme survives navigation and logout, synchronizes tabs and preserv
   try {
     await other.goto('/tasks');
     await selectChoice(other, 'Цветовая тема', themeLabels['light']);
-    await expect(page.locator('#theme-choice')).toHaveAttribute('data-value', 'light');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     await expect(page.getByLabel('Название *', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');
     await selectChoice(other, 'Цветовая тема', 'Тёмная');
-    await expect(page.locator('#theme-choice')).toHaveAttribute('data-value', 'dark');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect(page.getByLabel('Название *', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');
   } finally { await other.close(); }
   await page.getByRole('button', { name: 'Отмена', exact: true }).click();
   await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
+  await openAccountMenu(page);
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
   await expect(picker).toHaveAttribute('data-value', 'dark');

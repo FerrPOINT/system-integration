@@ -6,7 +6,10 @@ import { FormField } from '../ui/form-field';
 import { Brand } from './Brand';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
-import type { ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import { Menu } from 'lucide-react';
+import { Dialog } from '../ui/dialog';
+import { useMediaQuery } from '../ui/use-media-query';
 import { ThemePicker, useThemePreference } from './theme';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, NavLink, Route, Routes } from 'react-router-dom';
@@ -61,18 +64,20 @@ function Login({ appearance }: { appearance: ReactNode }) {
 }
 
 function Shell({ user, appearance }: { user: GetSession200; appearance: ReactNode }) {
+  const mobile = useMediaQuery('(max-width: 760px)');
   const logout = useMutation({
     mutationFn: async () => { await data(logOut(await csrf())); await csrf(); },
     onSuccess: clearSession,
   });
+  const controls = <>{appearance}<div className="account"><span>{user.username}<small>{user.role === 'OPERATOR' ? 'Оператор' : 'Инициатор'}</small></span>
+    <Button onClick={() => logout.mutate()} disabled={logout.isPending}>Выйти</Button></div></>;
   return <div className="app-shell">
     <a className="skip-link" href="#main">К содержимому</a>
     <header className="app-header">
       <Link to="/tasks" className="brand-link"><Brand /></Link>
       <nav className="main-nav" aria-label="Основная навигация"><NavLink to="/tasks">Задания</NavLink>
         {user.role === 'OPERATOR' && <NavLink to="/issues">Разбор обмена</NavLink>}</nav>
-      <div className="header-controls">{appearance}<div className="account"><span>{user.username}<small>{user.role === 'OPERATOR' ? 'Оператор' : 'Инициатор'}</small></span>
-        <Button onClick={() => logout.mutate()} disabled={logout.isPending}>Выйти</Button></div></div>
+      {mobile ? <MobileAccountMenu>{controls}</MobileAccountMenu> : <div className="header-controls">{controls}</div>}
     </header>
     <main id="main" className="base-page-stack" tabIndex={-1}>
       <ErrorMessage error={logout.error} />
@@ -89,4 +94,16 @@ function Shell({ user, appearance }: { user: GetSession200; appearance: ReactNod
       </Routes>
     </main>
   </div>;
+}
+
+function MobileAccountMenu({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  return <>
+    <Button ref={trigger} className="base-icon-button mobile-account-trigger" aria-label="Меню приложения" title="Меню приложения"
+      aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}><Menu size={22} aria-hidden="true" /></Button>
+    <Dialog open={open} title="Меню приложения" description="Тема и учётная запись." onClose={() => setOpen(false)} returnFocusRef={trigger}>
+      <div className="base-dialog-body mobile-account-menu">{children}</div>
+    </Dialog>
+  </>;
 }

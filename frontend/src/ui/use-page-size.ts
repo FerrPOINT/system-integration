@@ -5,12 +5,12 @@ export function fitPageSize(height: number, rowHeight: number, gap: number, colu
 }
 
 /** Use rendered dimensions and retain the tallest row at this width to prevent oscillation. */
-export function usePageSize(page: number) {
+export function usePageSize(page: number, enabled = true) {
   const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
   const [size, setSize] = useState<number | null>(null);
   const metrics = useRef({ width: 0, rowHeight: 0 });
   useLayoutEffect(() => {
-    if (!viewport) return;
+    if (!viewport || !enabled) { setSize(null); return; }
     metrics.current = { width: 0, rowHeight: 0 };
     let frame = 0;
     function measure() {
@@ -46,7 +46,7 @@ export function usePageSize(page: number) {
       attributes: true, attributeFilter: ['data-page-measurement'] });
     observe();
     return () => { cancelAnimationFrame(frame); resize.disconnect(); changes.disconnect(); };
-  }, [viewport]);
-  useLayoutEffect(() => { viewport?.scrollTo({ top: 0 }); }, [viewport, page]);
+  }, [viewport, enabled]);
+  useLayoutEffect(() => { if (enabled) viewport?.scrollTo({ top: 0 }); }, [viewport, page, enabled]);
   return { viewportRef: setViewport, measuredSize: size };
 }

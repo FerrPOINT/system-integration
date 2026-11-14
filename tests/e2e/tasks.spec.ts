@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, waitForRegistry } from './support';
+import { login, openAccountMenu, waitForRegistry } from './support';
 
 test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive list', async ({ page }, testInfo) => {
   await login(page);
@@ -31,15 +31,20 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
       ? events.x >= state.x + state.width && Math.abs(events.y - state.y) < 1
       : events.y >= state.y + state.height);
   }).toBe(true);
-  await expect.poll(() => new URL(page.url()).searchParams.get('size')).not.toBeNull();
-  const historySize = Number(new URL(page.url()).searchParams.get('size'));
-  await page.setViewportSize({ width: testInfo.project.name === 'desktop' ? 1440 : 390, height: 550 });
-  await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeLessThan(historySize);
-  await expect.poll(async () => {
-    const card = await history.boundingBox();
-    const viewport = await historyViewport.boundingBox();
-    return card && viewport && card.y + card.height <= viewport.y + viewport.height + 1;
-  }).toBe(true);
+  if (testInfo.project.name === 'desktop') {
+    await expect.poll(() => new URL(page.url()).searchParams.get('size')).not.toBeNull();
+    const historySize = Number(new URL(page.url()).searchParams.get('size'));
+    await page.setViewportSize({ width: 1440, height: 550 });
+    await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeLessThan(historySize);
+    await expect.poll(async () => {
+      const card = await history.boundingBox();
+      const viewport = await historyViewport.boundingBox();
+      return card && viewport && card.y + card.height <= viewport.y + viewport.height + 1;
+    }).toBe(true);
+  } else {
+    await expect(history.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
+    expect(await historyViewport.evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
+  }
   await page.setViewportSize({ width: testInfo.project.name === 'desktop' ? 1440 : 390, height: 1000 });
   await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
   await expect(page.getByRole('link', { name: name + ' обновлено', exact: true })).toBeVisible();
@@ -75,6 +80,7 @@ test('TC-08: logout clears owner data and another initiator cannot open a foreig
   const { taskId } = await created.json();
   await page.goto('/tasks/' + taskId);
   await expect(page.getByRole('button', { name: 'Изменить название' })).toBeVisible();
+  await openAccountMenu(page);
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
   await login(page, 'initiator.two');
@@ -123,7 +129,9 @@ test('TC-09 / TC-12: empty filter, server error recovery and UTC rendering', asy
   await page.unroute('**/api/tasks?*');
   await page.getByRole('button', { name: 'Повторить', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Ничего не найдено' })).toBeVisible();
+  if (await page.getByRole('button', { name: 'Фильтры заданий', exact: true }).count()) await page.getByRole('button', { name: 'Фильтры заданий', exact: true }).click();
   await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
+  if (await page.getByRole('button', { name: 'Готово', exact: true }).count()) await page.getByRole('button', { name: 'Готово', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Создать задание' })).toBeVisible();
   await page.goto('/tasks/' + taskId);
   const task = await (await page.request.get('/api/tasks/' + taskId)).json();

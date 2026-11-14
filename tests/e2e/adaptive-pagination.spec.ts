@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { login } from './support';
+import { collectFeed, login } from './support';
 import { loadUiEnvironment } from '../load/environment.mjs';
 
 test.setTimeout(90_000);
@@ -17,7 +17,7 @@ async function create(page: Page, title: string) {
 
 async function settled(page: Page, region: Locator) {
   await expect.poll(async () => {
-    if (!new URL(page.url()).searchParams.has('size')) return false;
+    if (page.viewportSize()!.width > 760 && !new URL(page.url()).searchParams.has('size')) return false;
     return region.getAttribute('aria-busy').then(value => value === 'false');
   }).toBe(true);
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
@@ -25,6 +25,12 @@ async function settled(page: Page, region: Locator) {
 }
 
 async function fits(page: Page, region: Locator) {
+  if (page.viewportSize()!.width <= 760) {
+    expect(await region.locator('.paged-viewport').evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expect(region.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
+    return;
+  }
   await expect.poll(() => region.evaluate(element => {
     const viewport=element.querySelector('.paged-viewport')!;
     const area=viewport.getBoundingClientRect();
@@ -40,6 +46,13 @@ async function fits(page: Page, region: Locator) {
 }
 
 async function collect(page: Page, region: Locator, links: string) {
+  if (page.viewportSize()!.width <= 760) {
+    await collectFeed(page, region);
+    await fits(page, region);
+    const hrefs = await region.locator(links).evaluateAll(elements => elements.map(element => element.getAttribute('href')!));
+    expect(new Set(hrefs).size).toBe(hrefs.length);
+    return new Set(hrefs);
+  }
   const ids=new Set<string>();
   for (let attempt=0;attempt<100;attempt++) {
     await settled(page,region);
@@ -66,25 +79,29 @@ test('UI-15: tasks fit the viewport, enumerate every record and keep filters thr
   await page.goto('/tasks?createdFrom='+encodeURIComponent(from));
   const region=page.locator('section.paged-list');
   await expect(region.locator('[data-page-item]').first()).toBeVisible();
-  const links='.task-card h2 a, .task-table tbody a';
+  const links='.task-card > a, .task-table tbody a';
   const seen=await collect(page,region,links);
   expect(seen).toEqual(ids);
+  if (info.project.name === 'mobile') {
+    for (const width of [320, 348, 390]) {
+      await page.setViewportSize({ width, height: 672 });
+      await fits(page, region);
+      expect(await region.locator('[data-page-item]').count()).toBe(40);
+      expect(new URL(page.url()).searchParams.get('createdFrom')).toBe(from);
+      expect(new URL(page.url()).searchParams.has('size')).toBe(false);
+    }
+    return;
+  }
   const first=new URL(page.url()); first.searchParams.set('page','0');
   await page.goto(first.toString());
   await page.setViewportSize({width:page.viewportSize()!.width,height:1000});
   await settled(page,region);
   const expandedSize=Number(new URL(page.url()).searchParams.get('size'));
   await page.getByLabel('Фильтры заданий', { exact: true }).click();
-  if (info.project.name === 'mobile') {
-    await expect(page.getByRole('dialog', { name: 'Фильтры заданий', exact: true })).toBeVisible();
-    expect(Number(new URL(page.url()).searchParams.get('size'))).toBe(expandedSize);
-    await page.getByRole('button', { name: 'Готово', exact: true }).click();
-  } else {
-    await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeGreaterThan(expandedSize);
-    await settled(page,region);
-    await fits(page,region);
-    await page.getByLabel('Фильтры заданий', { exact: true }).click();
-  }
+  await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeGreaterThan(expandedSize);
+  await settled(page,region);
+  await fits(page,region);
+  await page.getByLabel('Фильтры заданий', { exact: true }).click();
   expect(new URL(page.url()).searchParams.get('createdFrom')).toBe(from);
   await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBe(expandedSize);
   await settled(page,region);
@@ -116,7 +133,7 @@ test('UI-15: empty results retain navigation at the bottom including a short mob
   await expect(page.getByText('Ничего не найдено',{exact:true})).toBeVisible();
   for (const viewport of [page.viewportSize()!,{width:390,height:480}]) {
     await page.setViewportSize(viewport);
-    await expect.poll(() => region.locator('.pagination-footer').evaluate(element => {
+    if (viewport.width > 760) await expect.poll(() => region.locator('.pagination-footer').evaluate(element => {
       const rect=element.getBoundingClientRect(); return innerHeight-rect.bottom;
     })).toBeLessThanOrEqual(25);
     await expect(region.getByRole('navigation',{name:'Страницы',exact:true})).toHaveCount(0);
@@ -174,6 +191,14 @@ test('UI-15: history fits its panel and exposes every saved event', async ({page
   await expect(region.locator('[data-page-item]').first()).toBeVisible();
   await page.locator('.history-panel').scrollIntoViewIfNeeded();
   const seen=new Set<string>();
+  if (info.project.name === 'mobile') {
+    await collectFeed(page, region);
+    await fits(page, region);
+    const ids = await region.locator('[data-page-item]').evaluateAll(elements => elements.map(element => element.getAttribute('data-event-id')!));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(new Set(ids)).toEqual(new Set(expected));
+    return;
+  }
   for (let attempt=0;attempt<100;attempt++) {
     await settled(page,region);
     await region.scrollIntoViewIfNeeded();

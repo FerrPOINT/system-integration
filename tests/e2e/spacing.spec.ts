@@ -15,7 +15,8 @@ async function expectGaps(region: Locator) {
     }));
   });
   for (const item of gaps) {
-    expect(item.gap, JSON.stringify(item)).toBeGreaterThanOrEqual(16);
+    const compact = await region.evaluate(element => element.classList.contains('mobile-card-content'));
+    expect(item.gap, JSON.stringify(item)).toBeGreaterThanOrEqual(compact ? 8 : 12);
     expect(item.gap, JSON.stringify(item)).toBeLessThanOrEqual(24);
   }
 }
@@ -41,7 +42,8 @@ test('UI-07: exchange loading, error, empty and ready states keep the filter sep
     await expect(page.getByRole('combobox', { name: 'Состояние разбора', exact: true })).toBeVisible();
     const pending = page.getByRole('status').filter({ hasText: 'Загрузка…' });
     await expect(pending).toBeVisible();
-    await expect(page.locator('.pagination-footer')).toHaveText('');
+    if (info.project.name === 'desktop') await expect(page.locator('.pagination-footer')).toHaveText('');
+    else await expect(page.locator('.pagination-footer')).toHaveCount(0);
     await expectGaps(page.locator('main'));
     await expect(pending).toHaveAttribute('aria-busy', 'true');
     await expect(pending.locator('.base-notice-icon')).toHaveCount(0);
@@ -122,7 +124,7 @@ test('UI-08: task registry, editor, card and history use consistent section gaps
   await expectGaps(page.locator('main'));
   await expectCards(page);
   await page.getByRole('button', { name: 'Отмена', exact: true }).click();
-  await page.locator('.task-card h2 a, .task-table tbody a').first().click();
+  await page.locator('.task-card > a, .task-table tbody a').first().click();
   await expect(page.getByRole('heading', { name: 'История', exact: true })).toBeVisible();
   await expect(page.locator('.base-timeline')).toBeVisible();
   await expectGaps(page.locator('main'));

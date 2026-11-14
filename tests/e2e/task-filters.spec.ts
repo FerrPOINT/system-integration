@@ -28,7 +28,7 @@ test('UI-17: filters keep the header unscrolled and remain reachable on short sc
       await expect(page).toHaveURL(/businessStatus=SUCCEEDED/);
       await done.click();
       await expect(trigger).toBeFocused();
-      await expect(trigger).toContainText('Заданы условия');
+      await expect(trigger).toHaveAttribute('data-active', 'true');
       await trigger.click();
       await expect(dialog.getByRole('combobox', { name: 'Результат', exact: true })).toHaveAttribute('data-value', 'SUCCEEDED');
       const until = dialog.getByLabel('Создано до (UTC, не включая)', { exact: true });
@@ -49,6 +49,7 @@ test('UI-17: filters keep the header unscrolled and remain reachable on short sc
     await waitForRegistry(page);
     expect(await tools.evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    expect(await page.locator('.pagination-footer').evaluate(element => element.getBoundingClientRect().bottom <= innerHeight + 1)).toBe(true);
+    if (info.project.name === 'desktop') expect(await page.locator('.pagination-footer').evaluate(element => element.getBoundingClientRect().bottom <= innerHeight + 1)).toBe(true);
+    else await expect(page.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
   }
 });

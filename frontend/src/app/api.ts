@@ -1,6 +1,6 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { getCsrfToken, getSession } from '../../build/generated/openapi/client';
-import type { Problem, GetSession200 } from '../../build/generated/openapi/client';
+import type { Problem, GetSession200, ListTasksParams, IssueStatus } from '../../build/generated/openapi/client';
 
 export class ApiError extends Error {
   constructor(readonly status: number, readonly problem?: Problem) {
@@ -34,7 +34,10 @@ export const keys = {
   session: ['session'] as const,
   tasks: ['tasks'] as const,
   task: (id: string) => ['tasks', id] as const,
-  history: (id: string, page: number, size: number) => ['tasks', id, 'history', page, size] as const,
+  history: (id: string) => ['tasks', id, 'history'] as const,
+  taskList: ({ businessStatus, createdFrom, createdTo }: Pick<ListTasksParams, 'businessStatus' | 'createdFrom' | 'createdTo'>) => ['tasks', 'list', { businessStatus, createdFrom, createdTo }] as const,
+  issueList: (status: IssueStatus) => ['issues', 'list', status] as const,
+  collection: (base: readonly unknown[], feed: boolean, page: number, size: number) => [...base, feed ? 'feed' : 'page', feed ? 0 : page, size] as const,
   issues: ['issues'] as const,
   issue: (id: string) => ['issues', id] as const,
   reconciliation: (task: string, id: string) => ['reconciliations', task, id] as const,

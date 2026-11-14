@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, selectChoice } from './support';
+import { login, openAccountMenu, selectChoice } from './support';
 
 test('UI-09: counted pages preserve filters and filters apply without a submit button', async ({ page }, info) => {
   await login(page);
@@ -15,6 +15,10 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
     initial = await (await page.request.get('/api/tasks')).json();
   }
   async function expectSummary(current: number, total: number) {
+    if (info.project.name === 'mobile') {
+      await expect(page.locator('.feed-footer')).toContainText('из ' + total);
+      return;
+    }
     await expect.poll(async () => {
       const size=Number(new URL(page.url()).searchParams.get('size') || 20);
       const summary = total <= size ? 'Всего: ' + total : ((current - 1) * size + 1) + '–' + Math.min(current * size, total) + ' из ' + total;
@@ -22,17 +26,17 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
     }).toBe(true);
   }
   await expectSummary(1,initial.totalItems);
-  for (const name of ['← Назад', 'Далее →']) {
-    const arrow = page.getByRole('button', { name, exact: true });
-    await expect(arrow).toHaveText('');
-    await expect(arrow.locator('svg')).toHaveCount(1);
-  }
-  await page.getByRole('button', { name: 'Далее →', exact: true }).click();
-  await expect(page).toHaveURL(/page=1/);
-  await expectSummary(2,initial.totalItems);
-  if (info.project.name === 'mobile') {
-    await expect(page.getByRole('navigation', { name: 'Страницы', exact: true }).getByRole('button')).toHaveCount(3);
-    await expect(page.getByRole('button', { name: 'Страница 2', exact: true })).toHaveAttribute('aria-current', 'page');
+  if (info.project.name === 'desktop') {
+    for (const name of ['← Назад', 'Далее →']) {
+      const arrow = page.getByRole('button', { name, exact: true });
+      await expect(arrow).toHaveText('');
+      await expect(arrow.locator('svg')).toHaveCount(1);
+    }
+    await page.getByRole('button', { name: 'Далее →', exact: true }).click();
+    await expect(page).toHaveURL(/page=1/);
+    await expectSummary(2,initial.totalItems);
+  } else {
+    await expect(page.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
   }
   if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Фильтры заданий', exact: true }).click();
   const filtered = page.waitForResponse(response => response.url().includes('/api/tasks?') && response.url().includes('businessStatus=SUCCEEDED') && response.status() === 200);
@@ -62,6 +66,11 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
   await expect(to).toHaveValue('');
   if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Готово', exact: true }).click();
   await page.goto('/tasks?page=999999');
+  if (info.project.name === 'mobile') {
+    await expect(page).not.toHaveURL(/page=/);
+    await expect(page.locator('[data-page-item]').first()).toBeVisible();
+    return;
+  }
   await expect(page.getByText('Страница не найдена', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Страница 1', exact: true }).click();
   await expect(page).toHaveURL(/page=0/);
@@ -144,7 +153,9 @@ test('UI-11: changing account outside the SPA clears the previous private card',
     await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
     const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/session' && response.status() === 200);
     await context.setOffline(false); await refreshed;
+    await openAccountMenu(page);
     await expect(page.locator('.account')).toContainText(username);
+    if (await page.getByRole('dialog', { name: 'Меню приложения', exact: true }).count()) await page.keyboard.press('Escape');
   }
   await signInOutsideSpa('initiator.one');
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
