@@ -178,7 +178,9 @@ test('UI-15: history fits its panel and exposes every saved event', async ({page
     }
     const next=region.getByRole('button',{name:'Далее →',exact:true});
     if (!(await next.count()) || !(await next.isEnabled())) break;
+    const previous=new URL(page.url()).searchParams.get('page') || '0';
     await next.click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('page')).not.toBe(previous);
   }
   expect(seen).toEqual(new Set(expected));
   await expect(region).toContainText('Задание принято и поставлено в очередь');
