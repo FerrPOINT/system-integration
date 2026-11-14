@@ -1,26 +1,74 @@
 # Текущая стадия
 
-## Доработки полного backend-аудита — в работе
+## Доработки полного backend-аудита — выполнено, выпуск подготовлен
 
 План [BA-01–BA-09](backend-audit-followup-plan.md), база main 5aa1c06.
-На Firebat1 выполнен fast-forward; frontend 6f6dbe0 полностью включён.
-Ветка — fix/backend-audit-followup. Public runtime ac5c207 не менялся.
+Работа выполнена на Firebat1 в ветке fix/backend-audit-followup.
+Свежий frontend 6f6dbe0 полностью включён в базу. Квалифицированный runtime
+исходников — e0360e081d7b0b245647694731449d2d372ce5f2; последующая документация
+не меняет приложение. Исходники подготовлены к merge; public runtime
+ac5c207 продолжает работать, merge и публичный deploy в этот этап не входят.
 
-Валидация U+0000 согласована в TaskTitle, причинах решений и OpenAPI.
-До исправления два unit-теста воспроизвели дефект; после исправления прошли
-адресные unit/HTTP проверки, включая реальный сервер. Protocol diagnostics
-сохраняет прежние fingerprint inputs и JSON shape. Добавлены request correlation,
-commit-aware журналы эмулятора и закрытый Actuator /exchange без нового poller.
+U+0000 отклоняется с VALIDATION_FAILED до записи: TaskTitle, причины
+retry/resolve и OpenAPI согласованы. RED-тесты воспроизвели исходный дефект.
+Protocol diagnostics сообщает безопасную категорию/поле, сохраняя исходные
+fingerprint inputs, JSON shape и receipts. Добавлены серверный X-Request-ID,
+очистка MDC, commit-aware журналы эмулятора и закрытый Actuator /exchange.
+Диагностика читает очередь по запросу, без нового poller и COUNT в обычном API.
+Очередь включает parked deliveries, а не все незавершённые бизнес-задания.
+Feed-счётчики принадлежат процессу и сбрасываются при рестарте.
+Флаг worker принимает только true/false; его значение проверено относительно
+ConditionalOnProperty, неподдерживаемые aliases явно отклоняются.
 
-Конкурентная карточка проверена commit между SELECT: тест воспроизвёл смесь
-старой проблемы и нового exchange state. REPEATABLE_READ устранил её;
-следующая карточка видит RESOLVED без действий. Адресные protocol/feed/API
-и emulator commit-log проверки проходят.
+Карточка проблемы теперь читает согласованный REPEATABLE_READ snapshot.
+Детерминированный тест сначала воспроизвёл конкурентный commit решения между
+SELECT, затем подтвердил согласованные проблему/действия; следующее чтение
+видит RESOLVED. Команды продолжают повторно проверять состояние под lock.
 
-Upgrade 18.6 → 18.7 выполнен на собственном тестовом томе. Counts/digests
-14 business/migration таблиц двух БД сохранились. Полный Java/SQL/UI/recovery/
-demo/NF08 gate, финальное ревью и merge-ready ещё не завершены.
-Receipts — tests/results/backend-followup (ignored).
+| Проверка | Результат |
+| --- | --- |
+| Java | 216 тестов: backend unit 103 / PostgreSQL 83, emulator unit 13 / PostgreSQL 17. Ошибок и пропусков нет. |
+| Build | Два JAR, Javadoc/doclint, generated contracts/client, TypeScript/Vite; 28 Node-проверок инструментов/API/build/assets, 4 smoke. |
+| SQL | 69 ручных sites и captured generated SQL: 533 варианта, 1599 EXPLAIN ANALYZE/BUFFERS/WAL; 4 теста SQL-инструментов и проверка реального lock observer. Fixtures откатились. |
+| UI | Финальный e0360e0: 74 desktop/mobile сценария без failed/flaky/skipped; права трёх аккаунтов, foreign card 404, private diagnostics 401/403 и logout проверены также через API. |
+| Components/recovery/demo | 10 component, 10 recovery и 6 независимо проверенных демосценариев прошли на 6a8c326; граница повторной квалификации приведена ниже. |
+| PostgreSQL | Чистый запуск 18.7, upgrade 18.6 → 18.7 и проверка возврата/повторного upgrade на собственном томе. Counts/digests 14 business/migration таблиц двух БД совпали. |
+| NF08 | 5000 исходных записей, 20 клиентов, warmup 30 с + замер 120 с, суммарно 2 CPU / 4 GiB. 58 814 запросов; p95 чтения 97,84 мс, изменения 96,56 мс; ошибок 0. |
+
+После основного gate найден и RED-тестом подтверждён alias Boolean conversion:
+yes/on/1 не соответствовали условию запуска scheduler. На e0360e0 заново
+прошли все 186 backend unit/PostgreSQL тестов, JAR/Javadoc, SQL-планы,
+реальный startup/API, полный UI и NF08. Эмуляторные 30 тестов и
+components/recovery/demo не повторялись: emulator/frontend RootFS идентичны
+6a8c326; в backend JAR отличаются только ExchangeDiagnosticsEndpoint и его
+вложенный Diagnostics. Изменение касается проверки startup-флага; остальное
+содержимое JAR идентично. Полный recovery на e0360e0 отдельно не заявляем.
+
+После drain сверены все 22 080 операций обеих БД: потерь и повторного
+исполнения нет; очередь/pending/open issues/unpublished завершились, cursor
+согласован. 20 конкурентных повторов создали одну запись; конфликт тела
+отклонён. P95 завершения новых операций — 124,79 с, drain — 54,505 с.
+Генератор работал на том же Firebat1 вне лимитов контейнеров, напрямую
+с локальным API. Публичные HTTPS/proxy в p95 не входят; этот замер
+не определяет максимальную ёмкость и не задаёт SLA внешнего исполнения.
+
+Повторно просмотрены diff и соседние границы: права/CSRF, транзакции,
+canonical fingerprints, protocol evidence, жизненный цикл MDC, endpoint
+security, публикация после commit и SQL. Блокирующих замечаний не осталось.
+Новые зависимости, Redis, JPA, CI, процессы, миграции и fallback не добавлены.
+Исходное ТЗ совпадает с пользовательским файлом по SHA-256
+113890f7eea6bf91b232f0a4082dc8f901301b2ad60a2160d099c28769800aff.
+
+Тестовые контейнеры, том и сеть удалены, scratch и завершённые fixtures очищены.
+Все 11 обычных контейнеров сохранили ID/image/StartedAt; публичный HTTPS даёт 200.
+Компактные receipts — tests/results/backend-followup (ignored):
+java-final, final-api, final-delta, final-images, nf08-summary, cleanup,
+сжатые SQL/UI/NF08 и журналы. Сохранены выбранные образы
+system-integration-{backend,emulator,frontend}:e0360e0 и release.json с их IDs,
+а также release-compose.yml с pinned PostgreSQL digest.
+Это inputs будущего отдельно порученного --no-build deploy:
+перед запуском сверить IDs; после запуска проверить served artifact и публичные
+сценарии. Подготовка образов не является публичной приёмкой нового выпуска.
 
 ## Spring Data JDBC — выполнено
 
