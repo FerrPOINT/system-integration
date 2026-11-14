@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, selectChoice } from './support';
+import { login, openAccountMenu, selectChoice } from './support';
 
 test('UI-09: counted pages preserve filters and filters apply without a submit button', async ({ page }, info) => {
   await login(page);
@@ -15,17 +15,30 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
     initial = await (await page.request.get('/api/tasks')).json();
   }
   async function expectSummary(current: number, total: number) {
+    if (info.project.name === 'mobile') {
+      await expect(page.locator('.feed-footer')).toContainText('из ' + total);
+      return;
+    }
     await expect.poll(async () => {
       const size=Number(new URL(page.url()).searchParams.get('size') || 20);
-      return await page.locator('.base-page-summary').innerText() === 'Страница ' + current + ' из ' + Math.ceil(total/size) + ' · Всего записей: ' + total;
+      const summary = total <= size ? 'Всего: ' + total : ((current - 1) * size + 1) + '–' + Math.min(current * size, total) + ' из ' + total;
+      return await page.locator('.base-page-summary').innerText() === summary;
     }).toBe(true);
   }
   await expectSummary(1,initial.totalItems);
-  await page.getByRole('button', { name: 'Страница 2', exact: true }).click();
-  await expect(page).toHaveURL(/page=1/);
-  await expectSummary(2,initial.totalItems);
-  const filters = page.locator('.filter-panel');
-  if (info.project.name === 'mobile') await filters.locator('summary').click();
+  if (info.project.name === 'desktop') {
+    for (const name of ['← Назад', 'Далее →']) {
+      const arrow = page.getByRole('button', { name, exact: true });
+      await expect(arrow).toHaveText('');
+      await expect(arrow.locator('svg')).toHaveCount(1);
+    }
+    await page.getByRole('button', { name: 'Далее →', exact: true }).click();
+    await expect(page).toHaveURL(/page=1/);
+    await expectSummary(2,initial.totalItems);
+  } else {
+    await expect(page.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
+  }
+  if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Фильтры заданий', exact: true }).click();
   const filtered = page.waitForResponse(response => response.url().includes('/api/tasks?') && response.url().includes('businessStatus=SUCCEEDED') && response.status() === 200);
   await selectChoice(page, 'Результат', 'Выполнено');
   const result = await (await filtered).json();
@@ -44,19 +57,26 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
   await expect(page).toHaveURL(/createdFrom=/);
   await expect(from).toBeFocused();
   await to.fill('2026-10-01T00:00');
-  await expect(page.getByText('Начало периода должно быть раньше конца.', { exact: true })).toBeVisible();
+  const filterRegion = info.project.name === 'mobile' ? page.getByRole('dialog', { name: 'Фильтры заданий', exact: true }) : page;
+  await expect(filterRegion.getByText('Начало периода должно быть раньше конца.', { exact: true })).toBeVisible();
   await to.fill('2026-12-01T00:00');
-  await expect(page.getByText('Начало периода должно быть раньше конца.', { exact: true })).toHaveCount(0);
+  await expect(filterRegion.getByText('Начало периода должно быть раньше конца.', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
   await expect(from).toHaveValue('');
   await expect(to).toHaveValue('');
+  if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Готово', exact: true }).click();
   await page.goto('/tasks?page=999999');
-  await expect(page.getByText('Страница 1000000 не найдена · Всего страниц: ' + initial.totalPages, { exact: true })).toBeVisible();
+  if (info.project.name === 'mobile') {
+    await expect(page).not.toHaveURL(/page=/);
+    await expect(page.locator('[data-page-item]').first()).toBeVisible();
+    return;
+  }
+  await expect(page.getByText('Страница не найдена', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Страница 1', exact: true }).click();
   await expect(page).toHaveURL(/page=0/);
 });
 
-test('UI-09: invalid URL filters stay local and valid filters still load', async ({ page }) => {
+test('UI-09: invalid URL filters stay local and valid filters still load', async ({ page }, info) => {
   await login(page);
   const invalid = ['businessStatus=toString', 'businessStatus=constructor', 'createdFrom=not-a-date', 'createdTo=not-a-date', 'size=0', 'size=101', 'size=not-a-number'];
   const requests: URL[] = [];
@@ -79,7 +99,9 @@ test('UI-09: invalid URL filters stay local and valid filters still load', async
   });
   await page.goto('/tasks?businessStatus=SUCCEEDED&createdFrom=2020-01-01T00%3A00%3A00Z');
   await loaded;
+  if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Фильтры заданий', exact: true }).click();
   await expect(page.getByLabel('Создано с (UTC, включительно)', { exact: true })).toHaveValue('2020-01-01T00:00');
+  if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Готово', exact: true }).click();
   await expect(page.getByText('Некорректные параметры страницы. Сбросьте фильтры.', { exact: true })).toHaveCount(0);
 });
 
@@ -131,7 +153,9 @@ test('UI-11: changing account outside the SPA clears the previous private card',
     await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
     const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/session' && response.status() === 200);
     await context.setOffline(false); await refreshed;
+    await openAccountMenu(page);
     await expect(page.locator('.account')).toContainText(username);
+    if (await page.getByRole('dialog', { name: 'Меню приложения', exact: true }).count()) await page.keyboard.press('Escape');
   }
   await signInOutsideSpa('initiator.one');
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();

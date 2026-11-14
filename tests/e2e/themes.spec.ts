@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, selectChoice } from './support';
+import { login, openAccountMenu, selectChoice } from './support';
 
 const themeLabels: Record<string, string> = { dark: 'Тёмная', light: 'Светлая', gray: 'Серая' };
 const key = 'system-integration.theme';
@@ -40,33 +40,38 @@ test('UI-02: theme survives navigation and logout, synchronizes tabs and preserv
   const picker = page.getByRole('combobox', { name: 'Цветовая тема', exact: true });
   await selectChoice(page, 'Цветовая тема', themeLabels['gray']);
   await login(page);
+  await openAccountMenu(page);
   await expect(picker).toHaveAttribute('data-value', 'gray');
+  if (info.project.name === 'mobile') await page.keyboard.press('Escape');
   if (info.project.name === 'mobile') {
     const brand = await page.locator('.app-header > .brand-link').boundingBox();
     expect(brand!.width).toBeGreaterThan(150);
     expect(brand!.height).toBeLessThan(80);
   }
   const filters = page.locator('.filter-panel');
-  await expect(filters).toHaveJSProperty('open', info.project.name !== 'mobile');
-  if (info.project.name === 'mobile') await filters.locator('summary').click();
+  if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Фильтры заданий', exact: true }).click();
+  else await expect(filters).toHaveJSProperty('open', true);
   await selectChoice(page, 'Результат', 'Выполнено');
   await expect(page).toHaveURL(/businessStatus=SUCCEEDED/);
   await selectChoice(page, 'Результат', 'Все результаты');
   await expect(page).not.toHaveURL(/businessStatus=/);
+  if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Готово', exact: true }).click();
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
   await page.getByLabel('Название *', { exact: true }).fill('Черновик сохраняется при смене темы');
   const other = await context.newPage();
   try {
     await other.goto('/tasks');
+    await expect(other.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
     await selectChoice(other, 'Цветовая тема', themeLabels['light']);
-    await expect(page.locator('#theme-choice')).toHaveAttribute('data-value', 'light');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     await expect(page.getByLabel('Название *', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');
     await selectChoice(other, 'Цветовая тема', 'Тёмная');
-    await expect(page.locator('#theme-choice')).toHaveAttribute('data-value', 'dark');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect(page.getByLabel('Название *', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');
   } finally { await other.close(); }
   await page.getByRole('button', { name: 'Отмена', exact: true }).click();
   await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
+  await openAccountMenu(page);
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
   await expect(picker).toHaveAttribute('data-value', 'dark');

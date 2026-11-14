@@ -1,7 +1,7 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { login } from './support';
-import { loadEnvironment } from '../load/environment.mjs';
+import { collectFeed, login } from './support';
+import { loadUiEnvironment } from '../load/environment.mjs';
 
 test.setTimeout(90_000);
 
@@ -17,7 +17,7 @@ async function create(page: Page, title: string) {
 
 async function settled(page: Page, region: Locator) {
   await expect.poll(async () => {
-    if (!new URL(page.url()).searchParams.has('size')) return false;
+    if (page.viewportSize()!.width > 760 && !new URL(page.url()).searchParams.has('size')) return false;
     return region.getAttribute('aria-busy').then(value => value === 'false');
   }).toBe(true);
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
@@ -25,6 +25,12 @@ async function settled(page: Page, region: Locator) {
 }
 
 async function fits(page: Page, region: Locator) {
+  if (page.viewportSize()!.width <= 760) {
+    expect(await region.locator('.paged-viewport').evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expect(region.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
+    return;
+  }
   await expect.poll(() => region.evaluate(element => {
     const viewport=element.querySelector('.paged-viewport')!;
     const area=viewport.getBoundingClientRect();
@@ -40,6 +46,13 @@ async function fits(page: Page, region: Locator) {
 }
 
 async function collect(page: Page, region: Locator, links: string) {
+  if (page.viewportSize()!.width <= 760) {
+    await collectFeed(page, region);
+    await fits(page, region);
+    const hrefs = await region.locator(links).evaluateAll(elements => elements.map(element => element.getAttribute('href')!));
+    expect(new Set(hrefs).size).toBe(hrefs.length);
+    return new Set(hrefs);
+  }
   const ids=new Set<string>();
   for (let attempt=0;attempt<100;attempt++) {
     await settled(page,region);
@@ -48,7 +61,7 @@ async function collect(page: Page, region: Locator, links: string) {
       expect(ids.has(href)).toBe(false); ids.add(href);
     }
     const next=region.getByRole('button',{name:'Далее →',exact:true});
-    if (!(await next.isEnabled())) return ids;
+    if (!(await next.count()) || !(await next.isEnabled())) return ids;
     const previous=new URL(page.url()).searchParams.get('page') || '0';
     await next.click();
     await expect.poll(() => new URL(page.url()).searchParams.get('page')).not.toBe(previous);
@@ -57,7 +70,7 @@ async function collect(page: Page, region: Locator, links: string) {
 }
 
 test('UI-15: tasks fit the viewport, enumerate every record and keep filters through resize', async ({page}, info) => {
-  loadEnvironment();
+  loadUiEnvironment();
   await login(page);
   const from=new Date().toISOString();
   const ids=new Set<string>();
@@ -66,25 +79,34 @@ test('UI-15: tasks fit the viewport, enumerate every record and keep filters thr
   await page.goto('/tasks?createdFrom='+encodeURIComponent(from));
   const region=page.locator('section.paged-list');
   await expect(region.locator('[data-page-item]').first()).toBeVisible();
-  const links='.task-card h2 a, .task-table tbody a';
+  const links='.task-card > a, .task-table tbody a';
   const seen=await collect(page,region,links);
   expect(seen).toEqual(ids);
+  if (info.project.name === 'mobile') {
+    for (const width of [320, 348, 390]) {
+      await page.setViewportSize({ width, height: 672 });
+      await fits(page, region);
+      expect(await region.locator('[data-page-item]').count()).toBe(40);
+      expect(new URL(page.url()).searchParams.get('createdFrom')).toBe(from);
+      expect(new URL(page.url()).searchParams.has('size')).toBe(false);
+    }
+    return;
+  }
   const first=new URL(page.url()); first.searchParams.set('page','0');
   await page.goto(first.toString());
   await page.setViewportSize({width:page.viewportSize()!.width,height:1000});
   await settled(page,region);
   const expandedSize=Number(new URL(page.url()).searchParams.get('size'));
-  const filters=page.locator('.filter-panel');
-  await filters.locator('summary').click();
+  await page.getByLabel('Фильтры заданий', { exact: true }).click();
   await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeGreaterThan(expandedSize);
   await settled(page,region);
   await fits(page,region);
+  await page.getByLabel('Фильтры заданий', { exact: true }).click();
   expect(new URL(page.url()).searchParams.get('createdFrom')).toBe(from);
-  await filters.locator('summary').click();
   await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBe(expandedSize);
   await settled(page,region);
   await fits(page,region);
-  await region.getByRole('button',{name:'Страница 2',exact:true}).click();
+  await region.getByRole('button',{name:'Далее →',exact:true}).click();
   await settled(page,region);
   const anchor=await region.locator(links).first().getAttribute('href');
   const oldSize=Number(new URL(page.url()).searchParams.get('size'));
@@ -104,24 +126,26 @@ test('UI-15: tasks fit the viewport, enumerate every record and keep filters thr
 });
 
 test('UI-15: empty results retain navigation at the bottom including a short mobile viewport', async ({page}) => {
-  loadEnvironment();
+  loadUiEnvironment();
   await login(page);
   await page.goto('/tasks?createdFrom=2100-01-01T00%3A00%3A00Z');
   const region=page.locator('section.paged-list');
   await expect(page.getByText('Ничего не найдено',{exact:true})).toBeVisible();
   for (const viewport of [page.viewportSize()!,{width:390,height:480}]) {
     await page.setViewportSize(viewport);
-    await expect.poll(() => region.locator('.pagination-footer').evaluate(element => {
+    if (viewport.width > 760) await expect.poll(() => region.locator('.pagination-footer').evaluate(element => {
       const rect=element.getBoundingClientRect(); return innerHeight-rect.bottom;
     })).toBeLessThanOrEqual(25);
-    await expect(region.getByRole('button',{name:'← Назад',exact:true})).toBeDisabled();
-    await expect(region.getByRole('button',{name:'Далее →',exact:true})).toBeDisabled();
+    await expect(region.getByRole('navigation',{name:'Страницы',exact:true})).toHaveCount(0);
+    await expect(region.getByRole('button',{name:'← Назад',exact:true})).toHaveCount(0);
+    await expect(region.getByRole('button',{name:'Далее →',exact:true})).toHaveCount(0);
+    if (viewport.width <= 760) await expect(region.getByRole('status')).toHaveText('Нет записей');
     await fits(page,region);
   }
 });
 
-test('UI-15: issue grid uses the same server window without losing entries', async ({page}, info) => {
-  const postgres=loadEnvironment().find(item => item.service==='postgres')!;
+test('UI-15: issue table and mobile cards use the same server window without losing entries', async ({page}, info) => {
+  const postgres=loadUiEnvironment().find(item => item.service==='postgres')!;
   const ids=Array.from({length:8},() => crypto.randomUUID());
   const sql=(input: string) => execFileSync('docker',['exec','-i',postgres.containerId,'psql','-XqAt','-v','ON_ERROR_STOP=1','-U','si_admin','-d','si_test'],{input,encoding:'utf8'});
   sql(ids.map((id,index) => "INSERT INTO exchange_issues(id,scope,fingerprint,kind,summary,evidence) VALUES ('"+id+"','pagination:"+id+"','"+id+"','PROTOCOL_ERROR','E2E проверка отображения длинной диагностики обмена и решения оператора, запись "+index+"','{\"reason\":\"Изолированная UI-проверка\"}'::jsonb);").join('\n'));
@@ -130,14 +154,26 @@ test('UI-15: issue grid uses the same server window without losing entries', asy
     await page.goto('/issues?status=OPEN');
     const region=page.locator('section.paged-list');
     await expect(region.locator('[data-page-item]').first()).toBeVisible();
-    const seen=await collect(page,region,'.issue-cards h2 a');
+    const seen=await collect(page,region,'[data-issue-link]');
     for (const id of ids) expect(seen.has('/issues/'+id)).toBe(true);
+    if (info.project.name === 'desktop') {
+      for (const width of [761, 900, 1280]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await settled(page,region);
+        await expect(page.getByRole('table', { name: 'Реестр разборов обмена' })).toBeVisible();
+        expect(await page.locator('.base-table-scroll').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+        await fits(page,region);
+      }
+    } else {
+      await expect(page.getByRole('table')).toHaveCount(0);
+      await expect(page.locator('.issue-cards')).toBeVisible();
+    }
     await page.screenshot({path:info.outputPath('adaptive-issues.png')});
   } finally { sql("DELETE FROM exchange_issues WHERE id IN ("+ids.map(id => "'"+id+"'").join(',')+");"); }
 });
 
 test('UI-15: history fits its panel and exposes every saved event', async ({page}, info) => {
-  loadEnvironment();
+  loadUiEnvironment();
   await login(page);
   const id=await create(page,'E2E история с адаптивной пагинацией');
   const { token }=await (await page.request.get('/api/csrf')).json();
@@ -156,6 +192,14 @@ test('UI-15: history fits its panel and exposes every saved event', async ({page
   await expect(region.locator('[data-page-item]').first()).toBeVisible();
   await page.locator('.history-panel').scrollIntoViewIfNeeded();
   const seen=new Set<string>();
+  if (info.project.name === 'mobile') {
+    await collectFeed(page, region);
+    await fits(page, region);
+    const ids = await region.locator('[data-page-item]').evaluateAll(elements => elements.map(element => element.getAttribute('data-event-id')!));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(new Set(ids)).toEqual(new Set(expected));
+    return;
+  }
   for (let attempt=0;attempt<100;attempt++) {
     await settled(page,region);
     await region.scrollIntoViewIfNeeded();
@@ -164,8 +208,10 @@ test('UI-15: history fits its panel and exposes every saved event', async ({page
       expect(seen.has(id)).toBe(false); seen.add(id);
     }
     const next=region.getByRole('button',{name:'Далее →',exact:true});
-    if (!(await next.isEnabled())) break;
+    if (!(await next.count()) || !(await next.isEnabled())) break;
+    const previous=new URL(page.url()).searchParams.get('page') || '0';
     await next.click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('page')).not.toBe(previous);
   }
   expect(seen).toEqual(new Set(expected));
   await expect(region).toContainText('Задание принято и поставлено в очередь');

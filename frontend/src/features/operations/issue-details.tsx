@@ -21,6 +21,7 @@ import { issueKindLabels as kinds } from './issue-labels';
 import { useRefreshExchange } from './use-refresh-exchange';
 import { ReconcileButton } from './reconcile-button';
 import { Snapshot } from './exchange-snapshot';
+import { useListReturn } from '../../app/use-list-return';
 
 type DecisionAction = 'RETRY' | ResolutionAction;
 
@@ -29,14 +30,15 @@ const actionLabels: Record<DecisionAction, string> = {
 };
 
 export function IssueCard() {
+  const returnTo = useListReturn('/issues');
   const { id = '' } = useParams();
   const issue = useQuery({ queryKey: keys.issue(id), queryFn: ({ signal }) => data(getExchangeIssue(id, { signal })) });
   if (issue.isPending) return <Loading />;
-  if (!issue.data) return <><BackLink to="/issues">К разбору обмена</BackLink><ErrorMessage error={issue.error} />
+  if (!issue.data) return <><BackLink to={returnTo}>К разбору обмена</BackLink><ErrorMessage error={issue.error} />
     <Button onClick={() => issue.refetch()}>Повторить</Button></>;
   const item = issue.data;
   return <>
-    <PageHeader className="issue-page-header" back={<BackLink to="/issues">К разбору обмена</BackLink>} title={kinds[item.kind]}
+    <PageHeader className="detail-page-header" back={<BackLink to={returnTo}>К разбору обмена</BackLink>} title={kinds[item.kind]}
       actions={<RefreshButton pending={issue.isFetching} onClick={() => issue.refetch()} />} />
     <ErrorMessage error={issue.error} />
     <Card asChild><section aria-labelledby="issue-summary-title"><CardContent className="base-page-stack">
