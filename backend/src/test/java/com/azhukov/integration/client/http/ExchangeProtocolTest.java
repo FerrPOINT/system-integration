@@ -152,7 +152,9 @@ class ExchangeProtocolTest {
         assertNotNull(decoded.events().get(0).result());
         assertNull(decoded.events().get(1).result());
         assertEquals(identity.id(),decoded.events().get(1).operationId(),"Diagnostic identity keeps the former lenient extraction");
-        assertEquals(malformed,decoded.events().get(1).evidence());
+        var diagnosed=assertInstanceOf(ExternalExchangeClient.ProtocolEvidence.class,decoded.events().get(1).evidence());
+        assertEquals(malformed,diagnosed.content());
+        assertEquals("INVALID_UUID at operationId",diagnosed.detail());
         assertNull(decoded.events().get(2).operationId());
         assertNull(decoded.events().get(2).result());
         assertEquals(ExternalExchangeClient.FeedStatus.INVALID_PAGE,protocol.feed(new ExchangeReply(200,page,false,null),11).status());
@@ -167,5 +169,85 @@ class ExchangeProtocolTest {
         assertFalse(ExchangeProtocol.missingOperation(404,json.readTree("{\"code\":\"OPERATION_NOT_FOUND\"}")));
         assertFalse(ExchangeProtocol.missingOperation(404,json.readTree("{\"title\":\"Ошибка\",\"status\":500,\"code\":\"OPERATION_NOT_FOUND\"}")));
         assertFalse(ExchangeProtocol.missingOperation(404,json.readTree("{\"title\":\"Ошибка\",\"status\":4294967700,\"code\":\"OPERATION_NOT_FOUND\"}")));
+    }
+    @Test
+    void unsupportedVersionsAndInvalidVersionTypesHaveDistinctSafeDiagnostics() {
+        var valid=(tools.jackson.databind.node.ObjectNode)json.readTree(result);
+        for (int version:new int[]{Integer.MIN_VALUE,-1,0,3,Integer.MAX_VALUE})
+            assertResultDiagnostic(valid.deepCopy().put("version",version),"UNSUPPORTED_VERSION at version");
+        var missing=valid.deepCopy();missing.remove("version");
+        for (var raw:java.util.List.of(missing,valid.deepCopy().putNull("version"),
+            valid.deepCopy().put("version","private-version"),valid.deepCopy().put("version",2.5),
+            valid.deepCopy().put("version",2147483648L)))
+            assertResultDiagnostic(raw,"FIELD_TYPE at version");
+    }
+
+    @Test
+    void invalidStatusesAndInvalidStatusTypesHaveDistinctSafeDiagnostics() {
+        var valid=(tools.jackson.databind.node.ObjectNode)json.readTree(result);
+        for (String status:new String[]{"PENDING","UNKNOWN","succeeded","","SUCCEEDED\nprivate-value"})
+            assertResultDiagnostic(valid.deepCopy().put("status",status),"INVALID_STATUS at status");
+        var missing=valid.deepCopy();missing.remove("status");
+        for (var raw:java.util.List.of(missing,valid.deepCopy().putNull("status"),valid.deepCopy().put("status",2)))
+            assertResultDiagnostic(raw,"FIELD_TYPE at status");
+    }
+
+    @Test
+    void supportedEnumsWithInconsistentConditionalFieldsRemainVariantErrors() {
+        var valid=(tools.jackson.databind.node.ObjectNode)json.readTree(result);
+        for (var raw:java.util.List.of(valid.deepCopy().put("version",1),
+            valid.deepCopy().put("status","RUNNING"),valid.deepCopy().put("status","REJECTED")))
+            assertResultDiagnostic(raw,"INVALID_VARIANT at result");
+    }
+
+    private void assertResultDiagnostic(tools.jackson.databind.node.ObjectNode raw,String expected) {
+        var state=json.createObjectNode().put("operationId",identity.id().toString())
+            .set("request",json.valueToTree(identity.request())).put("acceptedAt","2026-11-11T00:00:00Z")
+            .put("executions",1).set("result",raw);
+        var attempt=new DeliveryAttempt(identity.id(),UUID.randomUUID(),"GET",1,1,identity.request());
+        var delivery=protocol.delivery(attempt,new ExchangeReply(200,state,false,null));
+        assertEquals(DeliveryAttempt.Outcome.PROTOCOL_ERROR,delivery.outcome());
+        assertEquals("Подтверждение не соответствует контракту или исходному запросу",delivery.protocolFailure());
+        var delivered=assertInstanceOf(ExternalExchangeClient.ProtocolEvidence.class,delivery.evidence());
+        assertSame(state,delivered.content());assertEquals(expected,delivered.detail());
+        var page=json.createArrayNode().add(json.createObjectNode().put("cursor",1).set("result",raw));
+        var feed=protocol.feed(new ExchangeReply(200,page,false,null),0);
+        assertEquals(ExternalExchangeClient.FeedStatus.READY,feed.status());
+        var event=feed.events().getFirst();
+        assertEquals(identity.id(),event.operationId());assertNull(event.result());assertEquals(1,event.cursor());
+        var received=assertInstanceOf(ExternalExchangeClient.ProtocolEvidence.class,event.evidence());
+        assertSame(raw,received.content());assertEquals(expected,received.detail());
+    }
+
+    @Test
+    void malformedFieldHasBoundedSafeDetailAndKeepsOriginalEvidence() {
+        var raw=json.readTree(result.replace("\"quantity\":25","\"quantity\":\"secret-value\""));
+        var attempt=new DeliveryAttempt(identity.id(),UUID.randomUUID(),"GET",1,1,identity.request());
+        var state=json.createObjectNode().put("operationId",identity.id().toString())
+            .set("request",raw.get("request")).put("acceptedAt","2026-11-11T00:00:00Z")
+            .put("executions",1).set("result",raw);
+        var reply=protocol.delivery(attempt,new ExchangeReply(200,state,false,null));
+        assertEquals(DeliveryAttempt.Outcome.PROTOCOL_ERROR,reply.outcome());
+        var evidence=assertInstanceOf(ExternalExchangeClient.ProtocolEvidence.class,reply.evidence());
+        assertSame(state,evidence.content());
+        assertEquals("FIELD_TYPE at quantity",evidence.detail());
+        assertFalse(evidence.detail().contains("secret-value"));
+    }
+    @Test
+    void utcWireDatesRejectUnsupportedYearsAndIncompleteTimes() {
+        for (String invalid : new String[]{"+10000-01-01T00:00:00Z","+999999999-01-01T00:00:00Z",
+            "0000-01-01T00:00:00Z","2026-11-12T00:00Z","2026-11-12T00:00:00-00:00",
+            "2026-11-12T00:00:00.1234567890Z"}) {
+            var raw=json.readTree(result.replace("2026-11-12T00:00:00Z",invalid));
+            var error=assertThrows(IllegalArgumentException.class,() -> protocol.result(raw),invalid);
+            assertEquals("INVALID_UTC at completedAt",error.getMessage());
+            var acknowledgement=json.createObjectNode().put("operationId",identity.id().toString())
+                .set("request",json.valueToTree(identity.request())).put("acceptedAt",invalid);
+            assertThrows(IllegalArgumentException.class,() -> protocol.acknowledgement(acknowledgement,identity),invalid);
+        }
+        for (String valid : new String[]{"0001-01-01T00:00:00Z","9999-12-31T23:59:59.999999999Z",
+            "2026-11-12T00:00:00+00:00","2026-11-12t00:00:00z"})
+            assertEquals(java.time.OffsetDateTime.parse(valid),
+                protocol.result(json.readTree(result.replace("2026-11-12T00:00:00Z",valid))).completedAt());
     }
 }

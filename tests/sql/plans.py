@@ -39,6 +39,7 @@ def static(key,params=(),variant='default'):
 
 result=json.dumps({'operationId':O,'request':{'reference':'REQ-100001','quantity':25},'version':2,'status':'SUCCEEDED','completedAt':'2026-01-02T00:00:00Z'})
 params={
+'JdbcExchangeRepository.backlog/0:1':[],
 'JdbcCommandReceiptRepository.lock/3:1':['actor:command:key'],'JdbcCommandReceiptRepository.find/3:1':[U,'CREATE_TASK',K],'JdbcCommandReceiptRepository.insert/6:1':[U,'NEW_COMMAND',K,'probe',201,'{}'],
 'DemoUsers.run/1:1':[uid(900004),'sql.probe','not-a-login-secret','INITIATOR'],'JdbcUserDetailsService.loadUserByUsername/1:1':['sql.owner.one'],
 'JdbcTaskRepository.insert/2:1':[NT,U,NO,'probe','REQ-110001',25],'JdbcExchangeRepository.enqueue/1:1':[uid(105001)],'JdbcTaskRepository.rename/3:1':[ 'changed',2,T],

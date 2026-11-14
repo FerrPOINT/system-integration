@@ -28,6 +28,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
 @Tag("postgres")
 @SpringBootTest(properties = {"si.emulator.worker.enabled=false", "spring.profiles.active=test-faults"})
 @AutoConfigureMockMvc
@@ -39,6 +40,27 @@ class EmulatorWorkflowTest {
     @Autowired MockMvc mvc;
     @Autowired PlatformTransactionManager transactions;
     @MockitoSpyBean JdbcTemplate publicationSql;
+
+    @Test
+    void lifecycleLogsDescribeCommittedEffectsOnly(org.springframework.boot.test.system.CapturedOutput output) {
+        var id=UUID.randomUUID();var request=new OperationRequest("REQ-123456",25);
+        new TransactionTemplate(transactions).executeWithoutResult(tx -> {
+            service.accept(id,request);
+            assertFalse(output.getAll().contains("event=accepted operationId="+id));
+            tx.setRollbackOnly();
+        });
+        assertFalse(output.getAll().contains("event=accepted operationId="+id));
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM operations",Integer.class));
+        service.accept(id,request);
+        assertTrue(output.getAll().contains("event=accepted operationId="+id));
+        service.accept(id,request);
+        assertTrue(output.getAll().contains("event=replayed operationId="+id));
+        assertTrue(service.executeNext());
+        assertTrue(output.getAll().contains("event=executed operationId="+id));
+        assertEquals(2,service.publish(25));
+        assertTrue(output.getAll().contains("event=published operationId=null detail=count=2"));
+        assertEquals(1,service.get(id).executions());
+    }
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry properties) {

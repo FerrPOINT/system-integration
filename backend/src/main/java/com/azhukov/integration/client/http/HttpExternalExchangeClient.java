@@ -60,7 +60,8 @@ public class HttpExternalExchangeClient implements ExternalExchangeClient {
     public Lookup lookup(UUID id) {
         var reply=get(id);
         if (reply.protocolFailure()!=null)
-            return new Lookup(Availability.UNAVAILABLE,null,reply.protocolFailure(),null);
+            return new Lookup(Availability.UNAVAILABLE,null,reply.protocolFailure(),
+                new ProtocolEvidence(null,"RESPONSE_SIZE at body"));
         if (ExchangeProtocol.missingOperation(reply.status(),reply.body()))
             return new Lookup(Availability.NOT_FOUND,null,null,reply.body());
         if (reply.status()>=400 && reply.status()<500)
@@ -69,10 +70,14 @@ public class HttpExternalExchangeClient implements ExternalExchangeClient {
         if (reply.status()==200) {
             try { return new Lookup(Availability.PRESENT,new ExchangeProtocol().state(reply.body()),null,reply.body()); }
             catch (IllegalArgumentException invalid) {
-                return new Lookup(Availability.UNAVAILABLE,null,"Сверка получила некорректный внешний снимок",reply.body());
+                return new Lookup(Availability.UNAVAILABLE,null,"Сверка получила некорректный внешний снимок",
+                    ExchangeProtocol.diagnostics(reply.body(),invalid));
             }
         }
-        return new Lookup(Availability.UNAVAILABLE,null,null,reply.body());
+        if (reply.status()==0 || (reply.status()>=500 && reply.status()<=599))
+            return new Lookup(Availability.UNAVAILABLE,null,null,reply.body());
+        return new Lookup(Availability.UNAVAILABLE,null,
+            "Сверка получила неподдерживаемый ответ HTTP "+reply.status(),reply.body());
     }
 
     private ExchangeReply send(HttpRequest.Builder request) {

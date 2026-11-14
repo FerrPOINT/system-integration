@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Внутренний API заданий
   version: 1.0.0
-  description: Контракт сессии, реестра, истории и операторских действий.
+  description: Контракт сессии, реестра, истории и операторских действий. Ответы содержат серверный X-Request-ID для связи с техническим журналом.
 security:
   - session: []
 paths:
@@ -117,13 +117,13 @@ paths:
             $ref: '#/components/schemas/BusinessStatus'
         - name: createdFrom
           in: query
-          description: Включённая нижняя граница времени создания в UTC.
+          description: Включённая нижняя граница времени создания в UTC; поддерживаются годы 0001–9999.
           schema:
             type: string
             format: date-time
         - name: createdTo
           in: query
-          description: Исключённая верхняя граница времени создания в UTC. При обеих границах должна быть позже createdFrom.
+          description: Исключённая верхняя граница времени создания в UTC, годы 0001–9999. При обеих границах должна быть позже createdFrom.
           schema:
             type: string
             format: date-time
@@ -638,10 +638,11 @@ components:
             $ref: '#/components/schemas/Problem'
   schemas:
     Title:
+      description: Корректный Unicode без одиночных UTF-16 surrogate-кодов и нулевого символа.
       type: string
       minLength: 1
       maxLength: 160
-      pattern: '^[\s\S]*\S[\s\S]*$'
+      pattern: '^(?![\s\S]*\u0000)[\s\S]*\S[\s\S]*$'
     Request:
       $ref: './external-exchange.openapi.yaml#/components/schemas/OperationInput'
     Problem:
@@ -1053,7 +1054,7 @@ components:
       type: string
       minLength: 1
       maxLength: 500
-      pattern: '^[\s\S]*\S[\s\S]*$'
+      pattern: '^(?![\s\S]*\u0000)[\s\S]*\S[\s\S]*$'
     ResolveIssueRequest:
       type: object
       additionalProperties: false

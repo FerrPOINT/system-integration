@@ -41,6 +41,8 @@ class ResultFeedTest extends PostgresTest {
                 call.getArguments()[0] instanceof String sql && sql.startsWith("UPDATE incoming_position")).count();
             assertEquals(0,writes,"An empty page must not start cursor/result application");
             assertEquals(0,exchange.cursor());
+            assertNotNull(worker.diagnostics().lastSuccessfulRead());
+            assertFalse(worker.diagnostics().paused());
         } finally { server.stop(0); }
     }
 
@@ -60,6 +62,7 @@ class ResultFeedTest extends PostgresTest {
                 assertEquals(7, exchange.cursor());
                 assertEquals(1, count("exchange_issues"));
                 assertEquals(0, count("task_history"));
+                assertTrue(worker.diagnostics().paused());assertEquals(1,worker.diagnostics().invalidPages());
             }
             // A valid cursor with an invalid result is diagnosed and consumed, rather than poisoning the feed.
             page.set("[{\"cursor\":8,\"result\":null}]");
@@ -83,6 +86,101 @@ class ResultFeedTest extends PostgresTest {
             assertEquals(1, requests.get());
             assertEquals(0, exchange.cursor());
             assertEquals(0, count("exchange_issues"));
+            assertEquals(1,worker.diagnostics().unavailableReads());
+            assertNull(worker.diagnostics().lastSuccessfulRead());assertFalse(worker.diagnostics().paused());
+        } finally { server.stop(0); }
+    }
+
+    @Test
+    void detailedBadPageReusesTheHistoricalFingerprintWithoutChangingStoredJson() throws Exception {
+        var page=new AtomicReference<>("""
+            [{"cursor":2},{"cursor":1}]
+            """);
+        exchange.badPage(json.readTree(page.get()));
+        assertEquals(1,count("exchange_issues"));
+        var server=source(new AtomicInteger(),page,new AtomicInteger(200));
+        try (var http=transport(server);var worker=new ExchangeCoordinator(exchange,new HttpExternalExchangeClient(http,json,settings(server)))) {
+            worker.receive();
+            assertEquals(1,count("exchange_issues"));
+            assertTrue(worker.diagnostics().paused());
+        } finally { server.stop(0); }
+    }
+
+
+    @Test
+    void classifiedResultsKeepHistoricalFingerprintsAndDoNotBlockTheNextValidEvent() throws Exception {
+        var owner=login("initiator.one");
+        var task=created(owner,java.util.UUID.randomUUID());
+        var neighbor=created(owner,java.util.UUID.randomUUID());
+        var operation=jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?",java.util.UUID.class,task);
+        var nextOperation=jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?",java.util.UUID.class,neighbor);
+        var valid=json.createObjectNode().put("operationId",operation.toString())
+            .set("request",json.createObjectNode().put("reference","REQ-000001").put("quantity",25))
+            .put("version",2).put("status","SUCCEEDED").put("completedAt","2026-11-12T00:00:00Z");
+        var badVersion=valid.deepCopy().put("version",3);
+        var badStatus=valid.deepCopy().put("status","private-value");
+        String canonical="Входящий снимок не соответствует контракту";
+        assertTrue(exchange.consume(0,java.util.List.of(new com.azhukov.integration.client.ExternalExchangeClient.IncomingEvent(
+            1,operation,null,badVersion))));
+        var historical=jdbc.queryForObject("SELECT evidence::text FROM exchange_issues",String.class);
+        var goodNeighbor=valid.deepCopy().put("operationId",nextOperation.toString());
+        var page=new AtomicReference<>(json.writeValueAsString(json.createArrayNode()
+            .add(json.createObjectNode().put("cursor",2).set("result",badVersion))
+            .add(json.createObjectNode().put("cursor",3).set("result",badStatus))
+            .add(json.createObjectNode().put("cursor",4).set("result",goodNeighbor))));
+        var server=source(new AtomicInteger(),page,new AtomicInteger(200));
+        try (var http=transport(server);var worker=new ExchangeCoordinator(exchange,new HttpExternalExchangeClient(http,json,settings(server)))) {
+            worker.receive();
+            assertEquals(4,exchange.cursor());assertEquals(2,count("exchange_issues"));
+            var versionFingerprint=com.azhukov.integration.json.ContentFingerprint.of(json,java.util.List.of(canonical,badVersion));
+            var statusFingerprint=com.azhukov.integration.json.ContentFingerprint.of(json,java.util.List.of(canonical,badStatus));
+            assertEquals(historical,jdbc.queryForObject("SELECT evidence::text FROM exchange_issues WHERE fingerprint=?",String.class,versionFingerprint));
+            var evidence=json.readTree(jdbc.queryForObject("SELECT evidence::text FROM exchange_issues WHERE fingerprint=?",String.class,statusFingerprint));
+            assertEquals(canonical+" [INVALID_STATUS at status]",evidence.get("reason").asString());
+            assertEquals(canonical,jdbc.queryForObject("SELECT summary FROM exchange_issues WHERE fingerprint=?",String.class,statusFingerprint));
+            assertEquals("PENDING",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?",String.class,task));
+            assertEquals("SUCCEEDED",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?",String.class,neighbor));
+            assertEquals(goodNeighbor,json.readTree(jdbc.queryForObject("SELECT accepted_result::text FROM tasks WHERE id=?",String.class,neighbor)));
+            var history=count("task_history");
+            page.set(json.writeValueAsString(json.createArrayNode()
+                .add(json.createObjectNode().put("cursor",5).set("result",badVersion))
+                .add(json.createObjectNode().put("cursor",6).set("result",badStatus))
+                .add(json.createObjectNode().put("cursor",7).set("result",goodNeighbor))));
+            worker.receive();
+            assertEquals(7,exchange.cursor());assertEquals(2,count("exchange_issues"));
+            assertEquals(history,count("task_history"));assertEquals(2,count("command_receipts"));
+        } finally { server.stop(0); }
+    }
+
+    @Test
+    void unsupportedExternalDateCreatesOneIssueWithoutBlockingAValidNeighbor() throws Exception {
+        var owner=login("initiator.one");
+        var badTask=created(owner,java.util.UUID.randomUUID());
+        var goodTask=created(owner,java.util.UUID.randomUUID());
+        var badOperation=jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?",java.util.UUID.class,badTask);
+        var goodOperation=jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?",java.util.UUID.class,goodTask);
+        var bad=json.createObjectNode().put("operationId",badOperation.toString())
+            .set("request",json.createObjectNode().put("reference","REQ-000001").put("quantity",25))
+            .put("version",2).put("status","SUCCEEDED").put("completedAt","+10000-01-01T00:00:00Z");
+        var good=bad.deepCopy().put("operationId",goodOperation.toString()).put("completedAt","2026-11-12T00:00:00Z");
+        var page=new AtomicReference<>(json.writeValueAsString(json.createArrayNode()
+            .add(json.createObjectNode().put("cursor",1).set("result",bad))
+            .add(json.createObjectNode().put("cursor",2).set("result",good))));
+        var server=source(new AtomicInteger(),page,new AtomicInteger(200));
+        try (var http=transport(server);var worker=new ExchangeCoordinator(exchange,new HttpExternalExchangeClient(http,json,settings(server)))) {
+            worker.receive();
+            assertEquals(2,exchange.cursor());assertEquals(1,count("exchange_issues"));
+            assertEquals("PENDING",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?",String.class,badTask));
+            assertNull(jdbc.queryForObject("SELECT accepted_result::text FROM tasks WHERE id=?",String.class,badTask));
+            assertEquals("SUCCEEDED",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?",String.class,goodTask));
+            assertTrue(jdbc.queryForObject("SELECT evidence::text FROM exchange_issues",String.class).contains("INVALID_UTC at completedAt"));
+            var history=count("task_history");
+            page.set(json.writeValueAsString(json.createArrayNode()
+                .add(json.createObjectNode().put("cursor",3).set("result",bad))
+                .add(json.createObjectNode().put("cursor",4).set("result",good))));
+            worker.receive();
+            assertEquals(4,exchange.cursor());assertEquals(1,count("exchange_issues"));
+            assertEquals(history,count("task_history"));
         } finally { server.stop(0); }
     }
 

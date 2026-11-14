@@ -1,5 +1,45 @@
 # План приёмки
 
+## Регрессии backend-аудита
+
+Финальный аудит F01–F05 дополнительно проверяет:
+
+- одиночные UTF-16 surrogate-коды в escaped JSON create/rename/retry/resolve:
+  VALIDATION_FAILED до хранения; отсутствуют частичные записи и receipt,
+  отклонённый ключ пригоден для следующей корректной команды;
+- годы вне 0001–9999 в обеих границах фильтра: 400, а не SQL 500;
+  допустимые границы работают с теми же правами и [from,to);
+- внешние timestamps с extended year, отсутствующими секундами, неизвестным
+  offset -00:00 или лишней дробной точностью: ошибка протокола;
+  плохое событие не мешает соседнему корректному, повтор не дублирует проблему;
+- lookup 201/202/204/302: PROTOCOL_ERROR и сохранённая сверка/история,
+  replay без нового HTTP/эффекта; корректные 200/404 и временный 503 сохранены;
+- private diagnostics: feed.deliveryInFlight вместо неясного inFlight,
+  прежние права и отсутствие побочной записи;
+- конечные runtime-образы: vendor OS updates, повторный Trivy и smoke.
+
+
+[BA-01–BA-09](backend-audit-followup-plan.md): U+0000 и допустимый Unicode
+проверяют TaskTitle/IssueCommands, HTTP create/rename — TaskWorkflowTest/
+ThreadingTest, причины допустимых retry/resolve — OperationsWorkflowTest.
+Проверяются 400, отсутствие частичных данных/receipt и request correlation.
+
+OperationsWorkflowTest выполняет concurrent commit между SELECT карточки:
+старый snapshot согласован, следующий запрос видит RESOLVED без действий.
+Protocol/feed/IssueDiagnostics сохраняют исходный fingerprint content и старый
+JSON shape при добавлении безопасной detail. ExchangeDiagnosticsTest
+проверяет 401/403/operator, empty/occupied queue, paused feed и readiness.
+ExchangeProtocolTest различает unsupported version, invalid status, field type
+и условные варианты; прежняя матрица допустимых состояний сохраняется.
+HttpExternalExchangeClientTest проверяет эти details на реальном loopback HTTP
+через delivery/feed/lookup и корректный следующий ответ того же клиента.
+ResultFeedTest проверяет старый fingerprint/evidence, неизменный summary,
+повтор ошибок без новых проблем/истории и применение корректного соседнего
+события с атомарным продвижением cursor.
+EmulatorWorkflowTest проверяет commit-only lifecycle logs и отсутствие успеха
+после rollback. PG upgrade проверяет digests 14 таблиц до/после 18.6 → 18.7.
+EXPLAIN покрывает новый on-demand backlog SQL. Полный gate остаётся обязательным.
+
 Сценарии TC-01–TC-15 проверяют исходное ТЗ; TC-16 — публикацию по поручению владельца. Результаты прогона указываются
 отдельно с версией приложения, окружением и ссылкой на отчёт. Для интеграционных
 проверок используются миграции и тестовый PostgreSQL, а внешний обмен

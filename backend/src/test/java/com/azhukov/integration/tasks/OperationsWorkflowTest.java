@@ -29,6 +29,8 @@ class OperationsWorkflowTest extends PostgresTest {
     @Autowired ExchangeService exchange;
     @Autowired PlatformTransactionManager transactions;
     @MockitoSpyBean JdbcTemplate observedSql;
+    @MockitoSpyBean com.azhukov.integration.repository.jdbc.JdbcReviewRepository observedIssues;
+    @Autowired com.azhukov.integration.service.ReviewService reviews;
 
     @BeforeEach
     void classifyRawLookupReplies() { when(client.lookup(any(UUID.class))).thenCallRealMethod(); }
@@ -172,7 +174,7 @@ class OperationsWorkflowTest extends PostgresTest {
         var history=count("task_history");
         var receipts=count("command_receipts");
         var revision=scenario.revision();
-        for (var reason:new String[]{"\u2003","\u00a0","\u3000"}) {
+        for (var reason:new String[]{"\u2003","\u00a0","\u3000",Character.toString(0),"До"+Character.toString(0)+"после"}) {
             status(400,command(scenario.op(),"retry",scenario.issue(),UUID.randomUUID(),Map.of(
                 "expectedIssueRevision",revision,"reconciliationId",scenario.reconciliation(),"reason",reason)));
             status(400,command(scenario.op(),"resolve",scenario.issue(),UUID.randomUUID(),Map.of(
@@ -181,8 +183,20 @@ class OperationsWorkflowTest extends PostgresTest {
         }
         assertEquals(history,count("task_history"));
         assertEquals(receipts,count("command_receipts"));
+        for (String escape : new String[]{"\\uD800","\\uDC00"}) {
+            for (String action : new String[]{"retry","resolve"}) {
+                String input="{\"expectedIssueRevision\":"+revision+",\"reconciliationId\":\""+scenario.reconciliation()
+                    +"\",\"reason\":\"bad"+escape+"value\",\"action\":\"APPLY_EXTERNAL_RESULT\"}";
+                if (action.equals("retry")) input=input.replace(",\"action\":\"APPLY_EXTERNAL_RESULT\"","");
+                var rejected=mvc.perform(post("/api/exchange/issues/"+scenario.issue()+"/"+action)
+                    .session(scenario.op().session()).header("X-CSRF-TOKEN",scenario.op().csrf())
+                    .header("Idempotency-Key",UUID.randomUUID()).contentType("application/json").content(input)).andReturn();
+                status(400,rejected);assertEquals("VALIDATION_FAILED",body(rejected).get("code").asString());
+            }
+        }
+        assertEquals(history,count("task_history"));assertEquals(receipts,count("command_receipts"));
         assertEquals(revision,body(issue(scenario.op(),scenario.issue())).get("issueRevision").asLong());
-        var reason="Проверено\u2003оператором";
+        var reason="Проверено\u2003оператором 😀";
         var decision=command(scenario.op(),"resolve",scenario.issue(),UUID.randomUUID(),Map.of(
             "expectedIssueRevision",revision,"reconciliationId",scenario.reconciliation(),
             "action","APPLY_EXTERNAL_RESULT","reason",reason));
@@ -239,6 +253,12 @@ class OperationsWorkflowTest extends PostgresTest {
         when(client.get(original.operationId())).thenReturn(missing());
         var snapshot=reconcile(op,task,UUID.randomUUID()); status(200,snapshot);
         long revision=body(issue(op,issue)).get("issueRevision").asLong();
+        var beforeInvalid=count("task_history");
+        var invalid=Map.of("expectedIssueRevision",revision,"reconciliationId",body(snapshot).get("reconciliationId").asString(),"reason","До"+Character.toString(0)+"после");
+        var rejected=command(op,"retry",issue,UUID.randomUUID(),invalid);status(400,rejected);
+        assertEquals("VALIDATION_FAILED",body(rejected).get("code").asString());
+        assertEquals(beforeInvalid,count("task_history"));
+        assertEquals(revision,body(issue(op,issue)).get("issueRevision").asLong());
         var input=Map.of("expectedIssueRevision",revision,"reconciliationId",body(snapshot).get("reconciliationId").asString(),"reason","Источник исправлен");
         var key=UUID.randomUUID();
         var retry=command(op,"retry",issue,key,input); status(200,retry);
@@ -498,6 +518,35 @@ class OperationsWorkflowTest extends PostgresTest {
         status(200,original);assertEquals(body(results.getFirst()),body(original));
     }
 
+    @Test
+    void issueCardKeepsOneSnapshotWhileAnotherOperatorAppliesTheResult() throws Exception {
+        var scenario=difference();
+        var armed=new java.util.concurrent.atomic.AtomicBoolean(true);
+        doAnswer(call -> {
+            var row=call.callRealMethod();
+            if (armed.getAndSet(false)) {
+                java.util.concurrent.CompletableFuture.runAsync(() ->
+                    reviews.resolve(new com.azhukov.integration.domain.Actor(operator,com.azhukov.integration.domain.Actor.Role.OPERATOR),
+                        UUID.randomUUID(),scenario.issue(),new com.azhukov.integration.dto.review.IssueCommands.Resolve(
+                            scenario.revision(),UUID.fromString(scenario.reconciliation()),
+                            com.azhukov.integration.domain.review.IssueResolution.Action.APPLY_EXTERNAL_RESULT,"Подтверждено")))
+                    .get(5,java.util.concurrent.TimeUnit.SECONDS);
+            }
+            return row;
+        }).when(observedIssues).get(scenario.issue(),false);
+        try {
+            var card=issue(scenario.op(),scenario.issue());status(200,card);
+            assertEquals("OPEN",body(card).get("status").asString());
+            assertTrue(java.util.stream.StreamSupport.stream(body(card).get("allowedActions").spliterator(),false)
+                .anyMatch(action -> action.asString().equals("APPLY_EXTERNAL_RESULT")),
+                "The old issue and its fresh comparison must describe the same snapshot as the task");
+        } finally { doCallRealMethod().when(observedIssues).get(scenario.issue(),false); }
+        var current=issue(scenario.op(),scenario.issue());status(200,current);
+        assertEquals("RESOLVED",body(current).get("status").asString());
+        assertTrue(body(current).get("allowedActions").isEmpty());
+        assertEquals("SUCCEEDED",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?",String.class,scenario.task()));
+    }
+
     private record Scenario(UUID task,DeliveryAttempt claim,Client op,UUID issue,long revision,String reconciliation) {}
     private Scenario difference() throws Exception {
         UUID task=created(login("initiator.one"),UUID.randomUUID());
@@ -533,5 +582,33 @@ class OperationsWorkflowTest extends PostgresTest {
     private MvcResult command(Client op,String action,UUID issue,UUID key,Object body) throws Exception {
         return mvc.perform(post("/api/exchange/issues/"+issue+"/"+action).session(op.session()).header("X-CSRF-TOKEN",op.csrf())
             .header("Idempotency-Key",key).contentType("application/json").content(json.writeValueAsString(body))).andReturn();
+    }
+    @Test
+    void unsupportedLookupStatusesOpenProtocolIssuesButTemporaryFailureDoesNot() throws Exception {
+        var owner=login("initiator.one");
+        var op=login("operator");
+        for (int code : new int[]{503,201,202,204,302}) {
+            UUID task=created(owner,UUID.randomUUID());
+            UUID operation=jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?",UUID.class,task);
+            when(client.get(operation)).thenReturn(new ExchangeReply(code,null,false,null));
+            UUID key=UUID.randomUUID();
+            var result=reconcile(op,task,key);status(200,result);
+            assertEquals("UNAVAILABLE",body(result).get("outcome").asString());
+            assertEquals("UNAVAILABLE",body(result).get("externalAvailability").asString());
+            var issueId=body(result).get("issueId");
+            if (code==503) {
+                assertTrue(issueId==null || issueId.isNull());
+                assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM exchange_issues WHERE task_id=?",Integer.class,task));
+            } else {
+                assertNotNull(issueId);assertFalse(issueId.isNull());
+                assertEquals("PROTOCOL_ERROR",jdbc.queryForObject("SELECT kind FROM exchange_issues WHERE task_id=?",String.class,task));
+                assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM task_history WHERE task_id=? AND event_type='ISSUE_OPENED'",Integer.class,task));
+            }
+            assertEquals("PENDING",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?",String.class,task));
+            int history=count("task_history");
+            var replay=reconcile(op,task,key);status(200,replay);assertEquals(body(result),body(replay));
+            assertEquals(history,count("task_history"));
+            verify(client,times(1)).get(operation);
+        }
     }
 }

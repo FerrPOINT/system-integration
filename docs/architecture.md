@@ -201,6 +201,27 @@ Backend читает фактическое состояние эмулятор�
 [захват и применение результатов](../backend/src/main/java/com/azhukov/integration/service/ExchangeService.java),
 [исполнение и публикация эмулятора](../emulator/src/main/java/com/azhukov/emulator/service/OperationService.java).
 
+## Валидация на границах
+
+Пользовательский текст допускает корректный Unicode; одиночные UTF-16
+surrogate-коды отклоняются до JDBC штатным UTF-8 encoder, без молчаливой замены.
+Ограничения длины и запрет NUL сохраняются в TaskTitle и IssueCommands.
+
+UtcTimestamp владеет календарным диапазоном 0001–9999 и UTC. Внешний wire-парсер
+дополнительно проверяет RFC 3339: секунды обязательны, дробная часть до девяти
+знаков, UTC Z/+00:00; -00:00 как неизвестный offset не принимается.
+Фильтры нормализуются штатным ISO-парсером Spring и проверяют общий диапазон
+до запроса. Произвольные extended years не должны попадать в PostgreSQL/UI.
+Неправильное событие остаётся проблемой протокола, не новым бизнес-результатом.
+
+lookup использует ту же семантику ошибок, что доставка: отсутствие ответа и
+HTTP 5xx временны; неподдерживаемые HTTP-ответы не маскируются недоступностью.
+Стандартный 404 OPERATION_NOT_FOUND остаётся самостоятельным допустимым исходом.
+
+Runtime bases фиксируются digest; vendor OS-пакеты обновляются при image build.
+Квалифицируется конечный immutable image; обновление внутри работающего
+контейнера не используется. Raw severity сканера не доказывает эксплуатируемость.
+
 ## Границы кода
 
 Gradle Wrapper и settings.gradle находятся в нейтральном корне. Соседние
@@ -679,6 +700,30 @@ HTTP выполняется вне транзакции; доставка пов
 снимок без сети; конфликт входа даёт 409 также до сети. Первая команда повторно
 проверяет квитанцию под advisory lock при сохранении. Первые одновременные GET
 могут дублироваться, но сохраняется одна сверка/история; отдельного single-flight нет.
+
+## Диагностика и согласованное чтение
+
+Закрытый Actuator /exchange использует ExchangeCoordinator как единственного
+владельца process-local feed state/counters. Backlog читается ExchangeService →
+ExchangeRepository одним агрегатом по явному запросу; poller/кэш не добавляется.
+Delivery queue включает parked rows и не равна всему business pending.
+Пауза feed не делает принимающий задания backend not-ready.
+
+Issue card использует REPEATABLE_READ для общего snapshot issue/exchange/
+reconciliation. Команды сохраняют locks и проверку revision/action/freshness.
+RequestCorrelationFilter создаёт X-Request-ID до Security и очищает MDC
+после chain, также при ошибке. Межпроцессная связь остаётся по operationId.
+У эмулятора afterCommit lifecycle logs: rollback не утверждает успех,
+публикация пачки логируется одной строкой.
+
+ProtocolEvidence — внутренний wrapper original content/safe detail.
+IssueLifecycleService дополняет существующий Evidence.reason, а в fingerprint
+передаёт прежние canonical reason и original content. Wire enum версии/статуса
+проверяет ExchangeProtocol с отдельными безопасными кодами UNSUPPORTED_VERSION
+и INVALID_STATUS; FIELD_TYPE обозначает отсутствующее/null/неверно типизированное
+поле. Сочетания допустимых enum и условных полей проверяет OperationResult,
+их нарушение остаётся INVALID_VARIANT. Новых JSON-полей,
+миграции и fallback для старых записей нет.
 
 ## Потоки и ограничение параллелизма
 

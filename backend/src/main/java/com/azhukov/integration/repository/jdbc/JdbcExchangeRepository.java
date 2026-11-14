@@ -1,6 +1,7 @@
 package com.azhukov.integration.repository.jdbc;
 
 import com.azhukov.integration.domain.RuleViolation;
+import com.azhukov.integration.dto.exchange.DeliveryBacklog;
 import com.azhukov.integration.domain.exchange.ExchangeState;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.DeliveryStatus;
@@ -105,6 +106,13 @@ public class JdbcExchangeRepository implements ExchangeRepository {
     public void applyResult(OperationResult result) {
         jdbc.update("UPDATE tasks SET accepted_result = ?::jsonb,business_status = ?,delivery_status = 'ACKNOWLEDGED',exchange_version = exchange_version + 1 WHERE operation_id = ?",
             json.writeValueAsString(result),result.status().name(),result.operationId());
+    }
+
+    public DeliveryBacklog backlog() {
+        return jdbc.queryForObject("""
+            SELECT count(*) AS operations,min(t.created_at) AS oldest_created_at
+            FROM delivery_queue q JOIN tasks t ON t.operation_id=q.operation_id
+            """,(rs,n) -> new DeliveryBacklog(rs.getLong("operations"),rs.getObject("oldest_created_at",OffsetDateTime.class)));
     }
 
     public long cursor(boolean lock) {

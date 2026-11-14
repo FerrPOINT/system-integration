@@ -1,5 +1,156 @@
 # Текущая стадия
 
+## Интеграция с актуальным main
+
+Во время приёмки backend в main вошёл frontend PR #8 (673c7ec).
+Его код и документы сохранены; конфликты затронули только документацию.
+Интегрированный кандидат 2653c7775deddccf674ebb2341efdb8a2a09def3 проверен
+на Firebat1: lint/typecheck/codegen/Vite, 56 frontend Node tests, две asset-проверки,
+четыре HTTP smoke, 74 desktop/mobile UI и 110 component, без ошибок и пропусков.
+Backend/SQL/контракты и compile inputs совпадают с 46ffcc8; файловая система
+backend-образа побайтно совпала по DiffIDs, OS-слои emulator/frontend прежние.
+Java/SQL/recovery/NF08 ниже относятся к этим неизменённым backend inputs;
+нагрузка не повторялась только из-за переноса frontend. Новые UI/component
+результаты — отдельная проверка связки, не выдаются за старые 74/10.
+Receipts: integrated-*.log/json, integrated-components.json.gz и
+integration-qualification.json в tests/results/backend-audit-fixes-2026-11-15.
+
+## Финальный backend-аудит — квалификация 15 ноября
+
+Прикладной кандидат 46ffcc843125c3edf4e91fcea9b125ad27367c76 закрывает F01–F05:
+malformed UTF-16 отклоняется до JDBC; UTC ограничен годами 0001–9999;
+внешний wire требует RFC 3339 с секундами; неподдерживаемые ответы lookup
+выделяются для разбора. deliveryInFlight явно именует активные доставки.
+Схема/Flyway, fingerprints и сохранённые receipts не менялись.
+Объём и причинные регрессии — в backend-audit-followup-plan.md.
+
+| Проверка на Firebat1 | Свежий результат |
+| --- | --- |
+| Java | 110 backend unit + 88 PostgreSQL + 13 emulator unit + 17 PostgreSQL: 228 без ошибок и пропусков; оба JAR/Javadoc собраны |
+| SQL | 69 call sites, 533 cases, 1599 EXPLAIN ANALYZE/BUFFERS/WAL; fixtures откатились |
+| Frontend/API | TypeScript/Vite/codegen, 29 Node-проверок, 4 HTTP smoke; build graph, регенерация контрактов и Docker context проверены |
+| UI | 74 desktop/mobile и 10 component, без failed/flaky/skipped |
+| Восстановление и demo | 10 recovery, 6 demo; исполнение отдельно сверено в БД эмулятора |
+| NF08 | 5000 исходных, 20 клиентов, 30 s прогрева / 120 s замера, 2 CPU / 4 GiB; 56 824 запроса, read p95 97,93 ms / write 96,67 ms, ошибок 0 |
+| Целостность | Все 21 600 операций согласованы, очередь/pending/problems пусты, duplicateExecutions=0; все 16 600 новых операций завершены |
+| Внешнее исполнение | p95 всех новых операций 125,45 s, отдельно от API; drain 50,47 s |
+| Поставка | NGINX stable 1.30.6 и pinned JRE base, vendor OS updates при build; image IDs/source labels проверены |
+| Зависимости | OSV: 82 runtime modules, совпадений 0; final OS scan: frontend/PG — 0, Java OS — 30 Medium / 4 Low без vendor fix; High/Critical и fixable — 0 |
+
+Генератор NF08 находился на том же Firebat1 вне лимита контейнеров,
+обращался к локальному API. Публичные HTTPS/proxy в замер не входят.
+Один поздний ответ доставки проигнорирован по lease; итоговая сверка
+подтверждает отсутствие потерь и повторного исполнения.
+Оставшиеся vendor advisories не объявляются доказанной атакой на API;
+OS-only scan не является полным аудитом отдельно поставленных бинарников.
+
+Ревью не требует новых слоёв, Redis, брокера или перевода SQL на ORM.
+SQL observer сначала отказался при 12 подключениях тестовых apps;
+после их штатной остановки прошёл. Проверки не ослаблялись.
+Receipts: ignored tests/results/backend-audit-fixes-2026-11-15/qualification.json,
+java.json, sql-plans.json.gz, app-ui.json, components.json.gz, recovery.json.gz,
+demo-independent.json, nf08-summary.json/nf08.json.gz и final-*-os.json.
+
+PR #6 готов к разрешённому merge, затем отдельно PR #7 с настройками.
+Код не форматируется; обязательный formatter gate/format-on-save выключены.
+Frontend PR #8 уже вошёл в main и сохраняется при интеграции backend.
+Публичный demo остаётся на 2e97ce4; новый deploy не выполняется.
+
+## Предыдущая квалификация 2e97ce4 — диагностика
+
+Неподдерживаемая wire-версия результата получает UNSUPPORTED_VERSION at version,
+неизвестный или недопустимый для результата статус — INVALID_STATUS at status.
+Отсутствующий/null/неверно типизированный version/status остаётся FIELD_TYPE.
+Допустимые enum с несовместимыми условными полями остаются INVALID_VARIANT:
+эти сочетания продолжает проверять OperationResult. Значения входных полей
+в безопасную detail не включаются; canonical reason/content не меняются.
+
+Добавлены пять тестов: классификация версии/типа, статуса/типа, условных
+вариантов, реальный loopback HTTP для delivery/feed/lookup с корректным
+следующим ответом и PostgreSQL-сценарий исторического fingerprint/replay
+с корректным соседним событием. Перед исправлением три новых unit-теста
+воспроизвели дефект. После исправления прошли полный backend unit (107)
+и PostgreSQL (84), JAR и Javadoc без ошибок/пропусков тестов.
+
+Схема, миграции, frontend, emulator и SQL не менялись. Их прежние результаты
+ниже относятся к указанным там версиям; UI/recovery/NF08 для этой точечной
+поправки повторно не запускались. Образы e0360e0 ниже относятся к основному
+этапу и не содержат исправление P2: перед deploy нужен backend, собранный
+из актуального commit PR, и отдельная проверка запущенного приложения.
+Merge и публичный deploy не выполнялись.
+Компактный отчёт поправки — tests/results/backend-followup/diagnostic-fix.json
+(ignored); исходники и тесты — [PR #6](https://github.com/FerrPOINT/system-integration/pull/6).
+
+## Доработки полного backend-аудита — выполнено, выпуск подготовлен
+
+План [BA-01–BA-09](backend-audit-followup-plan.md), база main 5aa1c06.
+Работа выполнена на Firebat1 в ветке fix/backend-audit-followup.
+Свежий frontend 6f6dbe0 полностью включён в базу. Квалифицированный runtime
+основного этапа — e0360e081d7b0b245647694731449d2d372ce5f2; интеграция
+67de759 меняла только документацию. Последующая поправка P2 описана выше. Исходники подготовлены к merge; public runtime
+ac5c207 продолжает работать, merge и публичный deploy в этот этап не входят.
+
+U+0000 отклоняется с VALIDATION_FAILED до записи: TaskTitle, причины
+retry/resolve и OpenAPI согласованы. RED-тесты воспроизвели исходный дефект.
+Protocol diagnostics сообщает безопасную категорию/поле, сохраняя исходные
+fingerprint inputs, JSON shape и receipts. Добавлены серверный X-Request-ID,
+очистка MDC, commit-aware журналы эмулятора и закрытый Actuator /exchange.
+Диагностика читает очередь по запросу, без нового poller и COUNT в обычном API.
+Очередь включает parked deliveries, а не все незавершённые бизнес-задания.
+Feed-счётчики принадлежат процессу и сбрасываются при рестарте.
+Флаг worker принимает только true/false; его значение проверено относительно
+ConditionalOnProperty, неподдерживаемые aliases явно отклоняются.
+
+Карточка проблемы теперь читает согласованный REPEATABLE_READ snapshot.
+Детерминированный тест сначала воспроизвёл конкурентный commit решения между
+SELECT, затем подтвердил согласованные проблему/действия; следующее чтение
+видит RESOLVED. Команды продолжают повторно проверять состояние под lock.
+
+| Проверка | Результат |
+| --- | --- |
+| Java | 216 тестов: backend unit 103 / PostgreSQL 83, emulator unit 13 / PostgreSQL 17. Ошибок и пропусков нет. |
+| Build | Два JAR, Javadoc/doclint, generated contracts/client, TypeScript/Vite; 28 Node-проверок инструментов/API/build/assets, 4 smoke. |
+| SQL | 69 ручных sites и captured generated SQL: 533 варианта, 1599 EXPLAIN ANALYZE/BUFFERS/WAL; 4 теста SQL-инструментов и проверка реального lock observer. Fixtures откатились. |
+| UI | Финальный e0360e0: 74 desktop/mobile сценария без failed/flaky/skipped; права трёх аккаунтов, foreign card 404, private diagnostics 401/403 и logout проверены также через API. |
+| Components/recovery/demo | 10 component, 10 recovery и 6 независимо проверенных демосценариев прошли на 6a8c326; граница повторной квалификации приведена ниже. |
+| PostgreSQL | Чистый запуск 18.7, upgrade 18.6 → 18.7 и проверка возврата/повторного upgrade на собственном томе. Counts/digests 14 business/migration таблиц двух БД совпали. |
+| NF08 | 5000 исходных записей, 20 клиентов, warmup 30 с + замер 120 с, суммарно 2 CPU / 4 GiB. 58 814 запросов; p95 чтения 97,84 мс, изменения 96,56 мс; ошибок 0. |
+
+После основного gate найден и RED-тестом подтверждён alias Boolean conversion:
+yes/on/1 не соответствовали условию запуска scheduler. На e0360e0 заново
+прошли все 186 backend unit/PostgreSQL тестов, JAR/Javadoc, SQL-планы,
+реальный startup/API, полный UI и NF08. Эмуляторные 30 тестов и
+components/recovery/demo не повторялись: emulator/frontend RootFS идентичны
+6a8c326; в backend JAR отличаются только ExchangeDiagnosticsEndpoint и его
+вложенный Diagnostics. Изменение касается проверки startup-флага; остальное
+содержимое JAR идентично. Полный recovery на e0360e0 отдельно не заявляем.
+
+После drain сверены все 22 080 операций обеих БД: потерь и повторного
+исполнения нет; очередь/pending/open issues/unpublished завершились, cursor
+согласован. 20 конкурентных повторов создали одну запись; конфликт тела
+отклонён. P95 завершения новых операций — 124,79 с, drain — 54,505 с.
+Генератор работал на том же Firebat1 вне лимитов контейнеров, напрямую
+с локальным API. Публичные HTTPS/proxy в p95 не входят; этот замер
+не определяет максимальную ёмкость и не задаёт SLA внешнего исполнения.
+
+Повторно просмотрены diff и соседние границы: права/CSRF, транзакции,
+canonical fingerprints, protocol evidence, жизненный цикл MDC, endpoint
+security, публикация после commit и SQL. Блокирующих замечаний не осталось.
+Новые зависимости, Redis, JPA, CI, процессы, миграции и fallback не добавлены.
+Исходное ТЗ совпадает с пользовательским файлом по SHA-256
+113890f7eea6bf91b232f0a4082dc8f901301b2ad60a2160d099c28769800aff.
+
+Тестовые контейнеры, том и сеть удалены, scratch и завершённые fixtures очищены.
+Все 11 обычных контейнеров сохранили ID/image/StartedAt; публичный HTTPS даёт 200.
+Компактные receipts — tests/results/backend-followup (ignored):
+java-final, final-api, final-delta, final-images, nf08-summary, cleanup,
+сжатые SQL/UI/NF08 и журналы. Сохранены выбранные образы
+system-integration-{backend,emulator,frontend}:e0360e0 и release.json с их IDs,
+а также release-compose.yml с pinned PostgreSQL digest.
+Это inputs будущего отдельно порученного --no-build deploy:
+перед запуском сверить IDs; после запуска проверить served artifact и публичные
+сценарии. Подготовка образов не является публичной приёмкой нового выпуска.
+
 ## Повторное ревью React — исправления проверены 15 ноября
 
 Код `86edc6f` устраняет четыре замечания повторного ревью: дублирование create

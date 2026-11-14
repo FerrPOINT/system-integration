@@ -33,7 +33,7 @@ class TaskTitleTest {
 
     @Test
     void titleMustRespectTheExistingInputLimits() {
-        for (var invalid : new String[]{""," \n\t","\u2003","\u3000","\u00a0","x".repeat(161)}) {
+        for (var invalid : new String[]{""," \n\t","\u2003","\u3000","\u00a0","x".repeat(161),Character.toString(0),"До"+Character.toString(0)+"после"}) {
             assertEquals(RuleViolation.Code.VALIDATION_FAILED,
                 assertThrows(RuleViolation.class,() -> new TaskTitle(invalid,1)).code());
         }
@@ -41,11 +41,22 @@ class TaskTitleTest {
         assertEquals("x".repeat(160),new TaskTitle("x".repeat(160),1).value());
         assertEquals("Имя\u2003объекта",new TaskTitle("Имя\u2003объекта",1).value());
         assertEquals("\nИмя\n",new TaskTitle("\nИмя\n",1).value());
+        assertEquals("Имя 😀",new TaskTitle("Имя 😀",1).value());
     }
 
     @Test
     void persistedRevisionMustBeWithinTheContractRange() {
         assertThrows(RuleViolation.class,() -> new TaskTitle("Имя",0));
         assertThrows(RuleViolation.class,() -> new TaskTitle("Имя",TaskTitle.MAX_REVISION+1));
+    }
+    @Test
+    void malformedUtf16IsRejectedWithoutRejectingSupplementaryCharacters() {
+        for (String title : new String[]{"before\uD800after","before\uDC00after","\uD800\uD800","\uDC00\uD800"}) {
+            assertEquals(RuleViolation.Code.VALIDATION_FAILED,
+                assertThrows(RuleViolation.class,() -> new TaskTitle(title,1)).code());
+            assertThrows(RuleViolation.class,() -> new TaskTitle("Existing",1).rename(title,1));
+        }
+        for (String title : new String[]{"Имя 😀","𐀀".repeat(80),"Имя\u2003объекта"})
+            assertEquals(title,new TaskTitle(title,1).value());
     }
 }

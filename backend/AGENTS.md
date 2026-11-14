@@ -16,6 +16,9 @@ Java 25 и Spring Boot. Текущая структура пакетов опи�
 - domain — обычная Java-модель и предметные правила. Без Spring, Jackson,
   JDBC, UserDetails, HTTP-статусов и generated DTO. Сущность предметной области
   не обязана быть JPA Entity; сохраняем Spring JDBC.
+- Служебный ExchangeDiagnosticsEndpoint относится к controller и использует
+  штатный Actuator, не прикладной OpenAPI. Доступ только оператору через
+  приватный backend; выдача не добавляет SQL к обычным API-запросам.
 - controller — тонкая реализация generated API, преобразование текущего
   пользователя в Actor и вызов service. mapper преобразует HTTP DTO через
   MapStruct; права, допустимые действия и переходы определяет domain/service.
