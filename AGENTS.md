@@ -80,6 +80,17 @@ $env:PLAYWRIGHT_BROWSERS_PATH="$PWD/.local/browsers"
   проверки затронутого сценария в рабочей среде. Статус сборки, работу сервиса и приёмку
   фиксируйте отдельно в [текущей стадии](docs/current-stage.md).
 
+## Форматирование
+
+Java в backend/emulator: ./gradlew spotlessApply, затем spotlessCheck.
+Frontend и JS/TS-проверки: из frontend выполнить corepack pnpm format
+и format:check. Правила и версии заданы в root build.gradle, .editorconfig,
+.prettierrc.json и frontend/package.json; не добавляйте локальный второй стиль.
+Generated/build/results, lockfile и применённые миграции не форматируются.
+Первичное форматирование отделяется от изменения поведения; новые изменения
+сразу следуют formatter, форматтер не заменяет тесты.
+Команды и IDE-настройки — в README.
+
 ## Архитектурные принципы
 
 Перед переводом backend/emulator на явные controller/service/repository/mapper

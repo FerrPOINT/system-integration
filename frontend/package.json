@@ -9,6 +9,8 @@
   },
   "scripts": {
     "generate:api": "orval",
+    "format": "prettier --ignore-path ../.prettierignore --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx,mjs,html}\" \"*.{ts,mjs,json,html}\" \"../tests/**/*.{ts,tsx,mjs,html}\" \"../.prettierrc.json\" \"../.vscode/*.json\"",
+    "format:check": "prettier --ignore-path ../.prettierignore --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx,mjs,html}\" \"*.{ts,mjs,json,html}\" \"../tests/**/*.{ts,tsx,mjs,html}\" \"../.prettierrc.json\" \"../.vscode/*.json\"",
     "dev": "orval && vite --host 127.0.0.1 --strictPort",
     "build": "orval && tsc --noEmit && vite build",
     "test:api": "node --test tests/*.test.mjs",
@@ -32,6 +34,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
     "orval": "8.47.0",
+    "prettier": "3.10.1",
     "typescript": "^7.0.2",
     "vite": "8.3.8"
   }

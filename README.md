@@ -172,6 +172,39 @@ Backend обращается к эмулятору по `SI_EMULATOR_URL`
 `docker compose stop`. `docker compose down` сохраняет том.
 Не добавляйте `--volumes`, если нужны сохранённые данные.
 
+## Форматирование кода
+
+Общие переводы строк LF, UTF-8 и завершающая новая строка заданы в
+.editorconfig. Java в backend/emulator форматирует
+[Spotless](https://github.com/diffplug/spotless/tree/main/plugin-gradle):
+google-java-format 2.0.0, AOSP, 4 пробела, ширина 120. Проверяется только
+рукописный src/**/*.java; generated в build и применённые миграции исключены.
+Автоматические semantic cleanups отключены. Imports сортируются, неиспользуемые
+удаляются штатным formatter. Сочетания полей/бизнес-правила не меняются.
+
+[Prettier](https://prettier.io/docs/install) 3.10.1 форматирует TS/TSX,
+CSS, JS-тесты и frontend-конфигурации: 2 пробела, ширина 120, одинарные
+кавычки в JS/TS, точки с запятой. .prettierignore исключает generated/build,
+node_modules, результаты и lockfile. Версии закреплены в Gradle/package.json
+и lockfile; не используйте npx с автоматически загружаемой latest.
+
+Из корня проекта:
+
+~~~sh
+./gradlew spotlessApply
+./gradlew spotlessCheck
+cd frontend
+corepack pnpm format
+corepack pnpm format:check
+~~~
+
+spotlessCheck штатно входит в Gradle check обоих приложений; проверка
+ничего не исправляет. Перед commit выполните обе проверки. В VS Code
+рекомендованы Prettier и Spotless Gradle, настройки format-on-save находятся
+в .vscode. В IntelliJ используйте Spotless plugin с этими Gradle-правилами,
+а для frontend — локальный frontend/node_modules/prettier и format on save.
+CLI остаётся источником истины. Новых CI jobs и Git hooks нет.
+
 ## Сборка и проверки
 
 Полный локальный стенд собирается из исходников. После заполнения `.env`,

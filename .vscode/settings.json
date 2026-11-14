@@ -1,0 +1,12 @@
+{
+  "prettier.prettierPath": "./frontend/node_modules/prettier",
+  "prettier.requireConfig": true,
+  "[typescript][typescriptreact][javascript][javascriptreact][css][json][jsonc][html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[java]": {
+    "editor.defaultFormatter": "richardwillis.vscode-spotless-gradle",
+    "editor.formatOnSave": true
+  }
+}
