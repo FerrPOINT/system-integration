@@ -121,7 +121,7 @@ test('UI-15: empty results retain navigation at the bottom including a short mob
   }
 });
 
-test('UI-15: issue grid uses the same server window without losing entries', async ({page}, info) => {
+test('UI-15: issue table and mobile cards use the same server window without losing entries', async ({page}, info) => {
   const postgres=loadUiEnvironment().find(item => item.service==='postgres')!;
   const ids=Array.from({length:8},() => crypto.randomUUID());
   const sql=(input: string) => execFileSync('docker',['exec','-i',postgres.containerId,'psql','-XqAt','-v','ON_ERROR_STOP=1','-U','si_admin','-d','si_test'],{input,encoding:'utf8'});
@@ -131,8 +131,20 @@ test('UI-15: issue grid uses the same server window without losing entries', asy
     await page.goto('/issues?status=OPEN');
     const region=page.locator('section.paged-list');
     await expect(region.locator('[data-page-item]').first()).toBeVisible();
-    const seen=await collect(page,region,'.issue-cards h2 a');
+    const seen=await collect(page,region,'[data-issue-link]');
     for (const id of ids) expect(seen.has('/issues/'+id)).toBe(true);
+    if (info.project.name === 'desktop') {
+      for (const width of [761, 900, 1280]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await settled(page,region);
+        await expect(page.getByRole('table', { name: 'Реестр разборов обмена' })).toBeVisible();
+        expect(await page.locator('.base-table-scroll').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+        await fits(page,region);
+      }
+    } else {
+      await expect(page.getByRole('table')).toHaveCount(0);
+      await expect(page.locator('.issue-cards')).toBeVisible();
+    }
     await page.screenshot({path:info.outputPath('adaptive-issues.png')});
   } finally { sql("DELETE FROM exchange_issues WHERE id IN ("+ids.map(id => "'"+id+"'").join(',')+");"); }
 });

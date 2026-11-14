@@ -26,13 +26,15 @@ main { max-width: 1280px; padding: 26px 24px 56px; margin: 0 auto; }
 .readable { max-width: 760px; }
 
 .filters { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr) auto; align-items: end; gap: 14px; padding: 0; }
-.task-table { table-layout: fixed; }
+.task-table, .issue-table { table-layout: fixed; }
+.issue-table th:nth-child(2) { width: 28%; }
+.issue-table th:nth-child(3) { width: 210px; }
 .task-table th:nth-child(2) { width: 22%; }
 .task-table th:nth-child(3) { width: 176px; }
 .task-table th:nth-child(4) { width: 210px; }
-.task-table td:first-child > a { color: var(--color-text-primary); font-weight: 600; text-decoration: none; }
-.task-table td:first-child > a:hover { color: var(--color-accent); text-decoration: underline; }
-.task-table td small { margin-top: 5px; }
+.task-table td:first-child > a, .issue-table td:first-child > a { color: var(--color-text-primary); font-weight: 600; text-decoration: none; }
+.task-table td:first-child > a:hover, .issue-table td:first-child > a:hover { color: var(--color-accent); text-decoration: underline; }
+.task-table td small, .issue-table td small { margin-top: 5px; }
 .task-cards { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--base-control-padding-inline); }
 .task-card h2 a { color: var(--color-text-primary); text-decoration: none; }
 .task-card h2 a:hover { color: var(--color-accent); text-decoration: underline; }
@@ -40,7 +42,7 @@ main { max-width: 1280px; padding: 26px 24px 56px; margin: 0 auto; }
 .task-card-status > span:last-child { color: var(--color-text-muted); font-size: 12px; }
 .details { max-width: 850px; }
 
-.issue-cards { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+.issue-cards { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: minmax(0,1fr); gap: 16px; }
 .issue-meta { display: grid; gap: 4px; }
 .issue-status-filter { width: 220px; max-width: 100%; }
 .issue-page-header, .task-page-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
