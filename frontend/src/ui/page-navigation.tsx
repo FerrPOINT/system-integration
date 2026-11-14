@@ -9,9 +9,8 @@ export function PageNavigation({ page, pageCount, onPageChange, pending, compact
   pending?: boolean; compact?: boolean; summary: ReactNode;
 }) {
   const current = page <= pageCount ? page : 1;
-  const start = Math.max(1, Math.min(current - 1, pageCount - 2));
   const pages = compact
-    ? Array.from({ length: Math.min(3, pageCount) }, (_, i) => start + i)
+    ? pageCount > 0 ? [current] : []
     : [...new Set([1, current - 1, current, current + 1, pageCount])].filter(n => n > 0 && n <= pageCount).sort((a, b) => a - b);
   if (pageCount <= 1 && page <= 1) return <div className="base-page-summary" role="status">{summary}</div>;
   return <ActionGroup asChild><nav className="base-page-navigation" aria-label="Страницы">

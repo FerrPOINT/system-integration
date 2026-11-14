@@ -27,9 +27,13 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
     await expect(arrow).toHaveText('');
     await expect(arrow.locator('svg')).toHaveCount(1);
   }
-  await page.getByRole('button', { name: 'Страница 2', exact: true }).click();
+  await page.getByRole('button', { name: 'Далее →', exact: true }).click();
   await expect(page).toHaveURL(/page=1/);
   await expectSummary(2,initial.totalItems);
+  if (info.project.name === 'mobile') {
+    await expect(page.getByRole('navigation', { name: 'Страницы', exact: true }).getByRole('button')).toHaveCount(3);
+    await expect(page.getByRole('button', { name: 'Страница 2', exact: true })).toHaveAttribute('aria-current', 'page');
+  }
   const filters = page.locator('.filter-panel');
   if (info.project.name === 'mobile') await filters.locator('summary').click();
   const filtered = page.waitForResponse(response => response.url().includes('/api/tasks?') && response.url().includes('businessStatus=SUCCEEDED') && response.status() === 200);

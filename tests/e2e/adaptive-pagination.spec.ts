@@ -84,7 +84,7 @@ test('UI-15: tasks fit the viewport, enumerate every record and keep filters thr
   await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBe(expandedSize);
   await settled(page,region);
   await fits(page,region);
-  await region.getByRole('button',{name:'Страница 2',exact:true}).click();
+  await region.getByRole('button',{name:'Далее →',exact:true}).click();
   await settled(page,region);
   const anchor=await region.locator(links).first().getAttribute('href');
   const oldSize=Number(new URL(page.url()).searchParams.get('size'));
