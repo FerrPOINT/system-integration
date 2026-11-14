@@ -15,11 +15,22 @@ class RepositoryArchitectureTest {
                     .that()
                     .resideOutsideOfPackage("com.azhukov.integration.repository.jdbc..")
                     .should()
-                    .dependOnClassesThat()
-                    .resideInAPackage("org.springframework.jdbc..");
+                    .dependOnClassesThat(
+                            com.tngtech.archunit.base.DescribedPredicate.describe(
+                                    "Spring JDBC execution infrastructure",
+                                    type ->
+                                            type.getPackageName().startsWith("org.springframework.jdbc.")
+                                                    // Spring Data @Query refers to these mapping interfaces in
+                                                    // annotation defaults.
+                                                    // They do not execute SQL; JdbcTemplate and other executors remain
+                                                    // forbidden.
+                                                    && !type.getName().equals("org.springframework.jdbc.core.RowMapper")
+                                                    && !type.getName()
+                                                            .equals(
+                                                                    "org.springframework.jdbc.core.ResultSetExtractor")));
 
     @Test
-    void onlyJdbcAdaptersDependOnSpringJdbc() {
+    void onlyJdbcAdaptersDependOnSpringJdbcExecutors() {
         var production =
                 new ClassFileImporter()
                         .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
@@ -83,6 +94,9 @@ class RepositoryArchitectureTest {
     void ruleRejectsSqlInAnotherAdapter() {
         var fixture = new ClassFileImporter().importClasses(BadAdapter.class);
         assertThrows(AssertionError.class, () -> SQL_BOUNDARY.check(fixture));
+        var readLeak = new ClassFileImporter().importPackages("com.azhukov.integration.repository.springdata");
+        var error = assertThrows(AssertionError.class, () -> SQL_BOUNDARY.check(readLeak));
+        assertTrue(error.getMessage().contains("JdbcTemplate"));
     }
 
     private static class BadAdapter {
