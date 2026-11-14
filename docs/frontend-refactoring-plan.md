@@ -47,6 +47,11 @@
   Draft basis фиксируется при начале ввода, обновляется только явным действием,
   а закрытие разбора извне сохраняет черновик до discard. Scoped lint/typecheck,
   три unit boundaries и 22 component checks прошли; итоговая приёмка впереди.
+- FR-09: один Route Object tree заменил descendant Routes; auth gate передаёт
+  readonly session, modal context типизирован, экраны используют React.lazy.
+  26 checks команд/пагинационной навигации и 10 новых проверок render/chunk
+  recovery, direct URL, role gates и not-found прошли. Отдельные build chunks,
+  фокус/Back и поведение с реальным backend подтверждаются в FR-12.
 - FR-06–FR-12: обязательные работы ещё не завершены. Полный build/test gate,
   IAB и публикация итогового кандидата ещё не выполнены.
 

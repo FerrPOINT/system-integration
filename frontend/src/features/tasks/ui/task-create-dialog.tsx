@@ -4,16 +4,17 @@ import { FormField } from '../../../shared/ui/form-field';
 import { Input } from '../../../shared/ui/input';
 import { Button } from '../../../shared/ui/button';
 import { CommandRefresh } from '../../../shared/ui/command-refresh';
-import { useRef, useState, type RefObject } from 'react';
+import { useRef, useState } from 'react';
 import { Dialog, DiscardDialog } from '../../../shared/ui/dialog';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useFormNavigationGuard } from '../../../shared/lib/forms/use-form-navigation-guard';
 import { useCreateTask, useCreatedTaskRefresh } from '../api/task-commands';
+import type { TaskRouteContext } from './task-route-context';
 
 export function NewTask() {
   const navigate = useNavigate();
   const [search] = useSearchParams();
-  const returnFocusRef = useOutletContext<RefObject<HTMLAnchorElement | null>>();
+  const { createTrigger: returnFocusRef } = useOutletContext<TaskRouteContext>();
   const titleInput = useRef<HTMLInputElement>(null);
   const [dirty, setDirty] = useState(false);
   const refresh = useCreatedTaskRefresh();

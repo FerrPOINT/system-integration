@@ -158,6 +158,61 @@ test('external resolution keeps an unsubmitted draft until the operator discards
   expect(state.commands).toHaveLength(0);
 });
 
+test('a screen render failure preserves the shell and recovers through the actual route tree', async ({ page }) => {
+  await mockApi(page);
+  await page.route(url => url.pathname === '/api/tasks/' + taskId, route => route.fulfill({ json: { taskId, title: 'Malformed task' } }));
+  await page.goto('/tests/command-outcome.html');
+  await expect(page.getByRole('heading', { name: 'Не удалось открыть страницу', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Основная навигация', exact: true })).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('Cannot read properties');
+  await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
+});
+
+test('a rejected page chunk has a controlled boundary and reload retries the module', async ({ page }) => {
+  await mockApi(page);
+  let attempts = 0;
+  await page.route(url => url.pathname.endsWith('/features/tasks/ui/task-list-page.tsx'), route => {
+    attempts++;
+    return attempts === 1 ? route.abort('failed') : route.continue();
+  });
+  await page.goto('/tests/command-outcome.html?screen=list');
+  await expect(page.getByRole('heading', { name: 'Не удалось открыть страницу', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Основная навигация', exact: true })).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('Failed to fetch dynamically imported module');
+  await page.getByRole('button', { name: 'Обновить страницу', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
+  expect(attempts).toBe(2);
+});
+
+test('initiator route gate redirects before reading operator data', async ({ page }) => {
+  const state = await mockApi(page);
+  const operatorReads: string[] = [];
+  page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/exchange/')) operatorReads.push(request.url()); });
+  await page.goto('/tests/command-outcome.html?screen=issue');
+  await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
+  expect(operatorReads).toEqual([]);
+  expect(state.commands).toEqual([]);
+});
+
+test('operator cannot open the initiator create dialog through a direct URL', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  await page.goto('/tests/command-outcome.html?screen=new');
+  await expect(page.getByRole('heading', { name: 'Все задания', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Новое задание', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Создать задание', exact: true })).toHaveCount(0);
+  expect(state.commands).toEqual([]);
+});
+
+test('unknown URLs have a regular not-found screen under the shell', async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/tests/command-outcome.html?screen=missing');
+  await expect(page.getByRole('heading', { name: 'Страница не найдена', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Основная навигация', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
+});
+
 test('unknown rename outcome repeats the original input and idempotency key', async ({ page }) => {
   const state = await mockApi(page); state.loseWrite = true;
   await page.goto('/tests/command-outcome.html');

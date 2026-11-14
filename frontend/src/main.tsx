@@ -1,16 +1,14 @@
 import { createRoot } from 'react-dom/client';
-import { createBrowserRouter, RouterProvider, ScrollRestoration } from 'react-router-dom';
-import { App } from './app/app';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { appRoutes } from './app/router';
 import { Providers } from './app/providers';
-import { RootErrorBoundary } from './app/root-error-boundary';
 import './shared/styles/design-tokens.css';
 import './shared/styles/controls.css';
 import './shared/styles/patterns.css';
 import './shared/styles/layout.css';
 import './app/shell/shell.css';
 
-const router = createBrowserRouter([{ path: '*', errorElement: <RootErrorBoundary />, element: <><App /><ScrollRestoration getKey={location =>
-  ['/tasks', '/issues'].includes(location.pathname) ? location.pathname + location.search : location.key} /></> }]);
+const router = createBrowserRouter(appRoutes);
 const container = document.getElementById('root');
 
 if (!container) {

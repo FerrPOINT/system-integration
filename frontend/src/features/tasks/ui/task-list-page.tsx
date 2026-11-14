@@ -17,6 +17,7 @@ import { FeedFooter } from '../../../shared/ui/feed-footer';
 
 import { TaskFilterFields, MobileTaskFilters } from './task-filters';
 import { TaskRecords } from './task-presenters';
+import type { TaskRouteContext } from './task-route-context';
 
 export function TaskList({ user }: { user: GetSession200 }) {
   const createTrigger = useRef<HTMLAnchorElement>(null);
@@ -57,6 +58,6 @@ export function TaskList({ user }: { user: GetSession200 }) {
       error={tasks.isFetchNextPageError ? tasks.error : null} onLoad={() => tasks.fetchNextPage({ cancelRefetch: false })} /> :
       <Pagination page={validPage ? page : 0} size={size} totalItems={tasksPage?.totalItems} totalPages={tasksPage?.totalPages} pending={tasks.isFetching || !valid} onChange={changePage} />}
     </section>
-    <Outlet context={createTrigger} />
+    <Outlet context={{ user, createTrigger } satisfies TaskRouteContext} />
   </>;
 }
