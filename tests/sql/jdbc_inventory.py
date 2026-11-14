@@ -55,6 +55,12 @@ def first_arg(source,start):
         pos+=1
     return source[start:pos],strings
 
+def text_block_constant(source,name):
+    matches=re.findall(r'\b'+re.escape(name)+r'\s*=\s*"""([\s\S]*?)"""',source)
+    if len(matches)!=1:
+        raise ValueError('Expected one text-block constant: '+name)
+    return textwrap.dedent(matches[0]).strip()
+
 def collect(roots):
     inventory={}
     for root in roots:
