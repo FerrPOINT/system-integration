@@ -17,7 +17,7 @@ async function server(page: Page, total: number, history = false) {
   await page.route(url => url.pathname.startsWith('/api/'), async route => {
     const request = route.request(); const url = new URL(request.url());
     if (request.method() !== 'GET') throw new Error('Window fixture forbids writes');
-    if (url.pathname === '/api/session') return route.fulfill({ json: { userId: owner, username: 'fixture', role: 'INITIATOR' } });
+    if (url.pathname === '/api/session') return route.fulfill({ json: { userId: owner, username: 'fixture', role: history ? 'OPERATOR' : 'INITIATOR' } });
     if (!history && url.pathname.endsWith('/history')) return route.fulfill({ json: { items: [], page: 0, hasNext: false, totalItems: 0, totalPages: 0 } });
     if (history ? url.pathname.endsWith('/history') : url.pathname === '/api/tasks') {
       const number = Number(url.searchParams.get('page') ?? 0); const size = Number(url.searchParams.get('size'));
@@ -30,10 +30,15 @@ async function server(page: Page, total: number, history = false) {
         const sequence = 1_000_000 + state.front - index;
         if (state.deleted.has(sequence)) continue;
         if (visible++ >= number * size) items.push(history ? { eventId: id(sequence), taskId: id(1_000_000), operationId: id(1_000_000),
-          occurredAt: '2026-11-14T00:00:00Z', actor: 'SYSTEM', type: 'ACCEPTED', summary: 'Событие №' + sequence } : task(sequence));
+          occurredAt: '2026-11-14T00:00:00Z', actor: 'USER', actorUserId: owner, type: 'RECONCILED', summary: 'Событие №' + sequence,
+          reconciliationId: id(sequence) } : task(sequence));
       }
       return route.fulfill({ json: { items, page: number, hasNext: (number + 1) * size < count, totalItems: count, totalPages: Math.ceil(count / size) } });
     }
+    if (url.pathname.includes('/reconciliations/')) return route.fulfill({ json: { reconciliationId: url.pathname.split('/').at(-1),
+      taskId: id(1_000_000), operationId: id(1_000_000), checkedAt: '2026-11-14T00:00:00Z', checkedBy: owner,
+      outcome: 'UNAVAILABLE', externalAvailability: 'UNAVAILABLE', local: { request: task(1_000_000).request,
+        deliveryStatus: 'ACKNOWLEDGED', businessStatus: 'SUCCEEDED' } } });
     if (url.pathname.startsWith('/api/tasks/')) return route.fulfill({ json: task(Number(url.pathname.split('/').at(-1)!.slice(-12))) });
     throw new Error('Unexpected window fixture request: ' + url.pathname);
   });
@@ -58,6 +63,34 @@ async function visibleAnchor(page: Page) {
     return { id: row.dataset.recordId!, top: row.getBoundingClientRect().top };
   });
 }
+
+test('new history entry starts at page zero while native Back restores the old anchor', async ({ page }) => {
+  await server(page, 1000, true);
+  await page.goto('/tests/collection-window.html?history'); await ready(page, true);
+  for (let count = 0; count < 7; count++) await forward(page, true);
+  expect((await info(page)).pages[0]).toBeGreaterThan(0);
+  const anchor = await page.locator('.history-panel [data-record-id]').evaluateAll(rows => {
+    const row = rows.find(row => row.getBoundingClientRect().top >= 0 && row.getBoundingClientRect().bottom <= innerHeight) as HTMLElement;
+    return { id: row.dataset.recordId!, top: row.getBoundingClientRect().top };
+  });
+  const row = page.locator('[data-record-id="' + anchor.id + '"]');
+  await row.getByRole('link', { name: 'Открыть сохранённую сверку', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Сохранённая сверка', exact: true })).toBeVisible();
+  await page.goBack(); await ready(page, true);
+  await expect.poll(async () => Math.abs((await row.boundingBox())!.y - anchor.top)).toBeLessThan(2);
+  await row.getByRole('link', { name: 'Открыть сохранённую сверку', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Сохранённая сверка', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'К заданию', exact: true }).click(); await ready(page, true);
+  await expect.poll(async () => (await info(page)).pages[0]).toBe(0);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+  await expect(page.getByRole('heading', { name: 'Запись №1000000', exact: true })).toBeVisible();
+  await expect(page.locator('[data-record-id="' + id(1_000_000) + '"]')).toBeAttached();
+  expect((await info(page)).cached).toBeLessThanOrEqual(100);
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Сохранённая сверка', exact: true })).toBeVisible();
+  await page.goBack(); await ready(page, true);
+  await expect.poll(async () => Math.abs((await row.boundingBox())!.y - anchor.top)).toBeLessThan(2);
+});
 
 for (const total of [20, 100, 1000, 5000]) {
   test(`window budget, refetch and backward access with ${total} records`, async ({ page }) => {

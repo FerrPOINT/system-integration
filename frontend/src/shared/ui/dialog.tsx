@@ -27,8 +27,10 @@ export function Dialog({ open, title, description, onClose, pending = false, ret
   </DialogPrimitive.Root>;
 }
 
-export function DiscardDialog({ open, onCancel, onDiscard, returnFocusRef }: {
+export function DiscardDialog({ open, onCancel, onDiscard, returnFocusRef, description = 'Введённые данные будут потеряны.',
+  discardLabel = 'Не сохранять', cancelLabel = 'Продолжить заполнение' }: {
   open: boolean; onCancel: () => void; onDiscard: () => void; returnFocusRef: RefObject<HTMLElement | null>;
+  description?: string; discardLabel?: string; cancelLabel?: string;
 }) {
   return <AlertDialogPrimitive.Root open={open} onOpenChange={next => { if (!next) onCancel(); }}>
     <AlertDialogPrimitive.Portal>
@@ -38,11 +40,11 @@ export function DiscardDialog({ open, onCancel, onDiscard, returnFocusRef }: {
       }}>
         <div className="base-dialog-header">
           <AlertDialogPrimitive.Title className="base-dialog-title">Закрыть форму?</AlertDialogPrimitive.Title>
-          <AlertDialogPrimitive.Description className="base-dialog-description">Введённые данные будут потеряны.</AlertDialogPrimitive.Description>
+          <AlertDialogPrimitive.Description className="base-dialog-description">{description}</AlertDialogPrimitive.Description>
         </div>
         <div className="base-dialog-footer">
-          <AlertDialogPrimitive.Cancel asChild><Button>Продолжить заполнение</Button></AlertDialogPrimitive.Cancel>
-          <Button variant="default" onClick={onDiscard}>Не сохранять</Button>
+          <AlertDialogPrimitive.Cancel asChild><Button>{cancelLabel}</Button></AlertDialogPrimitive.Cancel>
+          <Button variant="default" onClick={onDiscard}>{discardLabel}</Button>
         </div>
       </AlertDialogPrimitive.Content>
     </AlertDialogPrimitive.Portal>

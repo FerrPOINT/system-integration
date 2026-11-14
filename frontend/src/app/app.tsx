@@ -15,11 +15,13 @@ export function App() {
   const appearance = <ThemePicker {...useThemePreference()} />;
   const session = useQuery(sessionOptions);
   if (session.isPending) return <main className="base-page-stack"><Loading /></main>;
-  if (session.isError) return <main className="base-page-stack"><ErrorMessage error={session.error} />
+  if (session.isError && !session.data) return <main className="base-page-stack"><ErrorMessage error={session.error} />
     <Button onClick={() => session.refetch()}>Повторить</Button></main>;
   if (!session.data) return <LoginForm brand={<Brand />} appearance={appearance} />;
   const user = session.data;
   return <AppShell key={user.userId + ':' + user.role} user={user} appearance={appearance}>
+    {session.isError && <div className="base-page-stack"><ErrorMessage error={session.error} />
+      <Button onClick={() => session.refetch()} disabled={session.isFetching}>Повторить проверку сессии</Button></div>}
     <Suspense fallback={<Loading />}><Outlet context={{ user } satisfies SessionRouteContext} /></Suspense>
   </AppShell>;
 }

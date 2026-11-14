@@ -17,5 +17,8 @@ const initial = screen === 'list' ? '/tasks?size=10' : screen === 'issue' ? '/is
   screen === 'new' ? '/tasks/new?size=10' : screen === 'missing' ? '/missing' : '/tasks/' + taskId + '?size=10';
 const router = createMemoryRouter(appRoutes, { initialEntries: [initial] });
 // Security assertion only: expose keys, never credentials or private payloads.
-Object.assign(window, { fixturePrivateKeyCount: () => queryClient.getQueryCache().getAll().filter(query => query.queryKey[0] !== 'session').length });
+Object.assign(window, {
+  fixturePrivateKeyCount: () => queryClient.getQueryCache().getAll().filter(query => query.queryKey[0] !== 'session').length,
+  fixtureRefetchSession: () => queryClient.invalidateQueries({ queryKey: ['session'] }),
+});
 createRoot(document.getElementById('root')!).render(<StrictMode><QueryClientProvider client={queryClient}><RouterProvider router={router} /></QueryClientProvider></StrictMode>);

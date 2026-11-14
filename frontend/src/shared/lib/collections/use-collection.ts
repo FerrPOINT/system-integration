@@ -1,4 +1,4 @@
-import { hashKey, keepPreviousData, useInfiniteQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { hashKey, keepPreviousData, useInfiniteQuery, useQueryClient, type InfiniteData, type QueryKey } from '@tanstack/react-query';
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
 import { useComposedRefs } from '@radix-ui/react-compose-refs';
 import { useLocation } from 'react-router-dom';
@@ -24,7 +24,9 @@ export function useCollection<T>({ key, page, size, feed, enabled, read, identif
   const client = useQueryClient();
   const viewport = useRef<HTMLDivElement | null>(null);
   const composedRef = useComposedRefs(viewport, viewportRef);
-  const queryHash = hashKey([...key, feed ? 'feed' : 'page', feed ? 0 : page, size]);
+  const queryKey = [...key, feed ? 'feed' : 'page', feed ? 0 : page, size];
+  const queryHash = hashKey(queryKey);
+  const cachedFirstPage = client.getQueryData<InfiniteData<CollectionPage<T>>>(queryKey)?.pages[0]?.page ?? 0;
   const search = new URLSearchParams(location.search);
   search.delete('page'); search.delete('size');
   const route = ['/tasks', '/issues'].includes(location.pathname) ? location.pathname + (search.size ? '?' + search.toString() : '') : location.key;
@@ -32,14 +34,15 @@ export function useCollection<T>({ key, page, size, feed, enabled, read, identif
   const saved = useMemo(() => feed ? readPosition(storageKey, size) : {}, [feed, storageKey, size]);
   const initial = useMemo<Restoration>(() => ({ key: storageKey,
     initialPage: saved.position ? Math.max(0, saved.position.page - (saved.position.id ? 1 : 0)) : 0,
-    phase: saved.position ? 'restore' : 'ready',
-    notice: saved.issue === 'invalid' ? 'Сохранённая позиция недоступна. Список открыт сначала.' : saved.issue ? unavailable : undefined }), [storageKey, saved.position, saved.issue]);
+    phase: saved.position ? 'restore' : feed && cachedFirstPage > 0 ? 'reset-start' : 'ready',
+    notice: saved.issue === 'invalid' ? 'Сохранённая позиция недоступна. Список открыт сначала.' : saved.issue ? unavailable : undefined }), [storageKey, saved.position, saved.issue, feed, cachedFirstPage]);
   const [restoration, setRestoration] = useState<Restoration>(initial);
+  if (restoration.key !== storageKey) setRestoration(initial);
   const current = restoration.key === storageKey ? restoration : initial;
   const snapshot = useRef<{ key: string; position: FeedPosition } | null>(null);
   if (feed && !owner) throw new Error('CollectionOwner is required for a mobile collection');
   const query = useInfiniteQuery({
-    queryKey: [...key, feed ? 'feed' : 'page', feed ? 0 : page, size], enabled,
+    queryKey, enabled: enabled && current.phase !== 'reset-start' && current.phase !== 'reset-restore',
     initialPageParam: feed ? current.initialPage : page,
     queryFn: ({ pageParam, signal }) => read(pageParam, size, signal),
     getNextPageParam: last => feed && last.hasNext ? last.page + 1 : undefined,
