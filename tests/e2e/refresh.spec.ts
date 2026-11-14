@@ -23,7 +23,8 @@ for (const deliveryStatus of ['NEEDS_REVIEW', 'STOPPED'] as const) {
     await page.goto('/tasks/' + id);
     await expect(page.getByRole('heading', { name: task.title, exact: true })).toBeVisible();
     await expect.poll(() => reads.history).toBe(1);
-    await expect(page.getByRole('status')).toHaveCount(0);
+    await expect(page.getByRole('status', { name: 'Загрузка…', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'История', exact: true }).getByRole('status')).toHaveText('Нет записей');
     await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
     const before = { ...reads };
     await page.clock.runFor(8000);
