@@ -17,7 +17,7 @@ export function FeedFooter({ loaded, total, hasNext, pending, error, onLoad }: {
   }, [hasNext, pending, error, onLoad]);
   return <div ref={sentinel} className="feed-footer" data-feed-end>
     {error ? <><ErrorMessage error={error} /><Button type="button" disabled={pending} onClick={onLoad}>Повторить загрузку</Button></> :
-      pending && <span role="status" aria-label="Загрузка…">Загружаем ещё…</span>}
-    <small className="muted" aria-live="polite">Показано {loaded} из {total}</small>
+      pending && hasNext && <span role="status" aria-label="Загрузка…">Загружаем ещё…</span>}
+    <small className="muted" role={total === 0 ? 'status' : undefined} aria-live="polite">{total === 0 ? 'Нет записей' : `Показано ${loaded} из ${total}`}</small>
   </div>;
 }

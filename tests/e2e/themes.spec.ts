@@ -61,6 +61,7 @@ test('UI-02: theme survives navigation and logout, synchronizes tabs and preserv
   const other = await context.newPage();
   try {
     await other.goto('/tasks');
+    await expect(other.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
     await selectChoice(other, 'Цветовая тема', themeLabels['light']);
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     await expect(page.getByLabel('Название *', { exact: true })).toHaveValue('Черновик сохраняется при смене темы');

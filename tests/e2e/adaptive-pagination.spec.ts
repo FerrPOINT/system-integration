@@ -139,6 +139,7 @@ test('UI-15: empty results retain navigation at the bottom including a short mob
     await expect(region.getByRole('navigation',{name:'Страницы',exact:true})).toHaveCount(0);
     await expect(region.getByRole('button',{name:'← Назад',exact:true})).toHaveCount(0);
     await expect(region.getByRole('button',{name:'Далее →',exact:true})).toHaveCount(0);
+    if (viewport.width <= 760) await expect(region.getByRole('status')).toHaveText('Нет записей');
     await fits(page,region);
   }
 });

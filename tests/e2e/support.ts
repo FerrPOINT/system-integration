@@ -30,8 +30,10 @@ export async function waitForRegistry(page: Page) {
 }
 
 export async function openAccountMenu(page: Page) {
+  if (page.viewportSize()!.width > 760) return;
   const menu = page.getByRole('button', { name: 'Меню приложения', exact: true });
-  if (await menu.count() && !await page.getByRole('dialog', { name: 'Меню приложения', exact: true }).count()) await menu.click();
+  await expect(menu).toBeVisible();
+  if (await menu.getAttribute('aria-expanded') === 'false') await menu.click();
 }
 
 export async function collectFeed(page: Page, region: import('@playwright/test').Locator) {
