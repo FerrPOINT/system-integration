@@ -204,6 +204,8 @@ spotlessCheck штатно входит в Gradle check обоих прилож�
 в .vscode. В IntelliJ используйте Spotless plugin с этими Gradle-правилами,
 а для frontend — локальный frontend/node_modules/prettier и format on save.
 CLI остаётся источником истины. Новых CI jobs и Git hooks нет.
+Первичный formatter commit указан в .git-blame-ignore-revs. При необходимости
+включите его для blame командой git config blame.ignoreRevsFile .git-blame-ignore-revs.
 
 ## Сборка и проверки
 

@@ -1,5 +1,39 @@
 # Текущая стадия
 
+## Публичный выпуск и форматирование — 14.11.2026
+
+Demo обновлён из PR #6 до 2e97ce4, включая актуальный frontend.
+Все три image revision/IDs сверены с candidate; публичные JS/CSS совпали
+с образом. В IAB проверены вход, реестр с адаптивным size, карточка и
+компактная история. Прошли пять public/API-проверок: три роли, чужая карточка,
+secure cookie, logout, приватные служебные маршруты и gzip.
+PostgreSQL 18.6 → 18.7: counts/digests 14 business/migration таблиц
+не изменились. Рабочий том сохранён; reset/seed/dump не выполнялись.
+Семь соседних контейнеров сохранили ID/image/StartedAt.
+Receipts — tests/results/public-2026-11-14 (ignored) и runtime release.json.
+Предыдущие immutable образы и rollback override сохранены. PR #6 не слит.
+
+Форматирование ведётся отдельно в chore/code-formatting поверх 2e97ce4:
+Spotless 8.11.0 / google-java-format 2.0.0 (AOSP, 4 пробела, 120 колонок)
+для рукописной Java обоих приложений, Prettier 3.10.1 (2 пробела, 120)
+для frontend и JS/TS-тестов; .editorconfig и IDE format-on-save.
+Версии закреплены, generated/build/results/lockfile/миграции не форматируются.
+CLI-команды — в README; spotlessCheck входит в Gradle check, новых CI/hooks нет.
+
+После первичного форматирования прошли все 221 Java-тест
+(backend unit 107 / PostgreSQL 84, emulator unit 13 / PostgreSQL 17),
+два JAR, TypeScript/Vite, 29 Node-проверок и пять SQL inventory-тестов.
+Для 142 изменённых Java-файлов сверены кодовые токены/литералы; imports
+только сортируются либо удаляются как неиспользуемые. Для 69 JDBC sites
+сохранились IDs и строковые фрагменты SQL. Исправлен обнаруженный разбор
+переноса между jdbc и .query; регрессия сначала воспроизвела пропуск вызова.
+JS/TS AST сверены до/после форматирования; JSX проверен после штатного Vite
+transform с объединением соседних статических текстовых children.
+Полные UI/recovery/NF08 для форматирования повторно не запускались.
+Receipts — tests/results/code-formatting (ignored).
+Formatter commit отделён от настройки инструментов и поправки SQL inventory.
+Форматированная ветка отдельно не развёртывалась: публичный runtime — 2e97ce4.
+
 ## PR #6 — замечание P2 по диагностике исправлено
 
 Неподдерживаемая wire-версия результата получает UNSUPPORTED_VERSION at version,
@@ -21,7 +55,7 @@
 поправки повторно не запускались. Образы e0360e0 ниже относятся к основному
 этапу и не содержат исправление P2: перед deploy нужен backend, собранный
 из актуального commit PR, и отдельная проверка запущенного приложения.
-Merge и публичный deploy не выполнялись.
+Публичный выпуск 2e97ce4 проверен отдельно выше; merge PR не выполнялся.
 Компактный отчёт поправки — tests/results/backend-followup/diagnostic-fix.json
 (ignored); исходники и тесты — [PR #6](https://github.com/FerrPOINT/system-integration/pull/6).
 
@@ -31,8 +65,8 @@ Merge и публичный deploy не выполнялись.
 Работа выполнена на Firebat1 в ветке fix/backend-audit-followup.
 Свежий frontend 6f6dbe0 полностью включён в базу. Квалифицированный runtime
 основного этапа — e0360e081d7b0b245647694731449d2d372ce5f2; интеграция
-67de759 меняла только документацию. Последующая поправка P2 описана выше. Исходники подготовлены к merge; public runtime
-ac5c207 продолжает работать, merge и публичный deploy в этот этап не входят.
+67de759 меняла только документацию. Последующая поправка P2 описана выше. На конец основного этапа исходники были подготовлены к merge, public runtime
+оставался на ac5c207. Последующий публичный выпуск указан выше.
 
 U+0000 отклоняется с VALIDATION_FAILED до записи: TaskTitle, причины
 retry/resolve и OpenAPI согласованы. RED-тесты воспроизвели исходный дефект.

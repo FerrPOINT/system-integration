@@ -12,3 +12,6 @@ indent_size = 4
 
 [*.gradle]
 indent_size = 4
+
+[gradlew.bat]
+end_of_line = crlf
