@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { login, waitForRegistry } from './support';
+import { ApiSession } from '../support/http.mjs';
 
 async function expectGaps(region: Locator) {
   const gaps = await region.evaluate(el => {
@@ -24,7 +25,7 @@ async function expectCards(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 }
 
-test('UI-07: exchange loading, error, empty and ready states keep the filter separated', async ({ page }, info) => {
+test('UI-07: exchange loading, error, empty and ready states keep the filter separated', async ({ page, baseURL }, info) => {
   await login(page, 'operator');
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
@@ -77,7 +78,22 @@ test('UI-07: exchange loading, error, empty and ready states keep the filter sep
     await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
     await expectGaps(page.locator('main'));
     await expectCards(page);
-    await page.getByRole('link', { name: 'Открыть последнюю сверку', exact: true }).click();
+    // A resolved issue may legitimately have no saved reconciliation. Own the
+    // snapshot fixture instead of depending on whichever issue is newest.
+    const initiator = new ApiSession(baseURL);
+    await initiator.login('initiator.one', process.env.SI_DEMO_PASSWORD);
+    const task = await initiator.command('POST', '/api/tasks', {
+      title: 'E2E интервалы сверки ' + crypto.randomUUID(), request: { reference: 'REQ-870002', quantity: 25 },
+    });
+    await expect.poll(async () => (await initiator.get('/api/tasks/' + task.taskId)).businessStatus).toBe('SUCCEEDED');
+    const { token } = await (await page.request.get('/api/csrf')).json();
+    const saved = await page.request.post('/api/tasks/' + task.taskId + '/reconciliations', {
+      headers: { 'X-CSRF-TOKEN': token, 'Idempotency-Key': crypto.randomUUID() },
+    });
+    expect(saved.ok()).toBe(true);
+    const snapshot = await saved.json();
+    expect(snapshot.outcome).toBe('MATCH');
+    await page.goto('/tasks/' + task.taskId + '/reconciliations/' + snapshot.reconciliationId);
     await expect(page.getByRole('heading', { name: 'Сохранённая сверка', exact: true })).toBeVisible();
     await expectGaps(page.locator('main'));
     await expectCards(page);
