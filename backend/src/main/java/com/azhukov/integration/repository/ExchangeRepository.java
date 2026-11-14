@@ -1,6 +1,7 @@
 package com.azhukov.integration.repository;
 
 import com.azhukov.integration.domain.exchange.ExchangeState;
+import com.azhukov.integration.dto.exchange.DeliveryBacklog;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.DeliveryStatus;
 import java.time.OffsetDateTime;
@@ -33,7 +34,6 @@ public interface ExchangeRepository {
     void removeQueue(UUID operation);
     void delivery(UUID operation, DeliveryStatus status);
     void applyResult(OperationResult result);
-    record DeliveryBacklog(long operations,OffsetDateTime oldestCreatedAt) {}
     /** Includes parked deliveries awaiting an operator; read only on an explicit diagnostic request. */
     DeliveryBacklog backlog();
     long cursor(boolean lock);

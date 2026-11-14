@@ -1,6 +1,7 @@
 package com.azhukov.integration.repository.jdbc;
 
 import com.azhukov.integration.domain.RuleViolation;
+import com.azhukov.integration.dto.exchange.DeliveryBacklog;
 import com.azhukov.integration.domain.exchange.ExchangeState;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.DeliveryStatus;

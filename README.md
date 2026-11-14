@@ -108,7 +108,7 @@ docker compose up -d --wait postgres
 docker compose ps
 ```
 
-PostgreSQL 18.6 хранит данные в томе `system-integration_postgres`.
+PostgreSQL 18.7 хранит данные в томе `system-integration_postgres`.
 Базы `si_app`, `si_emulator`, `si_test` и `si_emulator_test` принадлежат разным ролям.
 Роль приложения не подключается к БД эмулятора. Диагностический порт
 `19532` доступен только на `127.0.0.1`. Сеть проекта — `10.252.95.0/24`;

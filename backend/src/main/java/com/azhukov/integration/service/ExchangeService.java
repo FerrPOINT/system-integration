@@ -8,6 +8,7 @@ import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.review.Issue;
 import com.azhukov.integration.domain.task.DeliveryStatus;
 import com.azhukov.integration.domain.task.HistoryType;
+import com.azhukov.integration.dto.exchange.DeliveryBacklog;
 import com.azhukov.integration.repository.ExchangeRepository;
 import com.azhukov.integration.repository.TaskRepository;
 import java.util.List;
@@ -93,7 +94,7 @@ public class ExchangeService {
     }
 
     @Transactional(readOnly = true)
-    public ExchangeRepository.DeliveryBacklog backlog() { return exchanges.backlog(); }
+    public DeliveryBacklog backlog() { return exchanges.backlog(); }
 
     @Transactional(readOnly = true)
     public long cursor() { return exchanges.cursor(false); }

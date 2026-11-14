@@ -1,6 +1,6 @@
-package com.azhukov.integration.config;
+package com.azhukov.integration.controller;
 
-import com.azhukov.integration.repository.ExchangeRepository;
+import com.azhukov.integration.dto.exchange.DeliveryBacklog;
 import com.azhukov.integration.service.ExchangeCoordinator;
 import com.azhukov.integration.service.ExchangeService;
 import java.time.Instant;
@@ -28,7 +28,7 @@ public class ExchangeDiagnosticsEndpoint {
 
     public record Diagnostics(Instant observedAt,boolean workerEnabled,
                               ExchangeCoordinator.FeedDiagnostics feed,
-                              ExchangeRepository.DeliveryBacklog deliveryQueue) {}
+                              DeliveryBacklog deliveryQueue) {}
 
     @ReadOperation
     public Diagnostics read() {
