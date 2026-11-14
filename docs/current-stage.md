@@ -1,26 +1,47 @@
 # Текущая стадия
 
-## Финальный аудит — доработка перед merge PR #6
+## Финальный backend-аудит — квалификация 15 ноября
 
-Поверх 2e97ce4 исправлены F01–F03: одиночные UTF-16 surrogate-коды не
-доходят до хранения; общий UTC-диапазон ограничен годами 0001–9999;
-внешний wire требует RFC 3339 с секундами; неподдерживаемые HTTP-ответы
-сверки открывают проблему протокола. feed.deliveryInFlight явно считает
-активные доставки. Schema/Flyway, fingerprints и сохранённые receipts не меняются.
+Прикладной кандидат 46ffcc843125c3edf4e91fcea9b125ad27367c76 закрывает F01–F05:
+malformed UTF-16 отклоняется до JDBC; UTC ограничен годами 0001–9999;
+внешний wire требует RFC 3339 с секундами; неподдерживаемые ответы lookup
+выделяются для разбора. deliveryInFlight явно именует активные доставки.
+Схема/Flyway, fingerprints и сохранённые receipts не менялись.
+Объём и причинные регрессии — в backend-audit-followup-plan.md.
 
-Подготовлено обновление runtime OS-пакетов и NGINX stable patch.
-Адресные unit и PostgreSQL-проверки выполнены; окончательная
-квалификация и scan конечных образов ещё не завершены.
-Подробный объём — в backend-audit-followup-plan.md.
+| Проверка на Firebat1 | Свежий результат |
+| --- | --- |
+| Java | 110 backend unit + 88 PostgreSQL + 13 emulator unit + 17 PostgreSQL: 228 без ошибок и пропусков; оба JAR/Javadoc собраны |
+| SQL | 69 call sites, 533 cases, 1599 EXPLAIN ANALYZE/BUFFERS/WAL; fixtures откатились |
+| Frontend/API | TypeScript/Vite/codegen, 29 Node-проверок, 4 HTTP smoke; build graph, регенерация контрактов и Docker context проверены |
+| UI | 74 desktop/mobile и 10 component, без failed/flaky/skipped |
+| Восстановление и demo | 10 recovery, 6 demo; исполнение отдельно сверено в БД эмулятора |
+| NF08 | 5000 исходных, 20 клиентов, 30 s прогрева / 120 s замера, 2 CPU / 4 GiB; 56 824 запроса, read p95 97,93 ms / write 96,67 ms, ошибок 0 |
+| Целостность | Все 21 600 операций согласованы, очередь/pending/problems пусты, duplicateExecutions=0; все 16 600 новых операций завершены |
+| Внешнее исполнение | p95 всех новых операций 125,45 s, отдельно от API; drain 50,47 s |
+| Поставка | NGINX stable 1.30.6 и pinned JRE base, vendor OS updates при build; image IDs/source labels проверены |
+| Зависимости | OSV: 82 runtime modules, совпадений 0; final OS scan: frontend/PG — 0, Java OS — 30 Medium / 4 Low без vendor fix; High/Critical и fixable — 0 |
 
-После квалификации и ревью PR #6 вливается в main; затем отдельно PR #7
-с настройками форматирования. Прикладной код не форматируется,
-обязательный formatter gate/format-on-save не включаются.
+Генератор NF08 находился на том же Firebat1 вне лимита контейнеров,
+обращался к локальному API. Публичные HTTPS/proxy в замер не входят.
+Один поздний ответ доставки проигнорирован по lease; итоговая сверка
+подтверждает отсутствие потерь и повторного исполнения.
+Оставшиеся vendor advisories не объявляются доказанной атакой на API;
+OS-only scan не является полным аудитом отдельно поставленных бинарников.
+
+Ревью не требует новых слоёв, Redis, брокера или перевода SQL на ORM.
+SQL observer сначала отказался при 12 подключениях тестовых apps;
+после их штатной остановки прошёл. Проверки не ослаблялись.
+Receipts: ignored tests/results/backend-audit-fixes-2026-11-15/qualification.json,
+java.json, sql-plans.json.gz, app-ui.json, components.json.gz, recovery.json.gz,
+demo-independent.json, nf08-summary.json/nf08.json.gz и final-*-os.json.
+
+PR #6 готов к разрешённому merge, затем отдельно PR #7 с настройками.
+Код не форматируется; обязательный formatter gate/format-on-save выключены.
 Frontend PR #8 не входит в этот этап.
-Публичный demo остаётся на 2e97ce4; нового deploy этим этапом не предусмотрено.
+Публичный demo остаётся на 2e97ce4; новый deploy не выполняется.
 
-
-## PR #6 — замечание P2 по диагностике исправлено
+## Предыдущая квалификация 2e97ce4 — диагностика
 
 Неподдерживаемая wire-версия результата получает UNSUPPORTED_VERSION at version,
 неизвестный или недопустимый для результата статус — INVALID_STATUS at status.
