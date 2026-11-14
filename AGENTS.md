@@ -90,7 +90,7 @@ Format-on-save включён для настроенных Java/JS/TS/CSS/JSON/
 Правила и версии заданы в root build.gradle, .editorconfig, .prettierrc.json
 и frontend/package.json; второго локального стиля не добавлять.
 Generated/build/results, lockfile и применённые миграции исключены.
-Команды для будущего общего прохода и IDE-настройки — в README.
+Команды исправления/проверки стиля и IDE-настройки — в README.
 
 ## Архитектурные принципы
 
