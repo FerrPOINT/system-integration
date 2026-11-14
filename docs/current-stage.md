@@ -1,11 +1,12 @@
 # Текущая стадия
 
-## Spring Data JDBC — выполнено, готово к merge
+## Spring Data JDBC — выполнено
 
 [SD-00–SD-06](spring-data-read-plan.md) выполнены на Firebat1.
 Backend-кандидат — 891666d; исходная база — main 319067e.
 Итоговая интеграция e0fdbbd включает свежий main 6c335b6 с UI-доработками.
-Публичный demo остаётся на ac5c207: merge и deploy этой доработки не выполнялись.
+Исходники — [PR #5](https://github.com/FerrPOINT/system-integration/pull/5).
+Публичный demo остаётся на ac5c207; deploy этой доработки не выполнялся.
 
 TaskReadRepository обслуживает карточку, реестр и историю. Узкие TaskRows
 и HistoryRows генерируют простые SELECT, Query/Criteria формирует optional-фильтры.
@@ -60,6 +61,24 @@ NF01–NF10 и D-NF01–03 опирается на указанные API/БД/U
 Redis, JPA, новые процессы, CI, generic CRUD и fallback-пути не добавлены.
 Компактные receipts находятся на Firebat1 в tests/results/spring-data-read
 (ignored); стадии публикации и очистки фиксируются в qualification.json.
+
+### Повторное ревью перед merge — 14.11.2026
+
+Проверены весь diff PR #5 и связанные границы controller/service/repository,
+права, транзакции, JSON mapping, generated SQL, зависимости и достоверность
+квалификации. Блокирующих замечаний не найдено; изменений runtime-кода не потребовалось.
+На 1733ae1 заново прошли все 204 Java-теста без ошибок/пропусков,
+четыре теста SQL-инструментов и 1596 EXPLAIN для 532 вариантов
+(inline/custom/generic); fixtures откатились. Локальные ссылки изменённых
+Markdown-файлов корректны, generated outputs и отчёты не попали в Git.
+
+UI/recovery/NF08 повторно не запускались: backend/emulator runtime inputs
+совпадают с квалифицированным 891666d, интегрированный UI ранее прошёл 74 сценария.
+Изменение load/environment.mjs добавляет выбор Vite только для UI;
+контейнерный default нагрузочного runner сохранён. Это повторное ревью PR,
+а не новая квалификация публичного релиза. Receipts — tests/results/pr5-review
+на Firebat1 (ignored). Тестовая БД/том/сеть удаляются после сверки;
+публичный runtime не меняется.
 
 ## Spring Boot hardening — выполнено
 
