@@ -13,7 +13,7 @@ export function TaskRecords({ items, size, mobile, returnState }: {
   items: Task[]; size: number; mobile: boolean; returnState: { returnTo: string };
 }) {
   return <>{mobile ?
-          <ul className="task-cards" data-page-items>{items.map(task => <Card asChild key={task.taskId} data-page-item><li className="task-card"><Link className="mobile-card-link" aria-label={task.title} aria-describedby={'task-state-' + task.taskId + ' task-meta-' + task.taskId} title={task.title} to={'/tasks/' + task.taskId} state={returnState}><CardContent density="compact" className="mobile-card-content">
+          <ul className="task-cards" data-page-items>{items.map(task => <Card asChild key={task.taskId} data-page-item><li className="task-card" data-record-id={task.taskId}><Link className="mobile-card-link" aria-label={task.title} aria-describedby={'task-state-' + task.taskId + ' task-meta-' + task.taskId} title={task.title} to={'/tasks/' + task.taskId} state={returnState}><CardContent density="compact" className="mobile-card-content">
             <div className="mobile-card-heading"><h2 className="base-card-title base-truncate">{task.title}</h2><ChevronRight size={18} aria-hidden="true" /></div>
             <div className="task-card-status" id={'task-state-' + task.taskId}><BusinessBadge status={task.businessStatus} /><span>{deliveryLabels[task.deliveryStatus]}</span></div>
             <div className="mobile-card-meta" id={'task-meta-' + task.taskId}><span className="base-truncate">{task.request.reference} · {task.request.quantity} ед.</span>
@@ -21,7 +21,7 @@ export function TaskRecords({ items, size, mobile, returnState }: {
           </CardContent></Link></li></Card>)}</ul> :
           <Card><Table className="task-table" data-page-items><caption className="sr-only">Реестр заданий</caption>
             <thead data-page-heading><tr><th scope="col">Название / заявка</th><th scope="col">Доставка</th><th scope="col">Результат</th><th scope="col">Создано (UTC)</th></tr></thead>
-            <tbody>{items.slice(0, size).map(task => <tr key={task.taskId} className="base-linked-row" data-page-item><td><Link className="base-truncate" title={task.title} to={'/tasks/' + task.taskId} state={returnState}>{task.title}</Link>
+            <tbody>{items.slice(0, size).map(task => <tr key={task.taskId} className="base-linked-row" data-page-item data-record-id={task.taskId}><td><Link className="base-truncate" title={task.title} to={'/tasks/' + task.taskId} state={returnState}>{task.title}</Link>
               <small>{task.request.reference} · {task.request.quantity} ед.</small></td><td>{deliveryLabels[task.deliveryStatus]}</td>
               <td><BusinessBadge status={task.businessStatus} /></td><td><time dateTime={task.createdAt}>{timestamp(task.createdAt, { showZone: false })}</time></td></tr>)}</tbody>
           </Table></Card>}</>;

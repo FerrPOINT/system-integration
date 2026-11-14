@@ -17,7 +17,9 @@ system-integration-load (compose.load.yml), его БД и loopback-порты 1
 обычные контейнеры, сеть и том system-integration сохраняются.
 
 Изолированные свойства UI-компонентов проверяет components.config.ts через собственный
-loopback Vite 19774 без API/БД: шесть Select-проверок и четыре регрессии
-навигации/фильтров при отложенном измерении пагинации. Fixtures не входят
-в production build.
+loopback Vite 19774 без API/БД: Select, отложенные измерения пагинации,
+идентичность/guard форм, исходы команд, render/chunk recovery и bounded feeds.
+Fixtures используют StrictMode и реальные production components/Query; API
+перехватывается. Mobile window profiles лежат в components/mobile и запускаются
+только мобильным project. Fixtures не входят в production build.
 Приложение, recovery и нагрузка по-прежнему используют только тестовый Compose.

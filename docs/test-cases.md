@@ -1,5 +1,26 @@
 # План приёмки
 
+## Архитектурные регрессии frontend
+
+FR-00–FR-12 [плана frontend](frontend-refactoring-plan.md) сохраняют исходные
+UI-сценарии и добавляют проверки границ состояния и ошибок:
+
+| Область | Проверка | Ожидаемый результат |
+| --- | --- | --- |
+| Form identity | Тёплые/холодные A/B, равные revision, refetch той же записи | Новый taskId создаёт новый form session; прежний ID сохраняет draft и expected revision. |
+| Write/read outcomes | Receipt получен, follow-up GET отказал | Команда остаётся принятой; retry выполняет только чтение. Неизвестный исход сохраняет input/key. |
+| Guard | Cancel, route/Back, reload, pending, focus | Один guard управляет подтверждением, pending блокирует уход, discard возвращает правильный фокус. |
+| Operator basis | Новая сверка/revision или внешнее закрытие во время ввода | Основа draft не обновляется молча, submit блокируется до явного обновления; причина сохраняется. |
+| Router | Прямой URL, роль, not-found, render/chunk error | Один route tree, безопасный fallback и восстановление с доступной оболочкой. |
+| Collection budget | 20/100/1000/5000 записей; refetch и polling | Не более 5 страниц/100 записей кэша/DOM и 5 GET; нет копии DTO в state/storage. |
+| Collection access | Полный обход 5000, обратная загрузка, Back после Query GC | Нет пропусков в стабильном наборе, вытесненные записи доступны; ID/offset восстанавливаются. |
+| Changed/error position | Вставка, удаление anchor, сокращение списка, отказ чтения/storage | Стабильный доступный anchor или явное состояние; нет скрытого API-успеха и autoretry цикла. |
+| Architecture gates | Positive/negative lint fixtures, StrictMode, strict TS | Неверные imports/cycles/generated calls отклоняются; lifecycle исправлен без отключения правил. |
+
+Component fixtures находятся в tests/components и frontend/tests, выполняются
+без БД через перехват API; 74 интеграционных UI-сценария используют отдельный
+локальный Compose. Их результаты и IAB-приёмка фиксируются раздельно в current-stage.
+
 Сценарии TC-01–TC-15 проверяют исходное ТЗ; TC-16 — публикацию по поручению владельца. Результаты прогона указываются
 отдельно с версией приложения, окружением и ссылкой на отчёт. Для интеграционных
 проверок используются миграции и тестовый PostgreSQL, а внешний обмен

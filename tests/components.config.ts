@@ -6,7 +6,7 @@ const origin = 'http://127.0.0.1:19774';
 export default defineConfig({
   ...base,
   testDir: './components',
-  projects: base.projects?.map(project => ({ ...project, testIgnore: [] })),
+  projects: base.projects?.map(project => ({ ...project, testIgnore: project.name === 'desktop' ? ['**/mobile/**'] : [] })),
   outputDir: './results/components',
   reporter: [['list'], ['json', { outputFile: './results/components.json' }]],
   use: { ...base.use, baseURL: origin },

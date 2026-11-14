@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider, useNavigate } from 'react-router-dom';
 import { TaskCard } from '../src/features/tasks/ui/task-details-page';
 import { taskKeys } from '../src/features/tasks/api/task-keys';
+import { CollectionOwner } from '../src/shared/lib/collections/collection-owner';
 import type { Task } from '../build/generated/openapi/client';
 import '../src/shared/styles/design-tokens.css';
 import '../src/shared/styles/controls.css';
@@ -38,4 +39,4 @@ function Harness() {
   </main>;
 }
 const router = createMemoryRouter([{ path: '/tasks/:id', element: <Harness /> }], { initialEntries: ['/tasks/' + tasks[0].taskId] });
-createRoot(document.getElementById('root')!).render(<StrictMode><QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider></StrictMode>);
+createRoot(document.getElementById('root')!).render(<StrictMode><CollectionOwner value="fixture-identity"><QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider></CollectionOwner></StrictMode>);

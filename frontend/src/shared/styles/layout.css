@@ -43,3 +43,5 @@ a { color: var(--color-accent); text-underline-offset: 3px; overflow-wrap: anywh
 .mobile-card-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--color-text-muted); }
 .mobile-card-meta > time { white-space: nowrap; }
 .feed-footer { display: grid; justify-items: center; gap: 12px; padding-block: 16px; }
+[data-feed-viewport] { overflow-anchor: none; }
+.feed-start { min-height: 1px; }

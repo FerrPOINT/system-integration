@@ -234,6 +234,12 @@ corepack pnpm test:assets
 corepack pnpm test:api
 ```
 
+Build включает generation, ESLint React/Query/import boundaries, строгий TypeScript
+и Vite. `test:api` также запускает unit projections/positions, URL/polling и
+отрицательные lint fixtures. Структура app → features/{auth,tasks,operations} →
+shared и владельцы состояния описаны в [архитектуре](docs/architecture.md#архитектура-react).
+Component runner и полный UI-прогон разделены в [инструкции тестов](tests/README.md).
+
 Проверка HTTP после сборки описана в [инструкции для тестов](tests/README.md).
 
 ## Генерация из OpenAPI

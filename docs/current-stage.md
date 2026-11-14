@@ -1,5 +1,21 @@
 # Текущая стадия
 
+## Основание React — итоговая квалификация выполняется
+
+Ветка `feat/frontend-foundation`, база main `5aa1c06`. Локальная среда —
+`C:/git/azhukov/mini-crm/system-integration`, Vite `127.0.0.1:19673` и отдельный
+Compose `system-integration-load`. Выполнены исходные этапы FR-00–FR-11
+[плана](frontend-refactoring-plan.md); FR-12 остаётся открытым до полного gate,
+IAB, проверки runtime inputs и публикации ветки/PR. Исторические результаты
+ниже не являются приёмкой нового frontend-кандидата. Merge/deploy не поручены.
+
+Предметный код разделён на auth/tasks/operations с api/model/ui, общие
+механизмы — shared, композиция — app. Scoped проверки подтвердили сохранение
+черновиков, разделение receipt/read errors, guard, stale operator basis,
+lazy/error recovery и StrictMode. Мобильное окно ограничено 100 записями;
+полный проход по 5000, обратная загрузка, Back после GC и polling бюджет проходят.
+Итоговые counts и ручная приёмка будут зафиксированы после единого прогона.
+
 ## Spring Data JDBC — выполнено
 
 [SD-00–SD-06](spring-data-read-plan.md) выполнены на Firebat1.

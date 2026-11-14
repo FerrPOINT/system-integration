@@ -10,5 +10,5 @@ test('empty, desktop and overlapping offset windows have explicit projections', 
   assert.equal(projectCollection([first], false, identify).items, first.items);
   const feed = projectCollection([first, last], true, identify);
   assert.deepEqual(feed.items, [{ id: 'a', version: 1 }, { id: 'b', version: 2 }, { id: 'c', version: 1 }]);
-  assert.deepEqual(feed.meta, { page: 1, hasNext: false, totalItems: 3, totalPages: 2 });
+  assert.deepEqual(feed.meta, { page: 1, firstPage: 0, hasNext: false, totalItems: 3, totalPages: 2 });
 });

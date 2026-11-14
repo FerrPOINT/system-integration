@@ -40,7 +40,7 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
     await expect(cards).toHaveCount(20);
     await expect(page.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
     await footer.scrollIntoViewIfNeeded();
-    await expect(footer.getByRole('status')).toContainText('Загружаем ещё');
+    await expect(footer.getByRole('status')).toContainText('Загрузка…');
     await page.mouse.wheel(0, 150);
     expect(requests.filter(window => window.page === 1)).toHaveLength(1);
     release();
@@ -54,7 +54,7 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
     await expect(cards).toHaveCount(40);
     await footer.scrollIntoViewIfNeeded();
     await expect(cards).toHaveCount(45);
-    await expect(footer).toHaveText('Показано 45 из 45');
+    await expect(footer).toHaveText('1–45 из 45');
     const hrefs = await cards.locator('a').evaluateAll(links => links.map(link => link.getAttribute('href')));
     expect(hrefs).toEqual(items.map(item => '/tasks/' + item.taskId));
     expect(requests.map(window => window.page)).toEqual([0, 1, 1, 2]);
@@ -84,7 +84,7 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
     await selectChoice(page, 'Результат', 'Отклонено');
     await page.getByRole('button', { name: 'Готово', exact: true }).click();
     await expect(cards).toHaveCount(2);
-    await expect(footer).toHaveText('Показано 2 из 2');
+    await expect(footer).toHaveText('1–2 из 2');
     expect(requests.at(-1)).toEqual({ page: 0, size: 20, status: 'REJECTED' });
   } finally { release(); await page.unrouteAll({ behavior: 'wait' }); }
 });

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { usePageSize } from './use-page-size';
+import { isCurrentLocation } from '../router/is-current-location';
 
 export function usePagination(mode: 'pages' | 'feed' = 'pages') {
   const location = useLocation();
@@ -13,8 +14,7 @@ export function usePagination(mode: 'pages' | 'feed' = 'pages') {
     if (!valid) return;
     // The router can update the address before its transitioned React location.
     // A queued measurement must not overwrite a newer route or filter navigation.
-    if (window.location.pathname !== location.pathname || window.location.search !== location.search ||
-      window.location.hash !== location.hash) return;
+    if (!isCurrentLocation(location)) return;
     const updated = new URLSearchParams(search);
     if (mode === 'feed') {
       if (!updated.has('page') && !updated.has('size')) return;

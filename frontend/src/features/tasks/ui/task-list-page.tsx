@@ -13,7 +13,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import type { GetSession200 } from '../../../../build/generated/openapi/client';
 import { Loading, Pagination, RefreshButton } from '../../../shared/ui/feedback';
 import { useMediaQuery } from '../../../shared/ui/use-media-query';
-import { FeedFooter } from '../../../shared/ui/feed-footer';
+import { FeedFooter, FeedStart } from '../../../shared/ui/feed-footer';
 
 import { TaskFilterFields, MobileTaskFilters } from './task-filters';
 import { TaskRecords } from './task-presenters';
@@ -25,9 +25,10 @@ export function TaskList({ user }: { user: GetSession200 }) {
   const location = useLocation();
   const returnState = { returnTo: location.pathname + location.search };
   const { search, pagination, filters, validParameters, valid, collection, changeFilters, resetFilters } = useTaskList(mobile);
-  const { page, size, valid: validPage, viewportRef, changePage } = pagination;
+  const { page, size, valid: validPage, changePage } = pagination;
   const { status, params, validPeriod, hasFilters } = filters;
   const { query: tasks, items: tasksItems, meta: tasksPage } = collection;
+  const { viewportRef: registryRef, restoring, positionNotice, loadNext, loadPrevious, refresh } = collection;
   const [filtersOpen, setFiltersOpen] = useState(true);
   const filterFields = <TaskFilterFields params={params} status={status} mobile={mobile} validPeriod={validPeriod}
     changeFilters={changeFilters} resetFilters={() => resetFilters()} />;
@@ -36,26 +37,30 @@ export function TaskList({ user }: { user: GetSession200 }) {
       context={mobile ? tasksPage && `Всего: ${tasksPage.totalItems}` : 'Приём задания, доставка и результат исполнения показаны отдельно.'}
       actions={<>{user.role === 'INITIATOR' && <Button asChild variant="default"><Link ref={createTrigger} className={mobile ? 'base-icon-button' : undefined} aria-label="Создать задание" title="Создать задание" to={{ pathname: "/tasks/new", search: search.toString() }}>{mobile ? <Plus size={20} aria-hidden="true" /> : 'Создать задание'}</Link></Button>}
         {mobile && <MobileTaskFilters active={hasFilters}>{filterFields}</MobileTaskFilters>}
-        <RefreshButton pending={tasks.isFetching} disabled={!valid} onClick={() => tasks.refetch()} /></>} />
+        <RefreshButton pending={tasks.isFetching} disabled={!valid} onClick={() => refresh()} /></>} />
     {!mobile &&
       <Disclosure className="filter-panel" open={filtersOpen} onToggle={event => setFiltersOpen(event.currentTarget.open)}
         summaryProps={{ 'aria-label': 'Фильтры заданий' }} summary={<>Фильтры <span className="muted">{hasFilters ? 'Заданы условия' : 'Результат и период'}</span></>}>
         {filterFields}
       </Disclosure>}
     </div>
-    <section className="paged-list base-page-stack" aria-busy={tasks.isFetching}>
-    <div className="paged-viewport" ref={viewportRef}>
+    <section className="paged-list base-page-stack" aria-busy={tasks.isFetching || restoring}>
+    <div className="paged-viewport" ref={registryRef} data-feed-viewport={mobile || undefined}>
+    {mobile && valid && tasksPage && <FeedStart hasPrevious={tasks.hasPreviousPage} pending={tasks.isFetchingPreviousPage} busy={tasks.isFetching}
+      error={tasks.isFetchPreviousPageError ? tasks.error : null} autoLoad={!restoring && !tasks.isFetchPreviousPageError && !tasks.isFetchNextPageError} onLoad={loadPrevious} />}
     {!valid ? <Notice role="alert" tone="danger">{validParameters ? 'Начало периода должно быть раньше конца.' : 'Некорректные параметры страницы. Сбросьте фильтры.'}</Notice> : tasks.isPending ? <Loading /> :
-      !tasksPage ? <><ErrorMessage error={tasks.error} /><Button onClick={() => tasks.refetch()}>Повторить</Button></> : <>
-      {!tasks.isFetchNextPageError && tasks.error && <><ErrorMessage error={tasks.error} /><Button onClick={() => tasks.refetch()}>Повторить</Button></>}
+      !tasksPage ? <><ErrorMessage error={tasks.error} /><Button onClick={() => refresh()}>Повторить</Button></> : <>
+      {!tasks.isFetchNextPageError && !tasks.isFetchPreviousPageError && tasks.error && <><ErrorMessage error={tasks.error} /><Button onClick={() => refresh()}>Повторить</Button></>}
       {tasksItems.length === 0 ? <Card><EmptyState headingLevel={2}
           message={status || params.createdFrom || params.createdTo ? 'Ничего не найдено' : 'Заданий пока нет'}
           description={status || params.createdFrom || params.createdTo ? 'Измените условия или сбросьте фильтры, чтобы увидеть задания.' : 'Создайте первое задание. Здесь появятся доставка и результат исполнения.'}
           action={(status || params.createdFrom || params.createdTo) && <Button onClick={() => resetFilters(false)}>Сбросить фильтры</Button>} /></Card> : <TaskRecords items={tasksItems} size={size} mobile={mobile} returnState={returnState} />}
       </>}
     </div>
-    {mobile ? valid && tasksPage && <FeedFooter loaded={tasksItems.length} total={tasksPage.totalItems} hasNext={tasks.hasNextPage} pending={tasks.isFetching}
-      error={tasks.isFetchNextPageError ? tasks.error : null} onLoad={() => tasks.fetchNextPage({ cancelRefetch: false })} /> :
+    {mobile ? valid && tasksPage && <FeedFooter loaded={tasksItems.length} total={tasksPage.totalItems} start={tasksPage.firstPage * size + 1} end={Math.min((tasksPage.page + 1) * size, tasksPage.totalItems)}
+      hasNext={tasks.hasNextPage} pending={tasks.isFetchingNextPage} busy={tasks.isFetching} notice={positionNotice}
+      autoLoad={!restoring && !tasks.isFetchPreviousPageError && !tasks.isFetchNextPageError}
+      error={tasks.isFetchNextPageError ? tasks.error : null} onLoad={loadNext} /> :
       <Pagination page={validPage ? page : 0} size={size} totalItems={tasksPage?.totalItems} totalPages={tasksPage?.totalPages} pending={tasks.isFetching || !valid} onChange={changePage} />}
     </section>
     <Outlet context={{ user, createTrigger } satisfies TaskRouteContext} />

@@ -1,5 +1,5 @@
 import { lazy } from 'react';
-import { Navigate, Outlet, ScrollRestoration, useOutletContext, type RouteObject } from 'react-router-dom';
+import { Navigate, Outlet, useOutletContext, type RouteObject } from 'react-router-dom';
 import { App } from './app';
 import { RootErrorBoundary, RouteErrorBoundary } from './root-error-boundary';
 import type { SessionRouteContext } from './route-context';
@@ -33,8 +33,7 @@ function OperatorRoutes() {
 
 /** One route tree for production and integration fixtures; Query owns all reads. */
 export const appRoutes: RouteObject[] = [{
-  element: <><App /><ScrollRestoration getKey={location =>
-    ['/tasks', '/issues'].includes(location.pathname) ? location.pathname + location.search : location.key} /></>,
+  element: <App />,
   errorElement: <RootErrorBoundary />,
   children: [{
     errorElement: <RouteErrorBoundary />,

@@ -6,7 +6,7 @@
 | [tests/sql/](sql/README.md) | Реестр JDBC и EXPLAIN на откатываемых тестовых fixtures. |
 | `tests/load/` | Генерация 5 000 записей и [профиль NF08](load/README.md). |
 | backend/src/test/, emulator/src/test/ | Контракты, предметные правила, архитектура, HTTP-доступ и PostgreSQL. integrationTest использует si_test/si_emulator_test. |
-| `frontend/tests/` | Контрактные тесты клиента, polling и round-trip production JS/CSS. |
+| `frontend/tests/` | Unit клиента, URL/polling, projections/positions, lint guardrails; component fixtures и round-trip production JS/CSS. |
 
 Сценарии и ожидаемые результаты связаны с требованиями в
 [плане приёмки](../docs/test-cases.md).
@@ -67,11 +67,16 @@ themes.spec.ts проверяет три палитры, тёмную по ум�
 spacing.spec.ts дополнительно измеряет интервалы при удержанном HTTP-ответе, ошибке, пустом и заполненном реестре, в карточках, форме, истории и сверке.
 Основной прогон содержит 74 проверки в двух профилях экрана. Component specs
 находятся в `components/`, прикладные — в `e2e/`: runner разделены каталогами.
-Отдельно выполняются шесть проверок Select, четыре проверки защиты навигации
-от отложенного измерения и восемь проверок идентичности формы задания.
-Последние используют реальный TaskCard/QueryClient и перехватывают все API-запросы;
-проверяют тёплый/холодный кэш, одинаковые revisions, history jump и обновление
-той же записи без потери черновика или подмены expected revision.
+Component discovery содержит 84 проверки: Select, отложенное измерение,
+идентичность/guard форм, исходы команд и follow-up GET, operator draft basis,
+route/chunk recovery и mobile window. Они используют production components/Query
+под StrictMode и перехватывают все API-запросы. Проверяются тёплый/холодный кэш,
+равные revisions, history jump, refetch без потери draft, native reload, focus
+и отсутствие повторной записи после receipt. `mobile/collection-window.spec.ts`
+проверяет cache/DOM/refetch/polling на 20/100/1000/5000, полный проход 5000 записей,
+оба направления, Back после GC, изменение данных и видимые ошибки восстановления.
+Этот профиль ограничен mobile project; остальные checks выполняются в двух.
+Discovery не является результатом прогона; свежие результаты см. в текущей стадии.
 UI-17 проверяет мобильное окно фильтров, короткий экран, сохранение условий
 и возврат фокуса; на desktop — раскрытие и пересчёт вместимости списка.
 UI-18 проверяет клики по краям ячеек разных строк в обоих реестрах,
