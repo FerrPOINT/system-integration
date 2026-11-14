@@ -3,7 +3,8 @@
 ## Spring Data JDBC — выполнено, готово к merge
 
 [SD-00–SD-06](spring-data-read-plan.md) выполнены на Firebat1.
-Кандидат runtime — 891666d; исходная база — main 319067e.
+Backend-кандидат — 891666d; исходная база — main 319067e.
+Итоговая интеграция e0fdbbd включает свежий main 6c335b6 с UI-доработками.
 Публичный demo остаётся на ac5c207: merge и deploy этой доработки не выполнялись.
 
 TaskReadRepository обслуживает карточку, реестр и историю. Узкие TaskRows
@@ -21,7 +22,7 @@ metadata четырёх HTTP-настроек генерируется штат�
 | Архитектура | Domain/service не зависят от Spring Data; records остаются внутри адаптера. Guard запрещает aggregate save/delete и Modifying в read-репозиториях; отрицательные fixtures реально отклоняются. |
 | Build/Javadoc | Два JAR, doclint, metadata, отсутствие processors/Hibernate в runtime. Две проверки build graph/Docker context проходят. |
 | SQL | 68 ручных sites + captured generated SQL: 532 варианта, 1596 EXPLAIN ANALYZE/BUFFERS/WAL. Для generated PREPARE заданы фактические driver types; fixtures откатились. |
-| UI/API | 68 desktop/mobile без failed/flaky/skipped; 4 smoke и финальная проверка трёх аккаунтов, ownership, operator, UTC, истории и logout. |
+| UI/API | 68 исходных и 74 итоговых интеграционных desktop/mobile без failed/flaky/skipped; 4 smoke и проверка трёх аккаунтов, ownership, operator, UTC, истории и logout. |
 | Recovery/demo | 10 recovery-сценариев и независимая подготовка шести демосценариев прошли. |
 | NF08 | 5000 исходных записей, 20 клиентов, 2 CPU / 4 GiB; финальный p95 чтения 94,00 мс, изменения 93,94 мс, ошибок 0. |
 
@@ -30,6 +31,10 @@ metadata четырёх HTTP-настроек генерируется штат�
 является наблюдением, резервирование выполняется под lock. Backend unit
 повторно прошли все 97 тестов. Для 891666d повторены read-integration, backend
 Javadoc/JAR, SQL-планы, сборка образов, smoke, API, build graph и NF08.
+Свежий main включён без изменений backend, схемы и контрактов. На интеграции
+e0fdbbd заново собраны три образа, прошли smoke и полный набор из 74 UI-сценариев.
+Backend/runtime inputs и измеряемый NF08 workload совпадают с 891666d;
+новый helper выбора Vite применяется только к UI-проверкам, default NF08 прежний.
 Содержимое JAR до/после Javadoc отличается только debug-позициями строк
 вложенного Receipt; executable disassembly совпадает, остальные entries идентичны.
 
@@ -49,7 +54,8 @@ Drain после проверок занял 70,64 с; p95 внешнего за
 
 Исходное ТЗ совпадает с пользовательским файлом по SHA-256
 113890f7eea6bf91b232f0a4082dc8f901301b2ad60a2160d099c28769800aff.
-Контракты, схема/миграции и frontend не менялись; сверка D01–D07,
+В нашей доработке контракты, схема/миграции и frontend не менялись;
+UI обновлён из main и перепроверен совместно с backend. Сверка D01–D07,
 NF01–NF10 и D-NF01–03 опирается на указанные API/БД/UI/recovery/NF08/demo.
 Redis, JPA, новые процессы, CI, generic CRUD и fallback-пути не добавлены.
 Компактные receipts находятся на Firebat1 в tests/results/spring-data-read
