@@ -9,8 +9,8 @@ public record TaskTitle(String value, long revision) {
     private static final Pattern NON_BLANK = Pattern.compile("\\S",Pattern.UNICODE_CHARACTER_CLASS);
 
     public TaskTitle {
-        if (value == null || value.length() > 160 || !NON_BLANK.matcher(value).find())
-            throw RuleViolation.invalid("Название должно содержать от 1 до 160 символов и не быть пустым");
+        if (value == null || value.length() > 160 || value.indexOf(0) >= 0 || !NON_BLANK.matcher(value).find())
+            throw RuleViolation.invalid("Название должно содержать от 1 до 160 символов, не быть пустым и не содержать нулевой символ");
         if (revision < 1 || revision > MAX_REVISION)
             throw RuleViolation.invalid("Достигнут предел версии");
     }

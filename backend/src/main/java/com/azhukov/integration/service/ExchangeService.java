@@ -93,6 +93,9 @@ public class ExchangeService {
     }
 
     @Transactional(readOnly = true)
+    public ExchangeRepository.DeliveryBacklog backlog() { return exchanges.backlog(); }
+
+    @Transactional(readOnly = true)
     public long cursor() { return exchanges.cursor(false); }
 
     @Transactional

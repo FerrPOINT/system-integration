@@ -135,7 +135,9 @@ class HttpExternalExchangeClientTest {
                     assertEquals(26,result.external().request().quantity(),"Operator must see external differences unchanged");
                     assertNull(result.external().result());
                 }
-                assertEquals(json.readTree(probe.body()),result.evidence());
+                Object original=result.evidence() instanceof com.azhukov.integration.client.ExternalExchangeClient.ProtocolEvidence detail
+                    ? detail.content() : result.evidence();
+                assertEquals(json.readTree(probe.body()),original);
             }
         }
     }

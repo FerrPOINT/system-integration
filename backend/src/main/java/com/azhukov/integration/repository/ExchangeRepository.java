@@ -33,6 +33,9 @@ public interface ExchangeRepository {
     void removeQueue(UUID operation);
     void delivery(UUID operation, DeliveryStatus status);
     void applyResult(OperationResult result);
+    record DeliveryBacklog(long operations,OffsetDateTime oldestCreatedAt) {}
+    /** Includes parked deliveries awaiting an operator; read only on an explicit diagnostic request. */
+    DeliveryBacklog backlog();
     long cursor(boolean lock);
     void advanceCursor(long cursor);
 

@@ -152,7 +152,9 @@ class ExchangeProtocolTest {
         assertNotNull(decoded.events().get(0).result());
         assertNull(decoded.events().get(1).result());
         assertEquals(identity.id(),decoded.events().get(1).operationId(),"Diagnostic identity keeps the former lenient extraction");
-        assertEquals(malformed,decoded.events().get(1).evidence());
+        var diagnosed=assertInstanceOf(ExternalExchangeClient.ProtocolEvidence.class,decoded.events().get(1).evidence());
+        assertEquals(malformed,diagnosed.content());
+        assertEquals("INVALID_UUID at operationId",diagnosed.detail());
         assertNull(decoded.events().get(2).operationId());
         assertNull(decoded.events().get(2).result());
         assertEquals(ExternalExchangeClient.FeedStatus.INVALID_PAGE,protocol.feed(new ExchangeReply(200,page,false,null),11).status());
@@ -167,5 +169,19 @@ class ExchangeProtocolTest {
         assertFalse(ExchangeProtocol.missingOperation(404,json.readTree("{\"code\":\"OPERATION_NOT_FOUND\"}")));
         assertFalse(ExchangeProtocol.missingOperation(404,json.readTree("{\"title\":\"Ошибка\",\"status\":500,\"code\":\"OPERATION_NOT_FOUND\"}")));
         assertFalse(ExchangeProtocol.missingOperation(404,json.readTree("{\"title\":\"Ошибка\",\"status\":4294967700,\"code\":\"OPERATION_NOT_FOUND\"}")));
+    }
+    @Test
+    void malformedFieldHasBoundedSafeDetailAndKeepsOriginalEvidence() {
+        var raw=json.readTree(result.replace("\"quantity\":25","\"quantity\":\"secret-value\""));
+        var attempt=new DeliveryAttempt(identity.id(),UUID.randomUUID(),"GET",1,1,identity.request());
+        var state=json.createObjectNode().put("operationId",identity.id().toString())
+            .set("request",raw.get("request")).put("acceptedAt","2026-11-11T00:00:00Z")
+            .put("executions",1).set("result",raw);
+        var reply=protocol.delivery(attempt,new ExchangeReply(200,state,false,null));
+        assertEquals(DeliveryAttempt.Outcome.PROTOCOL_ERROR,reply.outcome());
+        var evidence=assertInstanceOf(ExternalExchangeClient.ProtocolEvidence.class,reply.evidence());
+        assertSame(state,evidence.content());
+        assertEquals("FIELD_TYPE at quantity",evidence.detail());
+        assertFalse(evidence.detail().contains("secret-value"));
     }
 }

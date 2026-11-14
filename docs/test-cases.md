@@ -1,5 +1,21 @@
 # План приёмки
 
+## Регрессии backend-аудита
+
+[BA-01–BA-09](backend-audit-followup-plan.md): U+0000 и допустимый Unicode
+проверяют TaskTitle/IssueCommands, HTTP create/rename — TaskWorkflowTest/
+ThreadingTest, причины допустимых retry/resolve — OperationsWorkflowTest.
+Проверяются 400, отсутствие частичных данных/receipt и request correlation.
+
+OperationsWorkflowTest выполняет concurrent commit между SELECT карточки:
+старый snapshot согласован, следующий запрос видит RESOLVED без действий.
+Protocol/feed/IssueDiagnostics сохраняют исходный fingerprint content и старый
+JSON shape при добавлении безопасной detail. ExchangeDiagnosticsTest
+проверяет 401/403/operator, empty/occupied queue, paused feed и readiness.
+EmulatorWorkflowTest проверяет commit-only lifecycle logs и отсутствие успеха
+после rollback. PG upgrade проверяет digests 14 таблиц до/после 18.6 → 18.7.
+EXPLAIN покрывает новый on-demand backlog SQL. Полный gate остаётся обязательным.
+
 Сценарии TC-01–TC-15 проверяют исходное ТЗ; TC-16 — публикацию по поручению владельца. Результаты прогона указываются
 отдельно с версией приложения, окружением и ссылкой на отчёт. Для интеграционных
 проверок используются миграции и тестовый PostgreSQL, а внешний обмен

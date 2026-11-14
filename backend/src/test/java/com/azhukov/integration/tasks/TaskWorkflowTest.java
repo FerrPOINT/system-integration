@@ -236,4 +236,22 @@ class TaskWorkflowTest extends PostgresTest {
     }
 
 
+    @Test
+    void nulCannotReachStorageOnCreateOrRenameAndValidUnicodeIsPreserved() throws Exception {
+        var owner=login("initiator.one");
+        String invalid="До"+Character.toString(0)+"после";
+        var input=json.writeValueAsString(java.util.Map.of("title",invalid,
+            "request",java.util.Map.of("reference","REQ-000001","quantity",25)));
+        var rejected=create(owner,UUID.randomUUID(),input);status(400,rejected);
+        assertEquals("VALIDATION_FAILED",body(rejected).get("code").asString());
+        for (var table:List.of("tasks","delivery_queue","task_history","command_receipts")) assertEquals(0,count(table));
+        var valid=CREATE.replace("Проверка заявки","Название 😀");
+        var accepted=create(owner,UUID.randomUUID(),valid);status(201,accepted);
+        var id=UUID.fromString(body(accepted).get("taskId").asString());
+        var rename=rename(owner,id,UUID.randomUUID(),invalid,1);status(400,rename);
+        assertEquals("VALIDATION_FAILED",body(rename).get("code").asString());
+        assertEquals("Название 😀",jdbc.queryForObject("SELECT title FROM tasks WHERE id=?",String.class,id));
+        assertEquals(1,count("task_history"));assertEquals(1,count("command_receipts"));
+        assertNotNull(rename.getResponse().getHeader("X-Request-ID"));
+    }
 }

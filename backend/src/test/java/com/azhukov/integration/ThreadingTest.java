@@ -34,6 +34,37 @@ class ThreadingTest extends com.azhukov.integration.support.PostgresTest {
     }
 
     @Test
+    void actualHttpRejectsNulBeforeStorageAndReturnsRequestCorrelation() throws Exception {
+        var owner=login("initiator.one");var id=created(owner,java.util.UUID.randomUUID());
+        var cookies=new java.net.CookieManager(null,java.net.CookiePolicy.ACCEPT_ALL);
+        try (var http=HttpClient.newBuilder().cookieHandler(cookies).build()) {
+            String base="http://127.0.0.1:"+port;
+            var csrf=http.send(HttpRequest.newBuilder(URI.create(base+"/api/csrf")).GET().build(),HttpResponse.BodyHandlers.ofString());
+            var login=http.send(HttpRequest.newBuilder(URI.create(base+"/api/login"))
+                .header("X-CSRF-TOKEN",json.readTree(csrf.body()).get("token").asString())
+                .header("Content-Type","application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("username=initiator.one&password="+PASSWORD)).build(),HttpResponse.BodyHandlers.ofString());
+            assertEquals(204,login.statusCode());
+            csrf=http.send(HttpRequest.newBuilder(URI.create(base+"/api/csrf")).GET().build(),HttpResponse.BodyHandlers.ofString());
+            String token=json.readTree(csrf.body()).get("token").asString();
+            String title="До"+Character.toString(0)+"после";
+            for (boolean rename:java.util.List.of(false,true)) {
+                Object input=rename ? java.util.Map.of("title",title,"expectedTitleRevision",1)
+                    : java.util.Map.of("title",title,"request",java.util.Map.of("reference","REQ-000001","quantity",25));
+                var response=http.send(HttpRequest.newBuilder(URI.create(base+"/api/tasks"+(rename ? "/"+id : "")))
+                    .timeout(Duration.ofSeconds(5)).header("Content-Type","application/json").header("X-CSRF-TOKEN",token)
+                    .header("Idempotency-Key",java.util.UUID.randomUUID().toString())
+                    .header("X-Request-ID","untrusted").method(rename ? "PATCH" : "POST",HttpRequest.BodyPublishers.ofString(json.writeValueAsString(input))).build(),
+                    HttpResponse.BodyHandlers.ofString());
+                assertEquals(400,response.statusCode());
+                assertEquals("VALIDATION_FAILED",json.readTree(response.body()).get("code").asString());
+                assertNotNull(java.util.UUID.fromString(response.headers().firstValue("X-Request-ID").orElseThrow()));
+            }
+            assertEquals(1,count("tasks"));assertEquals(1,count("command_receipts"));assertEquals(1,count("task_history"));
+        }
+    }
+
+    @Test
     void actualHttpRequestUsesVirtualThread() throws Exception {
         try (var client = HttpClient.newHttpClient()) {
             var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/thread-test"))

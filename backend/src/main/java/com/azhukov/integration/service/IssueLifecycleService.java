@@ -1,6 +1,7 @@
 package com.azhukov.integration.service;
 
 import com.azhukov.integration.domain.exchange.DeliveryAttempt;
+import com.azhukov.integration.client.ExternalExchangeClient.ProtocolEvidence;
 import com.azhukov.integration.domain.exchange.ExchangeState;
 import com.azhukov.integration.domain.exchange.LocalSnapshot;
 import com.azhukov.integration.domain.exchange.OperationResult;
@@ -28,8 +29,10 @@ public class IssueLifecycleService {
 
     public UUID open(ExchangeState state,UUID operationId,Issue.Kind kind,String reason,
                      Object content,OperationResult received,Long cursor) {
-        var evidence=new Evidence(reason,cursor,state==null ? null : LocalSnapshot.of(state),received);
-        var opened=issues.open(state==null ? null : state.task().id(),operationId,kind,reason,content,evidence);
+        var evidence=evidence(reason,content,cursor,state,received);
+        // Human-readable diagnostics must not change the identity of a previously seen bad packet.
+        Object original=content instanceof ProtocolEvidence classified ? classified.content() : content;
+        var opened=issues.open(state==null ? null : state.task().id(),operationId,kind,reason,original,evidence);
         if (opened.created() && state!=null)
             tasks.history(state.task(),null,HistoryType.ISSUE_OPENED,reason,Map.of("issueId",opened.id()));
         return opened.id();
@@ -62,9 +65,14 @@ public class IssueLifecycleService {
     public UUID protocol(ExchangeState state,String reason,Object content) {
         UUID existing=issues.temporary(state.task().id());
         if (existing==null) return open(state,state.task().operationId(),Issue.Kind.PROTOCOL_ERROR,reason,content,null,null);
-        issues.protocol(existing,reason,new Evidence(reason,null,LocalSnapshot.of(state),null));
+        issues.protocol(existing,reason,evidence(reason,content,null,state,null));
         tasks.history(state.task(),null,HistoryType.ISSUE_OPENED,reason,Map.of("issueId",existing));
         return existing;
+    }
+
+    private static Evidence evidence(String reason,Object content,Long cursor,ExchangeState state,OperationResult received) {
+        String detail=content instanceof ProtocolEvidence classified ? reason+" ["+classified.detail()+"]" : reason;
+        return new Evidence(detail,cursor,state==null ? null : LocalSnapshot.of(state),received);
     }
 
     public void observe(ExchangeState state,OperationResult result) {

@@ -617,6 +617,26 @@ HTTP выполняется вне транзакции; доставка пов
 проверяет квитанцию под advisory lock при сохранении. Первые одновременные GET
 могут дублироваться, но сохраняется одна сверка/история; отдельного single-flight нет.
 
+## Диагностика и согласованное чтение
+
+Закрытый Actuator /exchange использует ExchangeCoordinator как единственного
+владельца process-local feed state/counters. Backlog читается ExchangeService →
+ExchangeRepository одним агрегатом по явному запросу; poller/кэш не добавляется.
+Delivery queue включает parked rows и не равна всему business pending.
+Пауза feed не делает принимающий задания backend not-ready.
+
+Issue card использует REPEATABLE_READ для общего snapshot issue/exchange/
+reconciliation. Команды сохраняют locks и проверку revision/action/freshness.
+RequestCorrelationFilter создаёт X-Request-ID до Security и очищает MDC
+после chain, также при ошибке. Межпроцессная связь остаётся по operationId.
+У эмулятора afterCommit lifecycle logs: rollback не утверждает успех,
+публикация пачки логируется одной строкой.
+
+ProtocolEvidence — внутренний wrapper original content/safe detail.
+IssueLifecycleService дополняет существующий Evidence.reason, а в fingerprint
+передаёт прежние canonical reason и original content. Новых JSON-полей,
+миграции и fallback для старых записей нет.
+
 ## Потоки и ограничение параллелизма
 
 В исходниках Java 25 и виртуальные HTTP-потоки backend/эмулятора включены

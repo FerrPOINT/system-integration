@@ -41,6 +41,8 @@ class ResultFeedTest extends PostgresTest {
                 call.getArguments()[0] instanceof String sql && sql.startsWith("UPDATE incoming_position")).count();
             assertEquals(0,writes,"An empty page must not start cursor/result application");
             assertEquals(0,exchange.cursor());
+            assertNotNull(worker.diagnostics().lastSuccessfulRead());
+            assertFalse(worker.diagnostics().paused());
         } finally { server.stop(0); }
     }
 
@@ -60,6 +62,7 @@ class ResultFeedTest extends PostgresTest {
                 assertEquals(7, exchange.cursor());
                 assertEquals(1, count("exchange_issues"));
                 assertEquals(0, count("task_history"));
+                assertTrue(worker.diagnostics().paused());assertEquals(1,worker.diagnostics().invalidPages());
             }
             // A valid cursor with an invalid result is diagnosed and consumed, rather than poisoning the feed.
             page.set("[{\"cursor\":8,\"result\":null}]");
@@ -83,6 +86,23 @@ class ResultFeedTest extends PostgresTest {
             assertEquals(1, requests.get());
             assertEquals(0, exchange.cursor());
             assertEquals(0, count("exchange_issues"));
+            assertEquals(1,worker.diagnostics().unavailableReads());
+            assertNull(worker.diagnostics().lastSuccessfulRead());assertFalse(worker.diagnostics().paused());
+        } finally { server.stop(0); }
+    }
+
+    @Test
+    void detailedBadPageReusesTheHistoricalFingerprintWithoutChangingStoredJson() throws Exception {
+        var page=new AtomicReference<>("""
+            [{"cursor":2},{"cursor":1}]
+            """);
+        exchange.badPage(json.readTree(page.get()));
+        assertEquals(1,count("exchange_issues"));
+        var server=source(new AtomicInteger(),page,new AtomicInteger(200));
+        try (var http=transport(server);var worker=new ExchangeCoordinator(exchange,new HttpExternalExchangeClient(http,json,settings(server)))) {
+            worker.receive();
+            assertEquals(1,count("exchange_issues"));
+            assertTrue(worker.diagnostics().paused());
         } finally { server.stop(0); }
     }
 

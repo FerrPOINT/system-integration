@@ -48,6 +48,7 @@ public class SecurityConfiguration {
             .requestMatchers(HttpMethod.POST, "/api/tasks").hasRole("INITIATOR")
             .requestMatchers(HttpMethod.PATCH, "/api/tasks/*").hasRole("INITIATOR")
             .requestMatchers("/api/exchange/**", "/api/tasks/*/reconciliations/**").hasRole("OPERATOR")
+            .requestMatchers("/actuator/exchange").hasRole("OPERATOR")
             .requestMatchers("/api/**").authenticated()
             .anyRequest().denyAll());
         http.formLogin(form -> form.loginProcessingUrl("/api/login")

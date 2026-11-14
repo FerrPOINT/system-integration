@@ -26,7 +26,7 @@ public final class IssueCommands {
         if (value<1 || value>9007199254740991L) throw RuleViolation.invalid("Некорректная версия проблемы");
     }
     private static void reason(String value) {
-        if (value==null || value.length()>500 || !NON_BLANK.matcher(value).find())
-            throw RuleViolation.invalid("Укажите причину длиной до 500 символов");
+        if (value==null || value.length()>500 || value.indexOf(0)>=0 || !NON_BLANK.matcher(value).find())
+            throw RuleViolation.invalid("Укажите непустую причину длиной до 500 символов без нулевого символа");
     }
 }

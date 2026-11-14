@@ -32,6 +32,23 @@ node .local/toolchains/corepack/node_modules/corepack/dist/corepack.js pnpm --di
 Compose/UI-прогона Vite освобождает порт 19673 frontend-контейнеру.
 Приведённые ниже порты 195xx относятся к обычному Compose и публикации.
 
+## Диагностика обмена
+
+GET /actuator/exchange доступен на приватном backend с операторской сессией:
+anonymous получает 401, инициатор — 403. Frontend proxy его не публикует.
+Ответ содержит observedAt, workerEnabled, feed paused/lastSuccessfulRead/
+unavailableReads/invalidPages/inFlight и deliveryQueue operations/oldestCreatedAt.
+Очередь читается один раз по запросу и включает parked deliveries; это не всё
+business pending. Возраст oldestCreatedAt считается относительно observedAt.
+Feed counters локальны процессу; restart их обнуляет, а очередь остаётся в БД.
+Readiness зависит от приложения/БД, не от доступности исполнителя.
+
+API возвращает серверный X-Request-ID; caller ID игнорируется. Ошибки HTTP
+и прикладной audit используют requestId в журнале; после запроса MDC очищается.
+Эмулятор пишет lifecycle события после commit без тел запросов.
+Безопасная protocol detail сохраняется в существующем Evidence.reason;
+canonical reason/content для дедупликации и сохранённые receipts не меняются.
+
 ## Доступ к данным
 
 Карточка, реестр и история заданий читаются через Spring Data JDBC.

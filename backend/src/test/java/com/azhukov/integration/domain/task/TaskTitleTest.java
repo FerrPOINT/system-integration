@@ -33,7 +33,7 @@ class TaskTitleTest {
 
     @Test
     void titleMustRespectTheExistingInputLimits() {
-        for (var invalid : new String[]{""," \n\t","\u2003","\u3000","\u00a0","x".repeat(161)}) {
+        for (var invalid : new String[]{""," \n\t","\u2003","\u3000","\u00a0","x".repeat(161),Character.toString(0),"До"+Character.toString(0)+"после"}) {
             assertEquals(RuleViolation.Code.VALIDATION_FAILED,
                 assertThrows(RuleViolation.class,() -> new TaskTitle(invalid,1)).code());
         }
@@ -41,6 +41,7 @@ class TaskTitleTest {
         assertEquals("x".repeat(160),new TaskTitle("x".repeat(160),1).value());
         assertEquals("Имя\u2003объекта",new TaskTitle("Имя\u2003объекта",1).value());
         assertEquals("\nИмя\n",new TaskTitle("\nИмя\n",1).value());
+        assertEquals("Имя 😀",new TaskTitle("Имя 😀",1).value());
     }
 
     @Test

@@ -1,5 +1,27 @@
 # Текущая стадия
 
+## Доработки полного backend-аудита — в работе
+
+План [BA-01–BA-09](backend-audit-followup-plan.md), база main 5aa1c06.
+На Firebat1 выполнен fast-forward; frontend 6f6dbe0 полностью включён.
+Ветка — fix/backend-audit-followup. Public runtime ac5c207 не менялся.
+
+Валидация U+0000 согласована в TaskTitle, причинах решений и OpenAPI.
+До исправления два unit-теста воспроизвели дефект; после исправления прошли
+адресные unit/HTTP проверки, включая реальный сервер. Protocol diagnostics
+сохраняет прежние fingerprint inputs и JSON shape. Добавлены request correlation,
+commit-aware журналы эмулятора и закрытый Actuator /exchange без нового poller.
+
+Конкурентная карточка проверена commit между SELECT: тест воспроизвёл смесь
+старой проблемы и нового exchange state. REPEATABLE_READ устранил её;
+следующая карточка видит RESOLVED без действий. Адресные protocol/feed/API
+и emulator commit-log проверки проходят.
+
+Upgrade 18.6 → 18.7 выполнен на собственном тестовом томе. Counts/digests
+14 business/migration таблиц двух БД сохранились. Полный Java/SQL/UI/recovery/
+demo/NF08 gate, финальное ревью и merge-ready ещё не завершены.
+Receipts — tests/results/backend-followup (ignored).
+
 ## Spring Data JDBC — выполнено
 
 [SD-00–SD-06](spring-data-read-plan.md) выполнены на Firebat1.

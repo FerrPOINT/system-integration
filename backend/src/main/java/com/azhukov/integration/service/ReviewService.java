@@ -49,7 +49,7 @@ public class ReviewService {
         return new ReconciliationStart(exchanges.exchange(record.operationId(),false),null);
     }
 
-    @Transactional(readOnly=true)
+    @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
     public Issue get(Actor user,UUID id) { requireOperator(user); return loadContext(id,user,false).view(user.id()); }
 
     @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)

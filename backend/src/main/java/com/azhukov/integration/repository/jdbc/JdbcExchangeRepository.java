@@ -107,6 +107,13 @@ public class JdbcExchangeRepository implements ExchangeRepository {
             json.writeValueAsString(result),result.status().name(),result.operationId());
     }
 
+    public DeliveryBacklog backlog() {
+        return jdbc.queryForObject("""
+            SELECT count(*) AS operations,min(t.created_at) AS oldest_created_at
+            FROM delivery_queue q JOIN tasks t ON t.operation_id=q.operation_id
+            """,(rs,n) -> new DeliveryBacklog(rs.getLong("operations"),rs.getObject("oldest_created_at",OffsetDateTime.class)));
+    }
+
     public long cursor(boolean lock) {
         return jdbc.queryForObject("SELECT last_cursor FROM incoming_position WHERE id = 1" + (lock ? " FOR UPDATE" : ""),Long.class);
     }
