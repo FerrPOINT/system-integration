@@ -1,13 +1,12 @@
 import { createRoot } from 'react-dom/client';
-import { QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, RouterProvider, ScrollRestoration } from 'react-router-dom';
-import { App } from './app/App';
-import { queryClient } from './app/api';
+import { App } from './app/app';
+import { Providers } from './app/providers';
 import { RootErrorBoundary } from './app/root-error-boundary';
-import './ui/design-tokens.css';
-import './ui/controls.css';
-import './ui/patterns.css';
-import './app/styles.css';
+import './shared/styles/design-tokens.css';
+import './shared/styles/controls.css';
+import './shared/styles/patterns.css';
+import './app/shell/shell.css';
 
 const router = createBrowserRouter([{ path: '*', errorElement: <RootErrorBoundary />, element: <><App /><ScrollRestoration getKey={location =>
   ['/tasks', '/issues'].includes(location.pathname) ? location.pathname + location.search : location.key} /></> }]);
@@ -18,7 +17,7 @@ if (!container) {
 }
 
 createRoot(container).render(
-  <QueryClientProvider client={queryClient}>
+  <Providers>
     <RouterProvider router={router} />
-  </QueryClientProvider>,
+  </Providers>,
 );

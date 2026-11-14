@@ -1,6 +1,6 @@
-import { Label } from '../ui/label';
-import { Notice } from '../ui/notice';
-import { Select } from '../ui/select';
+import { Label } from '../../shared/ui/label';
+import { Notice } from '../../shared/ui/notice';
+import { Select } from '../../shared/ui/select';
 import { useEffect, useLayoutEffect, useState } from 'react';
 
 export type Theme = 'dark' | 'light' | 'gray';

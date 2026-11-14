@@ -2,9 +2,9 @@ import { lazy, StrictMode, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createMemoryRouter, Link, Outlet, RouterProvider } from 'react-router-dom';
 import { RootErrorBoundary, RouteErrorBoundary } from '../src/app/root-error-boundary';
-import '../src/ui/design-tokens.css';
-import '../src/ui/controls.css';
-import '../src/ui/patterns.css';
+import '../src/shared/styles/design-tokens.css';
+import '../src/shared/styles/controls.css';
+import '../src/shared/styles/patterns.css';
 
 function Crash(): ReactNode {
   if (new URLSearchParams(location.search).has('value')) throw { diagnostic: 'PRIVATE_DIAGNOSTIC' };

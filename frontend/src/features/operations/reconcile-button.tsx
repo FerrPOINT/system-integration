@@ -1,12 +1,12 @@
-import { ErrorMessage } from '../../app/error-message';
-import { Button } from '../../ui/button';
-import { CommandRefresh } from '../../ui/command-refresh';
+import { ErrorMessage } from '../../shared/ui/error-message';
+import { Button } from '../../shared/ui/button';
+import { CommandRefresh } from '../../shared/ui/command-refresh';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { reconcileTask } from '../../../build/generated/openapi/client';
 import { data } from '../../shared/api/http';
 import { csrf } from '../../shared/api/csrf';
-import { useCommandKey } from '../../app/use-command-key';
+import { useCommandKey } from '../../shared/lib/forms/use-command-key';
 import { useRefreshExchange } from './use-refresh-exchange';
 
 export function ReconcileButton({ taskId }: { taskId: string }) {

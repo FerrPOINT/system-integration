@@ -1,29 +1,32 @@
-import { ErrorMessage } from '../../app/error-message';
-import { Notice } from '../../ui/notice';
-import { Disclosure } from '../../ui/disclosure';
-import { Table } from '../../ui/table';
-import { EmptyState } from '../../ui/empty-state';
-import { Card, CardContent } from '../../ui/card';
-import { PageHeader } from '../../ui/page-header';
-import { FormField } from '../../ui/form-field';
-import { Select } from '../../ui/select';
-import { Input } from '../../ui/input';
-import { Button } from '../../ui/button';
-import { Dialog } from '../../ui/dialog';
+import { ErrorMessage } from '../../shared/ui/error-message';
+import { Notice } from '../../shared/ui/notice';
+import { Disclosure } from '../../shared/ui/disclosure';
+import { Table } from '../../shared/ui/table';
+import { EmptyState } from '../../shared/ui/empty-state';
+import { Card, CardContent } from '../../shared/ui/card';
+import { PageHeader } from '../../shared/ui/page-header';
+import { FormField } from '../../shared/ui/form-field';
+import { Select } from '../../shared/ui/select';
+import { Input } from '../../shared/ui/input';
+import { Button } from '../../shared/ui/button';
+import { Dialog } from '../../shared/ui/dialog';
 import { ChevronRight, Plus, SlidersHorizontal } from 'lucide-react';
 import { useRef, useState, type ReactNode } from 'react';
 import { Link, Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { listTasks } from '../../../build/generated/openapi/client';
-import type { BusinessStatus, GetSession200 } from '../../../build/generated/openapi/client';
-import { keys } from '../../app/api';
+import type { BusinessStatus, GetSession200, Task } from '../../../build/generated/openapi/client';
+import { taskKeys } from './api/task-keys';
 import { data } from '../../shared/api/http';
-import { Loading, Pagination, RefreshButton } from '../../ui/Feedback';
-import { useMediaQuery } from '../../ui/use-media-query';
-import { businessLabels, deliveryLabels, timestamp } from '../../app/format';
-import { usePagination } from '../../app/use-pagination';
+import { Loading, Pagination, RefreshButton } from '../../shared/ui/feedback';
+import { useMediaQuery } from '../../shared/ui/use-media-query';
+import { businessLabels, deliveryLabels } from './model/task-labels';
+import { timestamp } from '../../shared/lib/format/timestamp';
+import { usePagination } from '../../shared/lib/pagination/use-pagination';
 import { BusinessBadge } from './business-badge';
-import { useCollectionQuery } from '../../app/use-collection-query';
-import { FeedFooter } from '../../ui/feed-footer';
+import { useCollectionQuery } from '../../shared/lib/collections/use-collection-query';
+import { FeedFooter } from '../../shared/ui/feed-footer';
+
+const identifyTask = (task: Task) => task.taskId;
 
 export function TaskList({ user }: { user: GetSession200 }) {
   const createTrigger = useRef<HTMLAnchorElement>(null);
@@ -48,8 +51,8 @@ export function TaskList({ user }: { user: GetSession200 }) {
     }
     setSearch(updated, { replace: true });
   }
-  const tasks = useCollectionQuery({ key: keys.taskList(params), page, size, feed: mobile, enabled: valid,
-    read: (page, size, signal) => data(listTasks({ ...params, page, size }, { signal })), identify: task => task.taskId });
+  const { query: tasks, items: tasksItems, meta: tasksPage } = useCollectionQuery({ key: taskKeys.taskList(params), page, size, feed: mobile, enabled: valid,
+    read: (page, size, signal) => data(listTasks({ ...params, page, size }, { signal })), identify: identifyTask });
   const [filtersOpen, setFiltersOpen] = useState(true);
   const hasFilters = Boolean(status || params.createdFrom || params.createdTo);
   const filterFields = <div className="base-form filters">
@@ -65,7 +68,7 @@ export function TaskList({ user }: { user: GetSession200 }) {
     </div>;
   return <>
     <div className="list-tools base-page-stack"><PageHeader title={user.role === 'OPERATOR' ? 'Все задания' : 'Мои задания'}
-      context={mobile ? tasks.data && `Всего: ${tasks.data.totalItems}` : 'Приём задания, доставка и результат исполнения показаны отдельно.'}
+      context={mobile ? tasksPage && `Всего: ${tasksPage.totalItems}` : 'Приём задания, доставка и результат исполнения показаны отдельно.'}
       actions={<>{user.role === 'INITIATOR' && <Button asChild variant="default"><Link ref={createTrigger} className={mobile ? 'base-icon-button' : undefined} aria-label="Создать задание" title="Создать задание" to={{ pathname: "/tasks/new", search: search.toString() }}>{mobile ? <Plus size={20} aria-hidden="true" /> : 'Создать задание'}</Link></Button>}
         {mobile && <MobileTaskFilters active={hasFilters}>{filterFields}</MobileTaskFilters>}
         <RefreshButton pending={tasks.isFetching} disabled={!valid} onClick={() => tasks.refetch()} /></>} />
@@ -78,13 +81,13 @@ export function TaskList({ user }: { user: GetSession200 }) {
     <section className="paged-list base-page-stack" aria-busy={tasks.isFetching}>
     <div className="paged-viewport" ref={viewportRef}>
     {!valid ? <Notice role="alert" tone="danger">{validParameters ? 'Начало периода должно быть раньше конца.' : 'Некорректные параметры страницы. Сбросьте фильтры.'}</Notice> : tasks.isPending ? <Loading /> :
-      !tasks.data ? <><ErrorMessage error={tasks.error} /><Button onClick={() => tasks.refetch()}>Повторить</Button></> : <>
+      !tasksPage ? <><ErrorMessage error={tasks.error} /><Button onClick={() => tasks.refetch()}>Повторить</Button></> : <>
       {!tasks.isFetchNextPageError && tasks.error && <><ErrorMessage error={tasks.error} /><Button onClick={() => tasks.refetch()}>Повторить</Button></>}
-      {tasks.data.items.length === 0 ? <Card><EmptyState headingLevel={2}
+      {tasksItems.length === 0 ? <Card><EmptyState headingLevel={2}
           message={status || params.createdFrom || params.createdTo ? 'Ничего не найдено' : 'Заданий пока нет'}
           description={status || params.createdFrom || params.createdTo ? 'Измените условия или сбросьте фильтры, чтобы увидеть задания.' : 'Создайте первое задание. Здесь появятся доставка и результат исполнения.'}
           action={(status || params.createdFrom || params.createdTo) && <Button onClick={() => setSearch({})}>Сбросить фильтры</Button>} /></Card> : mobile ?
-          <ul className="task-cards" data-page-items>{tasks.data.items.map(task => <Card asChild key={task.taskId} data-page-item><li className="task-card"><Link className="mobile-card-link" aria-label={task.title} aria-describedby={'task-state-' + task.taskId + ' task-meta-' + task.taskId} title={task.title} to={'/tasks/' + task.taskId} state={returnState}><CardContent density="compact" className="mobile-card-content">
+          <ul className="task-cards" data-page-items>{tasksItems.map(task => <Card asChild key={task.taskId} data-page-item><li className="task-card"><Link className="mobile-card-link" aria-label={task.title} aria-describedby={'task-state-' + task.taskId + ' task-meta-' + task.taskId} title={task.title} to={'/tasks/' + task.taskId} state={returnState}><CardContent density="compact" className="mobile-card-content">
             <div className="mobile-card-heading"><h2 className="base-card-title base-truncate">{task.title}</h2><ChevronRight size={18} aria-hidden="true" /></div>
             <div className="task-card-status" id={'task-state-' + task.taskId}><BusinessBadge status={task.businessStatus} /><span>{deliveryLabels[task.deliveryStatus]}</span></div>
             <div className="mobile-card-meta" id={'task-meta-' + task.taskId}><span className="base-truncate">{task.request.reference} · {task.request.quantity} ед.</span>
@@ -92,15 +95,15 @@ export function TaskList({ user }: { user: GetSession200 }) {
           </CardContent></Link></li></Card>)}</ul> :
           <Card><Table className="task-table" data-page-items><caption className="sr-only">Реестр заданий</caption>
             <thead data-page-heading><tr><th scope="col">Название / заявка</th><th scope="col">Доставка</th><th scope="col">Результат</th><th scope="col">Создано (UTC)</th></tr></thead>
-            <tbody>{tasks.data.items.slice(0, size).map(task => <tr key={task.taskId} className="base-linked-row" data-page-item><td><Link className="base-truncate" title={task.title} to={'/tasks/' + task.taskId} state={returnState}>{task.title}</Link>
+            <tbody>{tasksItems.slice(0, size).map(task => <tr key={task.taskId} className="base-linked-row" data-page-item><td><Link className="base-truncate" title={task.title} to={'/tasks/' + task.taskId} state={returnState}>{task.title}</Link>
               <small>{task.request.reference} · {task.request.quantity} ед.</small></td><td>{deliveryLabels[task.deliveryStatus]}</td>
               <td><BusinessBadge status={task.businessStatus} /></td><td><time dateTime={task.createdAt}>{timestamp(task.createdAt, { showZone: false })}</time></td></tr>)}</tbody>
           </Table></Card>}
       </>}
     </div>
-    {mobile ? valid && tasks.data && <FeedFooter loaded={tasks.data.items.length} total={tasks.data.totalItems} hasNext={tasks.hasNextPage} pending={tasks.isFetching}
+    {mobile ? valid && tasksPage && <FeedFooter loaded={tasksItems.length} total={tasksPage.totalItems} hasNext={tasks.hasNextPage} pending={tasks.isFetching}
       error={tasks.isFetchNextPageError ? tasks.error : null} onLoad={() => tasks.fetchNextPage({ cancelRefetch: false })} /> :
-      <Pagination page={validPage ? page : 0} size={size} totalItems={tasks.data?.totalItems} totalPages={tasks.data?.totalPages} pending={tasks.isFetching || !valid} onChange={changePage} />}
+      <Pagination page={validPage ? page : 0} size={size} totalItems={tasksPage?.totalItems} totalPages={tasksPage?.totalPages} pending={tasks.isFetching || !valid} onChange={changePage} />}
     </section>
     <Outlet context={createTrigger} />
   </>;

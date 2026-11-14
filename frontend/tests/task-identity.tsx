@@ -2,12 +2,12 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider, useNavigate } from 'react-router-dom';
 import { TaskCard } from '../src/features/tasks/task-details';
-import { keys } from '../src/app/api';
+import { taskKeys } from '../src/features/tasks/api/task-keys';
 import type { Task } from '../build/generated/openapi/client';
-import '../src/ui/design-tokens.css';
-import '../src/ui/controls.css';
-import '../src/ui/patterns.css';
-import '../src/app/styles.css';
+import '../src/shared/styles/design-tokens.css';
+import '../src/shared/styles/controls.css';
+import '../src/shared/styles/patterns.css';
+import '../src/app/shell/shell.css';
 
 const params = new URLSearchParams(location.search);
 const tasks: Task[] = ['a', 'b'].map((suffix, index) => ({
@@ -19,8 +19,8 @@ const tasks: Task[] = ['a', 'b'].map((suffix, index) => ({
   createdAt: '2026-11-14T00:00:00Z', deliveryStatus: 'ACKNOWLEDGED', businessStatus: 'SUCCEEDED',
 }));
 const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-client.setQueryData(keys.task(tasks[0].taskId), tasks[0]);
-if (!params.has('cold')) client.setQueryData(keys.task(tasks[1].taskId), tasks[1]);
+client.setQueryData(taskKeys.task(tasks[0].taskId), tasks[0]);
+if (!params.has('cold')) client.setQueryData(taskKeys.task(tasks[1].taskId), tasks[1]);
 
 function Harness() {
   const navigate = useNavigate();
@@ -30,7 +30,7 @@ function Harness() {
       <button onClick={() => navigate('/tasks/' + tasks[1].taskId)}>Open B</button>
       <button onClick={() => navigate(-1)}>History back</button>
       <button onClick={() => navigate('?page=1&size=10')}>Change history page</button>
-      <button onClick={() => client.setQueryData(keys.task(tasks[0].taskId), { ...tasks[0], title: 'Server A', titleRevision: 9 })}>Refresh A</button>
+      <button onClick={() => client.setQueryData(taskKeys.task(tasks[0].taskId), { ...tasks[0], title: 'Server A', titleRevision: 9 })}>Refresh A</button>
     </nav>
     <TaskCard user={{ userId: tasks[0].ownerId, username: 'fixture', role: 'INITIATOR' }} />
   </main>;

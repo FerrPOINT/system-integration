@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider, Route, Routes, useNavigate } from 'react-router-dom';
-import { usePagination } from '../src/app/use-pagination';
+import { usePagination } from '../src/shared/lib/pagination/use-pagination';
 
 // Control observer delivery to reproduce a queued layout measurement in the same
 // turn as navigation. The hook is production code; the router setup matches main.tsx.

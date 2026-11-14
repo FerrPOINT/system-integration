@@ -1,6 +1,7 @@
-import { Card, CardContent, CardTitle } from '../../ui/card';
+import { Card, CardContent, CardTitle } from '../../shared/ui/card';
 import type { LocalSnapshot, OperationState } from '../../../build/generated/openapi/client';
-import { businessLabels, deliveryLabels, timestamp } from '../../app/format';
+import { businessLabels, deliveryLabels } from '../tasks/model/task-labels';
+import { timestamp } from '../../shared/lib/format/timestamp';
 
 export function Snapshot({ title, value }: { title: string; value: LocalSnapshot | OperationState }) {
   const external = 'executions' in value;

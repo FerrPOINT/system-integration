@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
-import { usePageSize } from '../ui/use-page-size';
+import { usePageSize } from './use-page-size';
 
 export function usePagination(mode: 'pages' | 'feed' = 'pages') {
   const location = useLocation();

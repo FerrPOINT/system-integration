@@ -1,17 +1,17 @@
-import { ErrorMessage } from '../../app/error-message';
-import { FormField } from '../../ui/form-field';
-import { Input } from '../../ui/input';
-import { Button } from '../../ui/button';
-import { CommandRefresh } from '../../ui/command-refresh';
+import { ErrorMessage } from '../../shared/ui/error-message';
+import { FormField } from '../../shared/ui/form-field';
+import { Input } from '../../shared/ui/input';
+import { Button } from '../../shared/ui/button';
+import { CommandRefresh } from '../../shared/ui/command-refresh';
 import { useRef, useState, type RefObject } from 'react';
-import { Dialog, DiscardDialog } from '../../ui/dialog';
+import { Dialog, DiscardDialog } from '../../shared/ui/dialog';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { createTask, getTask } from '../../../build/generated/openapi/client';
-import { keys } from '../../app/api';
+import { taskKeys } from './api/task-keys';
 import { data } from '../../shared/api/http';
 import { csrf } from '../../shared/api/csrf';
-import { useCommandKey } from '../../app/use-command-key';
+import { useCommandKey } from '../../shared/lib/forms/use-command-key';
 import { useFormNavigationGuard } from '../../shared/lib/forms/use-form-navigation-guard';
 
 export function NewTask() {
@@ -24,8 +24,8 @@ export function NewTask() {
   const command = useCommandKey();
   const refresh = useMutation({
     mutationFn: async (id: string) => {
-      await client.fetchQuery({ queryKey: keys.task(id), queryFn: ({ signal }) => data(getTask(id, { signal })) });
-      await client.invalidateQueries({ queryKey: keys.tasks }, { throwOnError: true });
+      await client.fetchQuery({ queryKey: taskKeys.task(id), queryFn: ({ signal }) => data(getTask(id, { signal })) });
+      await client.invalidateQueries({ queryKey: taskKeys.tasks }, { throwOnError: true });
     },
   });
   const refreshCreated = (id: string) => refresh.mutate(id, {

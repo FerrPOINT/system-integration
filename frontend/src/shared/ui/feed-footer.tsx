@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { ErrorMessage } from '../app/error-message';
+import { ErrorMessage } from './error-message';
 import { Button } from './button';
 
 export function FeedFooter({ loaded, total, hasNext, pending, error, onLoad }: {

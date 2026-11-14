@@ -1,35 +1,38 @@
-import { ErrorMessage } from '../../app/error-message';
-import { Notice } from '../../ui/notice';
-import { BackLink } from '../../ui/back-link';
-import { Timeline, TimelineItem, TimelineMarker, TimelineContent } from '../../ui/timeline';
-import { ActionGroup } from '../../ui/action-group';
-import { Card, CardContent, CardTitle } from '../../ui/card';
-import { PageHeader } from '../../ui/page-header';
-import { FormField } from '../../ui/form-field';
-import { Input } from '../../ui/input';
-import { Button } from '../../ui/button';
-import { CommandRefresh } from '../../ui/command-refresh';
+import { ErrorMessage } from '../../shared/ui/error-message';
+import { Notice } from '../../shared/ui/notice';
+import { BackLink } from '../../shared/ui/back-link';
+import { Timeline, TimelineItem, TimelineMarker, TimelineContent } from '../../shared/ui/timeline';
+import { ActionGroup } from '../../shared/ui/action-group';
+import { Card, CardContent, CardTitle } from '../../shared/ui/card';
+import { PageHeader } from '../../shared/ui/page-header';
+import { FormField } from '../../shared/ui/form-field';
+import { Input } from '../../shared/ui/input';
+import { Button } from '../../shared/ui/button';
+import { CommandRefresh } from '../../shared/ui/command-refresh';
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { getTask, listTaskHistory, renameTask } from '../../../build/generated/openapi/client';
-import type { GetSession200, Task } from '../../../build/generated/openapi/client';
-import { keys } from '../../app/api';
+import type { GetSession200, Task, HistoryEvent } from '../../../build/generated/openapi/client';
+import { taskKeys } from './api/task-keys';
 import { ApiError, data } from '../../shared/api/http';
 import { csrf } from '../../shared/api/csrf';
-import { Loading, Pagination, RefreshButton } from '../../ui/Feedback';
-import { useCommandKey } from '../../app/use-command-key';
-import { deliveryLabels, timestamp } from '../../app/format';
+import { Loading, Pagination, RefreshButton } from '../../shared/ui/feedback';
+import { useCommandKey } from '../../shared/lib/forms/use-command-key';
+import { deliveryLabels } from './model/task-labels';
+import { timestamp } from '../../shared/lib/format/timestamp';
 import { ReconcileButton } from '../operations/reconcile-button';
 import { taskRefreshInterval } from './refresh-interval';
-import { usePagination } from '../../app/use-pagination';
+import { usePagination } from '../../shared/lib/pagination/use-pagination';
 import { BusinessBadge } from './business-badge';
-import { useMediaQuery } from '../../ui/use-media-query';
-import { useCollectionQuery } from '../../app/use-collection-query';
-import { useListReturn } from '../../app/use-list-return';
-import { FeedFooter } from '../../ui/feed-footer';
-import { DiscardDialog } from '../../ui/dialog';
+import { useMediaQuery } from '../../shared/ui/use-media-query';
+import { useCollectionQuery } from '../../shared/lib/collections/use-collection-query';
+import { useListReturn } from '../../shared/lib/router/use-list-return';
+import { FeedFooter } from '../../shared/ui/feed-footer';
+import { DiscardDialog } from '../../shared/ui/dialog';
 import { useFormNavigationGuard } from '../../shared/lib/forms/use-form-navigation-guard';
+
+const identifyHistoryEvent = (event: HistoryEvent) => event.eventId;
 
 export function TaskCard({ user }: { user: GetSession200 }) {
   const { id = '' } = useParams();
@@ -41,7 +44,7 @@ export function TaskCard({ user }: { user: GetSession200 }) {
 function TaskDetails({ id, user }: { id: string; user: GetSession200 }) {
   const returnTo = useListReturn('/tasks');
   const task = useQuery({
-    queryKey: keys.task(id),
+    queryKey: taskKeys.task(id),
     queryFn: ({ signal }) => data(getTask(id, { signal })),
     refetchInterval: query => taskRefreshInterval(query.state.data),
   });
@@ -82,7 +85,7 @@ function RenameForm({ task, onClose }: { task: Task; onClose: () => void }) {
   const [dirty, setDirty] = useState(false);
   const titleInput = useRef<HTMLInputElement>(null);
   const [initialTitle] = useState(task.title);
-  const refresh = useMutation({ mutationFn: () => client.invalidateQueries({ queryKey: keys.tasks }, { throwOnError: true }) });
+  const refresh = useMutation({ mutationFn: () => client.invalidateQueries({ queryKey: taskKeys.tasks }, { throwOnError: true }) });
   const refreshTask = () => refresh.mutate(undefined, { onSuccess: onClose });
   const rename = useMutation({
     mutationFn: async (form: FormData) => {
@@ -114,16 +117,16 @@ function RenameForm({ task, onClose }: { task: Task; onClose: () => void }) {
 function History({ id, canReview, refreshInterval }: { id: string; canReview: boolean; refreshInterval: number | false }) {
   const mobile = useMediaQuery('(max-width: 760px)');
   const { page, size, valid, viewportRef, changePage } = usePagination(mobile ? 'feed' : 'pages');
-  const history = useCollectionQuery({ key: keys.history(id), page, size, feed: mobile, enabled: valid,
-    read: (page, size, signal) => data(listTaskHistory(id, { page, size }, { signal })), identify: event => event.eventId, refreshInterval });
+  const { query: history, items: historyItems, meta: historyPage } = useCollectionQuery({ key: taskKeys.history(id), page, size, feed: mobile, enabled: valid,
+    read: (page, size, signal) => data(listTaskHistory(id, { page, size }, { signal })), identify: identifyHistoryEvent, refreshInterval });
   // Measure the available column, independent of the card's content height.
   return <div className="task-history-viewport" ref={viewportRef}>
     <Card asChild><section className="history-panel" aria-labelledby="task-history-title"><CardContent className="paged-list base-page-stack" aria-busy={history.isFetching}><CardTitle asChild><h2 id="task-history-title">История</h2></CardTitle>
     <div className="paged-viewport">
-    {!valid ? <Notice role="alert" tone="danger">Некорректные параметры страницы.</Notice> : history.isPending ? <Loading /> : !history.data ? <><ErrorMessage error={history.error} />
+    {!valid ? <Notice role="alert" tone="danger">Некорректные параметры страницы.</Notice> : history.isPending ? <Loading /> : !historyPage ? <><ErrorMessage error={history.error} />
       <Button onClick={() => history.refetch()}>Повторить</Button></> : <>
       {!history.isFetchNextPageError && <ErrorMessage error={history.error} />}
-      <Timeline data-page-items>{history.data.items.map(event => <TimelineItem key={event.eventId} data-page-item data-event-id={event.eventId}><TimelineMarker /><TimelineContent>
+      <Timeline data-page-items>{historyItems.map(event => <TimelineItem key={event.eventId} data-page-item data-event-id={event.eventId}><TimelineMarker /><TimelineContent>
         <p className="base-truncate" title={event.summary}>{event.summary}</p><small title={event.actorUserId}><time dateTime={event.occurredAt} title={timestamp(event.occurredAt)}>{timestamp(event.occurredAt, { compact: mobile, showZone: !mobile })}</time> ·
           {event.actor === 'SYSTEM' ? ' Система' : ` Пользователь ${mobile ? event.actorUserId?.slice(0, 8) : event.actorUserId}`}</small>
         {canReview && event.reconciliationId && <Link to={'/tasks/' + id + '/reconciliations/' + event.reconciliationId}>Открыть сохранённую сверку</Link>}
@@ -131,8 +134,8 @@ function History({ id, canReview, refreshInterval }: { id: string; canReview: bo
       </TimelineContent></TimelineItem>)}</Timeline>
     </>}
     </div>
-    {mobile ? valid && history.data && <FeedFooter loaded={history.data.items.length} total={history.data.totalItems} hasNext={history.hasNextPage} pending={history.isFetching}
+    {mobile ? valid && historyPage && <FeedFooter loaded={historyItems.length} total={historyPage.totalItems} hasNext={history.hasNextPage} pending={history.isFetching}
       error={history.isFetchNextPageError ? history.error : null} onLoad={() => history.fetchNextPage({ cancelRefetch: false })} /> :
-      <Pagination page={valid ? page : 0} size={size} totalItems={history.data?.totalItems} totalPages={history.data?.totalPages} pending={history.isFetching || !valid} onChange={changePage} />}
+      <Pagination page={valid ? page : 0} size={size} totalItems={historyPage?.totalItems} totalPages={historyPage?.totalPages} pending={history.isFetching || !valid} onChange={changePage} />}
   </CardContent></section></Card></div>;
 }

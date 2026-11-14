@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import { Button } from '../ui/button';
-import { Notice } from '../ui/notice';
-import { ActionGroup } from '../ui/action-group';
+import { Button } from '../shared/ui/button';
+import { Notice } from '../shared/ui/notice';
+import { ActionGroup } from '../shared/ui/action-group';
 
 /** Render failures are distinct from expected HTTP/validation errors in the screen. */
 export function RouteErrorBoundary() {

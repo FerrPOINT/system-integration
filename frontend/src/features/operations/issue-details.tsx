@@ -1,31 +1,32 @@
-import { ErrorMessage } from '../../app/error-message';
-import { BackLink } from '../../ui/back-link';
-import { Notice } from '../../ui/notice';
-import { ActionGroup } from '../../ui/action-group';
-import { Card, CardContent, CardTitle } from '../../ui/card';
-import { PageHeader } from '../../ui/page-header';
-import { FormField } from '../../ui/form-field';
-import { Select } from '../../ui/select';
-import { Textarea } from '../../ui/textarea';
-import { Button } from '../../ui/button';
-import { CommandRefresh } from '../../ui/command-refresh';
+import { ErrorMessage } from '../../shared/ui/error-message';
+import { BackLink } from '../../shared/ui/back-link';
+import { Notice } from '../../shared/ui/notice';
+import { ActionGroup } from '../../shared/ui/action-group';
+import { Card, CardContent, CardTitle } from '../../shared/ui/card';
+import { PageHeader } from '../../shared/ui/page-header';
+import { FormField } from '../../shared/ui/form-field';
+import { Select } from '../../shared/ui/select';
+import { Textarea } from '../../shared/ui/textarea';
+import { Button } from '../../shared/ui/button';
+import { CommandRefresh } from '../../shared/ui/command-refresh';
 import { useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { getExchangeIssue, resolveExchangeIssue, retryExchange, takeExchangeIssue } from '../../../build/generated/openapi/client';
 import type { Issue, ResolutionAction, Result } from '../../../build/generated/openapi/client';
-import { keys } from '../../app/api';
+import { exchangeKeys } from './api/exchange-keys';
 import { data } from '../../shared/api/http';
 import { csrf } from '../../shared/api/csrf';
-import { businessLabels, timestamp } from '../../app/format';
-import { useCommandKey } from '../../app/use-command-key';
-import { Loading, RefreshButton } from '../../ui/Feedback';
+import { businessLabels } from '../tasks/model/task-labels';
+import { timestamp } from '../../shared/lib/format/timestamp';
+import { useCommandKey } from '../../shared/lib/forms/use-command-key';
+import { Loading, RefreshButton } from '../../shared/ui/feedback';
 import { issueKindLabels as kinds } from './issue-labels';
 import { useRefreshExchange } from './use-refresh-exchange';
 import { ReconcileButton } from './reconcile-button';
 import { Snapshot } from './exchange-snapshot';
-import { useListReturn } from '../../app/use-list-return';
-import { DiscardDialog } from '../../ui/dialog';
+import { useListReturn } from '../../shared/lib/router/use-list-return';
+import { DiscardDialog } from '../../shared/ui/dialog';
 import { useFormNavigationGuard } from '../../shared/lib/forms/use-form-navigation-guard';
 
 type DecisionAction = 'RETRY' | ResolutionAction;
@@ -37,7 +38,7 @@ const actionLabels: Record<DecisionAction, string> = {
 export function IssueCard() {
   const returnTo = useListReturn('/issues');
   const { id = '' } = useParams();
-  const issue = useQuery({ queryKey: keys.issue(id), queryFn: ({ signal }) => data(getExchangeIssue(id, { signal })) });
+  const issue = useQuery({ queryKey: exchangeKeys.issue(id), queryFn: ({ signal }) => data(getExchangeIssue(id, { signal })) });
   if (issue.isPending) return <Loading />;
   if (!issue.data) return <><BackLink to={returnTo}>К разбору обмена</BackLink><ErrorMessage error={issue.error} />
     <Button onClick={() => issue.refetch()}>Повторить</Button></>;

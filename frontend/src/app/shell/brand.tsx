@@ -1,5 +1,5 @@
 import { ArrowRightLeft } from 'lucide-react';
-import { IconMark } from '../ui/icon-mark';
+import { IconMark } from '../../shared/ui/icon-mark';
 
 export function Brand() {
   return <span className="app-brand">
