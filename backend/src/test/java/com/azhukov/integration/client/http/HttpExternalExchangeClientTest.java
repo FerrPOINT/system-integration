@@ -199,6 +199,58 @@ class HttpExternalExchangeClientTest {
         }
     }
 
+
+    @Test
+    void versionAndStatusDiagnosticsSurviveHttpForLookupDeliveryAndFeed() throws Exception {
+        var id=UUID.randomUUID();
+        var result=json.createObjectNode().put("operationId",id.toString())
+            .set("request",json.createObjectNode().put("reference","REQ-000001").put("quantity",25))
+            .put("version",2).put("status","SUCCEEDED").put("completedAt","2026-11-12T00:00:00Z");
+        record Case(tools.jackson.databind.node.ObjectNode result,String detail) {}
+        for (var probe:java.util.List.of(
+            new Case(result.deepCopy().put("version",3),"UNSUPPORTED_VERSION at version"),
+            new Case(result.deepCopy().put("status","private-value"),"INVALID_STATUS at status"),
+            new Case(result.deepCopy().put("status","PENDING"),"INVALID_STATUS at status"))) {
+            var current=new java.util.concurrent.atomic.AtomicReference<>(probe.result());
+            var requests=new java.util.concurrent.atomic.AtomicInteger();
+            try (var source=source(request -> {
+                requests.incrementAndGet();
+                var snapshot=json.createObjectNode().put("operationId",id.toString()).set("request",result.get("request"))
+                    .put("acceptedAt","2026-11-11T00:00:00Z").put("executions",1).set("result",current.get());
+                var page=json.createArrayNode().add(json.createObjectNode().put("cursor",1).set("result",current.get()));
+                byte[] body=json.writeValueAsBytes(request.getRequestURI().getPath().equals("/result-events") ? page : snapshot);
+                request.getResponseHeaders().add("Content-Type","application/json");
+                request.sendResponseHeaders(200,body.length);
+                try (var output=request.getResponseBody()) { output.write(body); }
+            });var http=transport(source.origin())) {
+                var client=new HttpExternalExchangeClient(http,json,settings(source.origin()));
+                var attempt=new com.azhukov.integration.domain.exchange.DeliveryAttempt(id,UUID.randomUUID(),"GET",1,1,
+                    new com.azhukov.integration.domain.task.TaskInput("REQ-000001",25));
+                var lookup=client.lookup(id);
+                assertEquals("UNAVAILABLE",lookup.availability().name());assertNull(lookup.external());
+                assertEquals("Сверка получила некорректный внешний снимок",lookup.protocolFailure());
+                var delivery=client.deliver(attempt);
+                assertEquals(com.azhukov.integration.domain.exchange.DeliveryAttempt.Outcome.PROTOCOL_ERROR,delivery.outcome());
+                var feed=client.events(0);
+                assertEquals(com.azhukov.integration.client.ExternalExchangeClient.FeedStatus.READY,feed.status());
+                assertNull(feed.events().getFirst().result());
+                for (Object raw:java.util.List.of(lookup.evidence(),delivery.evidence(),feed.events().getFirst().evidence())) {
+                    var evidence=assertInstanceOf(com.azhukov.integration.client.ExternalExchangeClient.ProtocolEvidence.class,raw);
+                    assertEquals(probe.detail(),evidence.detail());
+                    assertEquals(probe.result(),evidence.content() instanceof tools.jackson.databind.JsonNode node && node.has("result")
+                        ? node.get("result") : evidence.content());
+                }
+                current.set(result);
+                var accepted=client.lookup(id);
+                assertEquals("PRESENT",accepted.availability().name());assertNull(accepted.protocolFailure());
+                assertEquals("SUCCEEDED",accepted.external().result().status().name());
+                assertEquals(com.azhukov.integration.domain.exchange.DeliveryAttempt.Outcome.ACKNOWLEDGED,client.deliver(attempt).outcome());
+                assertEquals("SUCCEEDED",client.events(0).events().getFirst().result().status().name());
+                assertEquals(6,requests.get());
+            }
+        }
+    }
+
     private static ExchangeHttpProperties settings(URI origin) {
         return new ExchangeHttpProperties(origin,Duration.ofSeconds(1),Duration.ofSeconds(2),DataSize.ofKilobytes(256));
     }

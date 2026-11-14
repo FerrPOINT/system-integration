@@ -634,7 +634,11 @@ RequestCorrelationFilter создаёт X-Request-ID до Security и очища
 
 ProtocolEvidence — внутренний wrapper original content/safe detail.
 IssueLifecycleService дополняет существующий Evidence.reason, а в fingerprint
-передаёт прежние canonical reason и original content. Новых JSON-полей,
+передаёт прежние canonical reason и original content. Wire enum версии/статуса
+проверяет ExchangeProtocol с отдельными безопасными кодами UNSUPPORTED_VERSION
+и INVALID_STATUS; FIELD_TYPE обозначает отсутствующее/null/неверно типизированное
+поле. Сочетания допустимых enum и условных полей проверяет OperationResult,
+их нарушение остаётся INVALID_VARIANT. Новых JSON-полей,
 миграции и fallback для старых записей нет.
 
 ## Потоки и ограничение параллелизма

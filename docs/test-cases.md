@@ -12,6 +12,13 @@ OperationsWorkflowTest выполняет concurrent commit между SELECT к
 Protocol/feed/IssueDiagnostics сохраняют исходный fingerprint content и старый
 JSON shape при добавлении безопасной detail. ExchangeDiagnosticsTest
 проверяет 401/403/operator, empty/occupied queue, paused feed и readiness.
+ExchangeProtocolTest различает unsupported version, invalid status, field type
+и условные варианты; прежняя матрица допустимых состояний сохраняется.
+HttpExternalExchangeClientTest проверяет эти details на реальном loopback HTTP
+через delivery/feed/lookup и корректный следующий ответ того же клиента.
+ResultFeedTest проверяет старый fingerprint/evidence, неизменный summary,
+повтор ошибок без новых проблем/истории и применение корректного соседнего
+события с атомарным продвижением cursor.
 EmulatorWorkflowTest проверяет commit-only lifecycle logs и отсутствие успеха
 после rollback. PG upgrade проверяет digests 14 таблиц до/после 18.6 → 18.7.
 EXPLAIN покрывает новый on-demand backlog SQL. Полный gate остаётся обязательным.

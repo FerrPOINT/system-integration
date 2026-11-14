@@ -12,7 +12,6 @@ public interface ExternalExchangeClient {
     FeedReply events(long after);
     Lookup lookup(UUID operationId);
 
-    /** Diagnostic evidence is opaque outside the HTTP adapter. */
     /** Internal-only classification; content retains the original deduplication identity. */
     record ProtocolEvidence(Object content,String detail) {}
     record Lookup(Availability availability, OperationSnapshot external, String protocolFailure, Object evidence) {}

@@ -45,8 +45,15 @@ public final class ExchangeProtocol {
     public OperationResult result(JsonNode body) {
         object(body, Set.of("operationId", "request", "version", "status", "completedAt", "rejectionCode"));
         var identity = identity(body);
-        return new OperationResult(identity.id(),identity.request(),integer(body,"version"),
-            BusinessStatus.valueOf(text(body,"status")),
+        int version=integer(body,"version");
+        if (version!=1 && version!=2) throw invalid("UNSUPPORTED_VERSION","version");
+        var status=switch (text(body,"status")) {
+            case "RUNNING" -> BusinessStatus.RUNNING;
+            case "SUCCEEDED" -> BusinessStatus.SUCCEEDED;
+            case "REJECTED" -> BusinessStatus.REJECTED;
+            default -> throw invalid("INVALID_STATUS","status");
+        };
+        return new OperationResult(identity.id(),identity.request(),version,status,
             body.has("completedAt") ? time(body,"completedAt") : null,
             body.has("rejectionCode") ? text(body,"rejectionCode") : null);
     }

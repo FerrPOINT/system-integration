@@ -106,6 +106,52 @@ class ResultFeedTest extends PostgresTest {
         } finally { server.stop(0); }
     }
 
+
+    @Test
+    void classifiedResultsKeepHistoricalFingerprintsAndDoNotBlockTheNextValidEvent() throws Exception {
+        var owner=login("initiator.one");
+        var task=created(owner,java.util.UUID.randomUUID());
+        var neighbor=created(owner,java.util.UUID.randomUUID());
+        var operation=jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?",java.util.UUID.class,task);
+        var nextOperation=jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?",java.util.UUID.class,neighbor);
+        var valid=json.createObjectNode().put("operationId",operation.toString())
+            .set("request",json.createObjectNode().put("reference","REQ-000001").put("quantity",25))
+            .put("version",2).put("status","SUCCEEDED").put("completedAt","2026-11-12T00:00:00Z");
+        var badVersion=valid.deepCopy().put("version",3);
+        var badStatus=valid.deepCopy().put("status","private-value");
+        String canonical="Входящий снимок не соответствует контракту";
+        assertTrue(exchange.consume(0,java.util.List.of(new com.azhukov.integration.client.ExternalExchangeClient.IncomingEvent(
+            1,operation,null,badVersion))));
+        var historical=jdbc.queryForObject("SELECT evidence::text FROM exchange_issues",String.class);
+        var goodNeighbor=valid.deepCopy().put("operationId",nextOperation.toString());
+        var page=new AtomicReference<>(json.writeValueAsString(json.createArrayNode()
+            .add(json.createObjectNode().put("cursor",2).set("result",badVersion))
+            .add(json.createObjectNode().put("cursor",3).set("result",badStatus))
+            .add(json.createObjectNode().put("cursor",4).set("result",goodNeighbor))));
+        var server=source(new AtomicInteger(),page,new AtomicInteger(200));
+        try (var http=transport(server);var worker=new ExchangeCoordinator(exchange,new HttpExternalExchangeClient(http,json,settings(server)))) {
+            worker.receive();
+            assertEquals(4,exchange.cursor());assertEquals(2,count("exchange_issues"));
+            var versionFingerprint=com.azhukov.integration.json.ContentFingerprint.of(json,java.util.List.of(canonical,badVersion));
+            var statusFingerprint=com.azhukov.integration.json.ContentFingerprint.of(json,java.util.List.of(canonical,badStatus));
+            assertEquals(historical,jdbc.queryForObject("SELECT evidence::text FROM exchange_issues WHERE fingerprint=?",String.class,versionFingerprint));
+            var evidence=json.readTree(jdbc.queryForObject("SELECT evidence::text FROM exchange_issues WHERE fingerprint=?",String.class,statusFingerprint));
+            assertEquals(canonical+" [INVALID_STATUS at status]",evidence.get("reason").asString());
+            assertEquals(canonical,jdbc.queryForObject("SELECT summary FROM exchange_issues WHERE fingerprint=?",String.class,statusFingerprint));
+            assertEquals("PENDING",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?",String.class,task));
+            assertEquals("SUCCEEDED",jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?",String.class,neighbor));
+            assertEquals(goodNeighbor,json.readTree(jdbc.queryForObject("SELECT accepted_result::text FROM tasks WHERE id=?",String.class,neighbor)));
+            var history=count("task_history");
+            page.set(json.writeValueAsString(json.createArrayNode()
+                .add(json.createObjectNode().put("cursor",5).set("result",badVersion))
+                .add(json.createObjectNode().put("cursor",6).set("result",badStatus))
+                .add(json.createObjectNode().put("cursor",7).set("result",goodNeighbor))));
+            worker.receive();
+            assertEquals(7,exchange.cursor());assertEquals(2,count("exchange_issues"));
+            assertEquals(history,count("task_history"));assertEquals(2,count("command_receipts"));
+        } finally { server.stop(0); }
+    }
+
     private static ExchangeHttpProperties settings(HttpServer server) {
         return new ExchangeHttpProperties(origin(server),Duration.ofSeconds(1),Duration.ofSeconds(2),DataSize.ofKilobytes(256));
     }

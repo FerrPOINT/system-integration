@@ -171,6 +171,55 @@ class ExchangeProtocolTest {
         assertFalse(ExchangeProtocol.missingOperation(404,json.readTree("{\"title\":\"Ошибка\",\"status\":4294967700,\"code\":\"OPERATION_NOT_FOUND\"}")));
     }
     @Test
+    void unsupportedVersionsAndInvalidVersionTypesHaveDistinctSafeDiagnostics() {
+        var valid=(tools.jackson.databind.node.ObjectNode)json.readTree(result);
+        for (int version:new int[]{Integer.MIN_VALUE,-1,0,3,Integer.MAX_VALUE})
+            assertResultDiagnostic(valid.deepCopy().put("version",version),"UNSUPPORTED_VERSION at version");
+        var missing=valid.deepCopy();missing.remove("version");
+        for (var raw:java.util.List.of(missing,valid.deepCopy().putNull("version"),
+            valid.deepCopy().put("version","private-version"),valid.deepCopy().put("version",2.5),
+            valid.deepCopy().put("version",2147483648L)))
+            assertResultDiagnostic(raw,"FIELD_TYPE at version");
+    }
+
+    @Test
+    void invalidStatusesAndInvalidStatusTypesHaveDistinctSafeDiagnostics() {
+        var valid=(tools.jackson.databind.node.ObjectNode)json.readTree(result);
+        for (String status:new String[]{"PENDING","UNKNOWN","succeeded","","SUCCEEDED\nprivate-value"})
+            assertResultDiagnostic(valid.deepCopy().put("status",status),"INVALID_STATUS at status");
+        var missing=valid.deepCopy();missing.remove("status");
+        for (var raw:java.util.List.of(missing,valid.deepCopy().putNull("status"),valid.deepCopy().put("status",2)))
+            assertResultDiagnostic(raw,"FIELD_TYPE at status");
+    }
+
+    @Test
+    void supportedEnumsWithInconsistentConditionalFieldsRemainVariantErrors() {
+        var valid=(tools.jackson.databind.node.ObjectNode)json.readTree(result);
+        for (var raw:java.util.List.of(valid.deepCopy().put("version",1),
+            valid.deepCopy().put("status","RUNNING"),valid.deepCopy().put("status","REJECTED")))
+            assertResultDiagnostic(raw,"INVALID_VARIANT at result");
+    }
+
+    private void assertResultDiagnostic(tools.jackson.databind.node.ObjectNode raw,String expected) {
+        var state=json.createObjectNode().put("operationId",identity.id().toString())
+            .set("request",json.valueToTree(identity.request())).put("acceptedAt","2026-11-11T00:00:00Z")
+            .put("executions",1).set("result",raw);
+        var attempt=new DeliveryAttempt(identity.id(),UUID.randomUUID(),"GET",1,1,identity.request());
+        var delivery=protocol.delivery(attempt,new ExchangeReply(200,state,false,null));
+        assertEquals(DeliveryAttempt.Outcome.PROTOCOL_ERROR,delivery.outcome());
+        assertEquals("Подтверждение не соответствует контракту или исходному запросу",delivery.protocolFailure());
+        var delivered=assertInstanceOf(ExternalExchangeClient.ProtocolEvidence.class,delivery.evidence());
+        assertSame(state,delivered.content());assertEquals(expected,delivered.detail());
+        var page=json.createArrayNode().add(json.createObjectNode().put("cursor",1).set("result",raw));
+        var feed=protocol.feed(new ExchangeReply(200,page,false,null),0);
+        assertEquals(ExternalExchangeClient.FeedStatus.READY,feed.status());
+        var event=feed.events().getFirst();
+        assertEquals(identity.id(),event.operationId());assertNull(event.result());assertEquals(1,event.cursor());
+        var received=assertInstanceOf(ExternalExchangeClient.ProtocolEvidence.class,event.evidence());
+        assertSame(raw,received.content());assertEquals(expected,received.detail());
+    }
+
+    @Test
     void malformedFieldHasBoundedSafeDetailAndKeepsOriginalEvidence() {
         var raw=json.readTree(result.replace("\"quantity\":25","\"quantity\":\"secret-value\""));
         var attempt=new DeliveryAttempt(identity.id(),UUID.randomUUID(),"GET",1,1,identity.request());
