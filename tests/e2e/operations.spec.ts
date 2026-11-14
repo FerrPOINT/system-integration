@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { login, selectChoice } from './support';
+import { login, openAccountMenu, selectChoice } from './support';
 import { execFileSync } from 'node:child_process';
-import { loadEnvironment } from '../load/environment.mjs';
+import { loadUiEnvironment } from '../load/environment.mjs';
 
 const external = process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19681';
 
@@ -29,6 +29,7 @@ test('TC-03 / TC-07: lost reply, independent execution, reconciliation and opera
   const actual = await (await request.get(`${external}/operations/${local.operationId}`)).json();
   expect(actual.executions).toBe(1);
   expect(actual.result.status).toBe('SUCCEEDED');
+  await openAccountMenu(page);
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
   await login(page, 'operator');
@@ -93,6 +94,7 @@ test('TC-06 / TC-07: conflicting external input is stopped explicitly without ac
   const initial = await (await page.request.get('/api/tasks/' + taskId)).json();
   expect((await request.put(`${external}/operations/${initial.operationId}`, { data: { reference: 'REQ-829999', quantity: 25 } })).status()).toBe(202);
   await expect.poll(async () => (await (await page.request.get('/api/tasks/' + taskId)).json()).deliveryStatus).toBe('NEEDS_REVIEW');
+  await openAccountMenu(page);
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
   await login(page, 'operator');
@@ -113,7 +115,7 @@ test('TC-06 / TC-07: conflicting external input is stopped explicitly without ac
 
 test('SI-10: exhausted delivery resumes only after a fresh operator decision', async ({ page, request }, info) => {
   test.setTimeout(60_000);
-  const resources = loadEnvironment();
+  const resources = loadUiEnvironment();
   const postgres = resources.find((item: { service: string }) => item.service === 'postgres')!;
   const reference = info.project.name === 'mobile' ? 'REQ-850002' : 'REQ-850001';
   expect((await request.put(external + '/test/faults/' + reference, { data: { mode: 'UNAVAILABLE' } })).status()).toBe(204);
@@ -134,6 +136,7 @@ test('SI-10: exhausted delivery resumes only after a fresh operator decision', a
     return (await (await page.request.get('/api/tasks/' + taskId)).json()).deliveryStatus;
   }, { timeout: 25_000, intervals: [200] }).toBe('NEEDS_REVIEW');
   expect(sql("SELECT attempts||':'||automatic_attempts FROM delivery_queue WHERE operation_id=(SELECT operation_id FROM tasks WHERE id='" + taskId + "')")).toBe('5:5');
+  await openAccountMenu(page);
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
   await login(page, 'operator');

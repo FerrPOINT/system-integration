@@ -5,8 +5,12 @@ import { localOrigin } from '../support/http.mjs';
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const compose = ['compose', '-p', 'system-integration-load', '-f', 'compose.yml', '-f', 'compose.load.yml', '--profile', 'app'];
 
-export function loadEnvironment() {
-  return ['backend', 'postgres', 'emulator', 'frontend'].map(service => {
+export function loadEnvironment({ frontend = 'container' } = {}) {
+  if (!['container', 'vite'].includes(frontend)) throw new Error('Unsupported frontend runtime');
+  if (frontend === 'vite' && new URL(localOrigin(process.env.SI_FRONTEND_URL || 'http://127.0.0.1:19673')).port !== '19673')
+    throw new Error('Native UI checks require the isolated Vite port 19673');
+  const services = frontend === 'container' ? ['backend', 'postgres', 'emulator', 'frontend'] : ['backend', 'postgres', 'emulator'];
+  return services.map(service => {
     const id = execFileSync('docker', [...compose, 'ps', '-q', service], { cwd: root, encoding: 'utf8' }).trim();
     if (!id) throw new Error(`Missing load service: ${service}`);
     const [container] = JSON.parse(execFileSync('docker', ['inspect', id], { encoding: 'utf8' }));
@@ -48,4 +52,8 @@ export function qualifiedLoadEnvironment(sourceCommit) {
       throw new Error('Load images must match the qualified source commit');
   }
   return resources;
+}
+
+export function loadUiEnvironment() {
+  return loadEnvironment({ frontend: process.env.SI_UI_FRONTEND_RUNTIME || 'container' });
 }

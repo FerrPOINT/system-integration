@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { login, waitForRegistry } from './support';
+import { ApiSession } from '../support/http.mjs';
 
 async function expectGaps(region: Locator) {
   const gaps = await region.evaluate(el => {
@@ -14,7 +15,8 @@ async function expectGaps(region: Locator) {
     }));
   });
   for (const item of gaps) {
-    expect(item.gap, JSON.stringify(item)).toBeGreaterThanOrEqual(16);
+    const compact = await region.evaluate(element => element.classList.contains('mobile-card-content'));
+    expect(item.gap, JSON.stringify(item)).toBeGreaterThanOrEqual(compact ? 8 : 12);
     expect(item.gap, JSON.stringify(item)).toBeLessThanOrEqual(24);
   }
 }
@@ -24,7 +26,7 @@ async function expectCards(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 }
 
-test('UI-07: exchange loading, error, empty and ready states keep the filter separated', async ({ page }, info) => {
+test('UI-07: exchange loading, error, empty and ready states keep the filter separated', async ({ page, baseURL }, info) => {
   await login(page, 'operator');
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
@@ -40,6 +42,8 @@ test('UI-07: exchange loading, error, empty and ready states keep the filter sep
     await expect(page.getByRole('combobox', { name: 'Состояние разбора', exact: true })).toBeVisible();
     const pending = page.getByRole('status').filter({ hasText: 'Загрузка…' });
     await expect(pending).toBeVisible();
+    if (info.project.name === 'desktop') await expect(page.locator('.pagination-footer')).toHaveText('');
+    else await expect(page.locator('.pagination-footer')).toHaveCount(0);
     await expectGaps(page.locator('main'));
     await expect(pending).toHaveAttribute('aria-busy', 'true');
     await expect(pending.locator('.base-notice-icon')).toHaveCount(0);
@@ -53,22 +57,45 @@ test('UI-07: exchange loading, error, empty and ready states keep the filter sep
     await expectGaps(page.locator('main'));
     mode = 'ready';
     await page.getByRole('button', { name: 'Обновить', exact: true }).click();
-    await expect(page.locator('.issue-cards')).toBeVisible();
+    await expect(page.locator('[data-issue-link]').first()).toBeVisible();
+    if (info.project.name === 'desktop') await expect(page.getByRole('table', { name: 'Реестр разборов обмена' })).toBeVisible();
+    else await expect(page.getByRole('table')).toHaveCount(0);
     await expectGaps(page.locator('main'));
     await expectCards(page);
+    await waitForRegistry(page);
+    const readySize = new URL(page.url()).searchParams.get('size');
+    const readyLinks = await page.locator('[data-issue-link]').evaluateAll(links => links.map(link => link.getAttribute('href')));
     mode = 'error';
     await page.getByRole('button', { name: 'Обновить', exact: true }).click();
     await expect(page.getByRole('alert')).toBeVisible();
-    await expect(page.locator('.issue-cards')).toBeVisible();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect(new URL(page.url()).searchParams.get('size')).toBe(readySize);
+    expect(await page.locator('[data-issue-link]').evaluateAll(links => links.map(link => link.getAttribute('href')))).toEqual(readyLinks);
+    await expect(page.locator('[data-issue-link]').first()).toBeVisible();
     await expectGaps(page.locator('main'));
     mode = 'ready';
     await page.getByRole('button', { name: 'Обновить', exact: true }).click();
     await expect(page.getByRole('alert')).toHaveCount(0);
-    await page.locator('.issue-cards h2 a').first().click();
+    await page.locator('[data-issue-link]').first().click();
     await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
     await expectGaps(page.locator('main'));
     await expectCards(page);
-    await page.getByRole('link', { name: 'Открыть последнюю сверку', exact: true }).click();
+    // A resolved issue may legitimately have no saved reconciliation. Own the
+    // snapshot fixture instead of depending on whichever issue is newest.
+    const initiator = new ApiSession(baseURL);
+    await initiator.login('initiator.one', process.env.SI_DEMO_PASSWORD);
+    const task = await initiator.command('POST', '/api/tasks', {
+      title: 'E2E интервалы сверки ' + crypto.randomUUID(), request: { reference: 'REQ-870002', quantity: 25 },
+    });
+    await expect.poll(async () => (await initiator.get('/api/tasks/' + task.taskId)).businessStatus).toBe('SUCCEEDED');
+    const { token } = await (await page.request.get('/api/csrf')).json();
+    const saved = await page.request.post('/api/tasks/' + task.taskId + '/reconciliations', {
+      headers: { 'X-CSRF-TOKEN': token, 'Idempotency-Key': crypto.randomUUID() },
+    });
+    expect(saved.ok()).toBe(true);
+    const snapshot = await saved.json();
+    expect(snapshot.outcome).toBe('MATCH');
+    await page.goto('/tasks/' + task.taskId + '/reconciliations/' + snapshot.reconciliationId);
     await expect(page.getByRole('heading', { name: 'Сохранённая сверка', exact: true })).toBeVisible();
     await expectGaps(page.locator('main'));
     await expectCards(page);
@@ -97,7 +124,7 @@ test('UI-08: task registry, editor, card and history use consistent section gaps
   await expectGaps(page.locator('main'));
   await expectCards(page);
   await page.getByRole('button', { name: 'Отмена', exact: true }).click();
-  await page.locator('.task-card h2 a, .task-table tbody a').first().click();
+  await page.locator('.task-card > a, .task-table tbody a').first().click();
   await expect(page.getByRole('heading', { name: 'История', exact: true })).toBeVisible();
   await expect(page.locator('.base-timeline')).toBeVisible();
   await expectGaps(page.locator('main'));

@@ -12,6 +12,8 @@ export async function login(page: Page, username = 'initiator.one') {
 }
 
 export async function selectChoice(page: Page, name: string, option: string) {
+  const menu = page.getByRole('button', { name: 'Меню приложения', exact: true });
+  if (name === 'Цветовая тема' && await menu.count() && !await page.getByRole('combobox', { name, exact: true }).count()) await menu.click();
   await page.getByRole('combobox', { name, exact: true }).click();
   await page.getByRole('option', { name: option, exact: true }).click();
 }
@@ -21,8 +23,29 @@ export async function waitForRegistry(page: Page) {
   const registry=page.locator('section.paged-list');
   await expect.poll(async () => {
     if (await registry.getAttribute('aria-busy') !== 'false') return false;
-    return await registry.locator('[data-page-item]').count() === 0 || new URL(page.url()).searchParams.has('size');
+    return page.viewportSize()!.width <= 760 || await registry.locator('[data-page-item]').count() === 0 || new URL(page.url()).searchParams.has('size');
   }).toBe(true);
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   await expect(registry).toHaveAttribute('aria-busy','false');
+}
+
+export async function openAccountMenu(page: Page) {
+  if (page.viewportSize()!.width > 760) return;
+  const menu = page.getByRole('button', { name: 'Меню приложения', exact: true });
+  await expect(menu).toBeVisible();
+  if (await menu.getAttribute('aria-expanded') === 'false') await menu.click();
+}
+
+export async function collectFeed(page: Page, region: import('@playwright/test').Locator) {
+  const footer = region.locator('[data-feed-end]');
+  for (let attempt = 0; attempt < 100; attempt++) {
+    await expect(region).toHaveAttribute('aria-busy', 'false');
+    const count = await region.locator('[data-page-item]').count();
+    const summary = await footer.innerText();
+    const total = Number(summary.match(/из (\d+)/)![1]);
+    if (count === total) return;
+    await footer.scrollIntoViewIfNeeded();
+    await expect.poll(() => region.locator('[data-page-item]').count()).toBeGreaterThan(count);
+  }
+  throw new Error('Mobile feed did not terminate');
 }

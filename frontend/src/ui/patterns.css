@@ -317,6 +317,11 @@ border-bottom: 1px solid var(--color-border);
 .base-table tbody tr:last-child {
 border-bottom: 0;
 }
+/* The first cell's native link covers the row, preserving browser link actions. */
+.base-table .base-linked-row { position: relative; cursor: pointer; }
+.base-table .base-linked-row > td:first-child > a::after { content: ""; position: absolute; inset: 0; }
+.base-table .base-linked-row > td:first-child > a:focus-visible { outline: none; }
+.base-table .base-linked-row:focus-within { outline: 2px solid var(--color-focus); outline-offset: -2px; }
 .base-table tr:hover {
 background: color-mix(
       in srgb,
@@ -667,11 +672,6 @@ outline: 2px solid Highlight;
 
 /* Plain CSS equivalents for the consumed Base utility classes. */
 .base-page-heading { min-width: 0; }
-.base-page-heading > .base-back-link { flex-shrink: 0; }
-@media (max-width: 760px) {
-  .base-page-heading > .base-back-link { width: 44px; padding-inline: 0; }
-  .base-page-heading .base-back-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-}
 .base-page-context { margin-top: 4px; color: var(--color-text-secondary); font-size: var(--base-font-body); }
 .base-field-hint { margin: 0; color: var(--color-text-muted); font-size: var(--base-font-label); }
 
@@ -707,8 +707,8 @@ dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
 .base-page-navigation { justify-content: flex-end; }
 .base-page-summary { color: var(--color-text-muted); font-size: var(--base-font-body); }
 @media (max-width: 760px) {
-  .base-page-navigation { justify-content: center; }
-  .base-page-summary { flex-basis: 100%; text-align: center; }
+  .base-page-navigation { justify-content: flex-end; gap: 8px; }
+  .base-page-navigation .base-page-summary { margin-inline-end: auto; white-space: nowrap; }
 }
 
 

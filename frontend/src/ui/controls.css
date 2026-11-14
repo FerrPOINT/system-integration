@@ -76,7 +76,7 @@
   white-space: normal;
 }
 .base-choice-panel {
-  z-index: 70;
+  z-index: 110;
   min-width: var(
     --radix-select-trigger-width,
     var(--radix-dropdown-menu-trigger-width, 160px)
