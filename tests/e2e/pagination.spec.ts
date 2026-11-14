@@ -67,7 +67,7 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
   await expect(page).toHaveURL(/page=0/);
 });
 
-test('UI-09: invalid URL filters stay local and valid filters still load', async ({ page }) => {
+test('UI-09: invalid URL filters stay local and valid filters still load', async ({ page }, info) => {
   await login(page);
   const invalid = ['businessStatus=toString', 'businessStatus=constructor', 'createdFrom=not-a-date', 'createdTo=not-a-date', 'size=0', 'size=101', 'size=not-a-number'];
   const requests: URL[] = [];
@@ -90,7 +90,9 @@ test('UI-09: invalid URL filters stay local and valid filters still load', async
   });
   await page.goto('/tasks?businessStatus=SUCCEEDED&createdFrom=2020-01-01T00%3A00%3A00Z');
   await loaded;
+  if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Фильтры заданий', exact: true }).click();
   await expect(page.getByLabel('Создано с (UTC, включительно)', { exact: true })).toHaveValue('2020-01-01T00:00');
+  if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Готово', exact: true }).click();
   await expect(page.getByText('Некорректные параметры страницы. Сбросьте фильтры.', { exact: true })).toHaveCount(0);
 });
 
