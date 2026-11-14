@@ -1,7 +1,8 @@
 # План: Spring Data JDBC для чтения и документация backend
 
-Дата: 14.11.2026. Статус: SD-00–SD-05 в работе; адресные read/architecture проверки прошли,
-итоговая квалификация SD-06 ещё не выполнена.
+Дата: 14.11.2026. Статус: SD-00–SD-06 выполнены и проверены.
+Runtime-кандидат — 891666d; результаты и границы доказательств —
+в [текущей стадии](current-stage.md). Merge и deploy не выполнялись.
 База: main `319067e79df02d61961d22e973513c46c5f3db64`.
 Рабочая среда — Firebat1; публичный runtime остаётся на ac5c207.
 План уточняет доступ к данным и сопровождаемость, не меняет исходное ТЗ.
@@ -35,13 +36,14 @@ mapping и отсутствие упрощения от генерации; не
 
 ## 2. Факты исходного кода и границы переноса
 
-Сейчас Spring Data JDBC не подключён. В backend есть TaskRepository,
-ExchangeRepository, ReviewRepository и CommandReceiptRepository с JDBC-адаптерами.
-TaskService обслуживает get/list/history и команды; JdbcTaskRepository объединяет
-чтение, изменения и запись истории. Текущая модель domain свободна от Spring.
-В emulator OperationRepository имеет один JdbcOperationRepository.
+На исходной базе 319067e Spring Data JDBC не был подключён. TaskRepository,
+ExchangeRepository, ReviewRepository и CommandReceiptRepository имели JDBC-адаптеры.
+TaskService обслуживал get/list/history и команды; JdbcTaskRepository объединял
+чтение, изменения и запись истории. Domain оставался свободным от Spring.
+В emulator OperationRepository имел один JdbcOperationRepository.
+Эта исходная точка нужна для сравнения; текущие владельцы описаны в architecture.md.
 
-| Сценарий и текущий владелец | Цель | Причина и ограничение |
+| Сценарий и владелец до переноса | Цель | Причина и ограничение |
 | --- | --- | --- |
 | Карточка: TaskService.get → TaskRepository.get | Spring Data JDBC, запрос по id с owner для инициатора | Простое чтение одной строки. Чужой и отсутствующий id по-прежнему дают одинаковый 404. |
 | Реестр: TaskService.list → list/countTasks | Spring Data JDBC через штатные Query/Criteria и JdbcAggregateOperations внутри read-адаптера | Динамические optional-фильтры не превращаем в десятки finder-методов. Обязательны SQL-планы и сравнение NF08. |
@@ -54,7 +56,7 @@ TaskService обслуживает get/list/history и команды; JdbcTaskR
 | Исполнение/публикация emulator | JdbcOperationRepository | Собственное состояние, блокировки, batch и порядок cursor по commit. Новый Spring Data starter в emulator без простого потребителя не добавляем. |
 | Вход и создание demo users | JdbcUserDetailsService / DemoUsers | Существующий небольшой адаптер Spring Security; не смешиваем с изменением чтения заданий. |
 
-Распределение внедрено в рабочей ветке; итоговая квалификация и аудит ещё впереди.
+Распределение внедрено в рабочей ветке; квалификация и итоговый аудит завершены.
 
 ## 3. Простая структура и правила
 

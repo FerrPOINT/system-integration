@@ -443,8 +443,8 @@ tests/results/deadline-regression.json.
 Ключевые регрессии: ownership и 404, прежние JSON/UTC-поля, согласованный
 COUNT, стабильные страницы, mapping jsonb, отсутствие N+1 и записи через
 read-репозитории; реальные generated SQL входят в EXPLAIN и NF08.
-Адресные read/architecture проверки прошли; общий gate ещё предстоит.
-Подтверждённые версии и результаты находятся в current-stage.md;
+Read/architecture, полный Java/UI/recovery gate, SQL-планы, demo и NF08 прошли.
+Подтверждённые версии и границы доказательств находятся в current-stage.md;
 результаты ниже относятся к прежним этапам.
 
 ## Приёмка Spring-слоёв

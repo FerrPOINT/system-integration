@@ -1,15 +1,59 @@
 # Текущая стадия
 
-## Spring Data JDBC — реализация, квалификация впереди
+## Spring Data JDBC — выполнено, готово к merge
 
-[План SD-00–SD-06](spring-data-read-plan.md) выполняется на Firebat1.
-Карточка, история и реестр заданий используют отдельный TaskReadRepository;
-команды и обмен сохраняют явный JDBC. Старые UI list/count/history-read удалены.
-Добавлены Javadoc, metadata processor и архитектурные ограничения.
-Адресно прошли прежние TaskMapping/TaskWorkflow, новые read/boundary проверки
-и перехват generated SQL с типами PostgreSQL. Это не итоговая квалификация:
-общие Java/UI/recovery/build/Javadoc, EXPLAIN и NF08 ещё предстоят.
-Публичный runtime и результаты завершённого выпуска ниже не изменились.
+[SD-00–SD-06](spring-data-read-plan.md) выполнены на Firebat1.
+Кандидат runtime — 891666d; исходная база — main 319067e.
+Публичный demo остаётся на ac5c207: merge и deploy этой доработки не выполнялись.
+
+TaskReadRepository обслуживает карточку, реестр и историю. Узкие TaskRows
+и HistoryRows генерируют простые SELECT, Query/Criteria формирует optional-фильтры.
+Команды, outbox, квитанции, блокировки и сложные проекции сохраняют JdbcTemplate.
+Один DataSource и transaction manager; domain и HTTP-контракты не получили
+persistence-аннотаций или Spring Page. Старые UI list/count/history-read удалены.
+Javadoc объясняет транзакции, блокировки, повторы, batch и причины ручного SQL;
+metadata четырёх HTTP-настроек генерируется штатным processor вне runtime.
+
+| Проверка | Подтверждение |
+| --- | --- |
+| Java | 204 уникальных теста: backend unit 97 / PostgreSQL 78, emulator unit 13 / PostgreSQL 16. Ошибок и пропусков нет. |
+| Read-regressions | 60 сочетаний ролей/фильтров, counted snapshot при конкурентном commit, все 12 типов истории и ссылки, один DataSource/manager. |
+| Архитектура | Domain/service не зависят от Spring Data; records остаются внутри адаптера. Guard запрещает aggregate save/delete и Modifying в read-репозиториях; отрицательные fixtures реально отклоняются. |
+| Build/Javadoc | Два JAR, doclint, metadata, отсутствие processors/Hibernate в runtime. Две проверки build graph/Docker context проходят. |
+| SQL | 68 ручных sites + captured generated SQL: 532 варианта, 1596 EXPLAIN ANALYZE/BUFFERS/WAL. Для generated PREPARE заданы фактические driver types; fixtures откатились. |
+| UI/API | 68 desktop/mobile без failed/flaky/skipped; 4 smoke и финальная проверка трёх аккаунтов, ownership, operator, UTC, истории и logout. |
+| Recovery/demo | 10 recovery-сценариев и независимая подготовка шести демосценариев прошли. |
+| NF08 | 5000 исходных записей, 20 клиентов, 2 CPU / 4 GiB; финальный p95 чтения 94,00 мс, изменения 93,94 мс, ошибок 0. |
+
+Полный Java/UI/recovery gate начат на f7ced5a. После него добавлен только
+архитектурный тест и исправлен Javadoc квитанций: nonlocking replay lookup
+является наблюдением, резервирование выполняется под lock. Backend unit
+повторно прошли все 97 тестов. Для 891666d повторены read-integration, backend
+Javadoc/JAR, SQL-планы, сборка образов, smoke, API, build graph и NF08.
+Содержимое JAR до/после Javadoc отличается только debug-позициями строк
+вложенного Receipt; executable disassembly совпадает, остальные entries идентичны.
+
+После первого замера перепроверена возможная просадка throughput.
+При одинаковом closed-loop профиле baseline ac5c207 дал 477,78 запросов/с
+(p95 98,28 / 95,97 мс), финальный кандидат — 583,81 запросов/с.
+Первый кандидат ранее дал 425,97 запросов/с (p95 100,23 / 98,52 мс).
+Устойчивая регрессия не воспроизвелась; постоянный прирост скорости и максимальную
+ёмкость этими прогонами не заявляем. Генератор находился на том же Firebat1
+вне лимитов контейнеров; публичные HTTPS и frontend proxy в p95 API не входят.
+
+Итоговые 24 986 операций согласованы в обеих БД, исполнились по одному разу.
+Очередь, pending и неопубликованные события завершились, курсоры совпали;
+20 конкурентных повторов создали одну запись, конфликт тела отклонён.
+Drain после проверок занял 70,64 с; p95 внешнего завершения — 127,41 с.
+Эта задержка не подменяется p95 локального API.
+
+Исходное ТЗ совпадает с пользовательским файлом по SHA-256
+113890f7eea6bf91b232f0a4082dc8f901301b2ad60a2160d099c28769800aff.
+Контракты, схема/миграции и frontend не менялись; сверка D01–D07,
+NF01–NF10 и D-NF01–03 опирается на указанные API/БД/UI/recovery/NF08/demo.
+Redis, JPA, новые процессы, CI, generic CRUD и fallback-пути не добавлены.
+Компактные receipts находятся на Firebat1 в tests/results/spring-data-read
+(ignored); стадии публикации и очистки фиксируются в qualification.json.
 
 ## Spring Boot hardening — выполнено
 
