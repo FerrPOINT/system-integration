@@ -346,7 +346,7 @@ TypeScript входят в build; отрицательные lint fixtures пр�
 
 | Компонент | Ответственность |
 | --- | --- |
-| TaskReadRepository / TaskReadRepositoryAdapter | Карточка/история через узкие Spring Data repositories; горячая counted-пагинация — связанный SQL и общий TaskRowMapper. Records остаются внутри адаптера. |
+| TaskReadRepository / SpringDataTaskReadRepository | Карточка, counted-реестр и история через Spring Data JDBC; records остаются внутри адаптера. |
 | TaskRepository / JdbcTaskRepository | Командное чтение/блокировка, изменения задания и единственная запись истории. |
 | ExchangeRepository / JdbcExchangeRepository | Состояние обмена, очередь, попытки и курсор. TaskRowMapper читает общие проекции; SQL не дублируется. |
 | TaskService | Создание/чтение/переименование, права и атомарное задание/outbox/история/квитанция. |
@@ -621,16 +621,11 @@ REPEATABLE READ с общими предикатами. UI-09 проверяет
 ## Чтение, кэш и повтор команд
 
 TaskService использует TaskReadRepository для карточки, истории и реестра.
-TaskReadRepositoryAdapter объединяет узкие TaskRows/HistoryRows.
-HistoryRows использует bounded @Query с JOIN логина автора; карточка остаётся
-derived query. Горячая counted-пагинация использует NamedParameterJdbcTemplate
-и общий TaskRowMapper: два чередующихся сравнения обнаружили лишнюю стоимость
-aggregate mapping. Один набор связанных предикатов используется SELECT и COUNT;
-данные и точный итог читаются в прежней REPEATABLE_READ транзакции TaskService.
-Выбор проверяется под нагрузкой в [read-плане](read-path-performance-plan.md);
-native-замер не выдаётся за конечный выигрыш API. Старого Query/Criteria пути нет.
-Поля read-проекции не меняют сохранённую историю. Отдельной read-БД, JPA,
-Hibernate, ORM-связей и второго datasource/transaction manager нет.
+SpringDataTaskReadRepository объединяет узкие TaskRows/HistoryRows
+и штатный Query/Criteria для optional-фильтров. HistoryRows использует bounded
+@Query с JOIN логина автора; остальные простые SELECT/COUNT генерируются Spring Data.
+Поля read-проекции не меняют сохранённую историю. COUNT получает те же предикаты
+без пагинации. Отдельной read-БД, JPA, Hibernate и ORM-связей нет.
 Плоские TaskReadRow/HistoryReadRow описывают существующие таблицы.
 ReadMappingConfiguration добавляет чтение PostgreSQL json/jsonb как текста,
 сохраняя стандартные и dialect-конвертеры. TaskResultReader — общий владелец
