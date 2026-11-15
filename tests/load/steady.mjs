@@ -7,6 +7,7 @@ import { qualifiedLoadEnvironment } from './environment.mjs';
 import { observeLoad, loadSnapshot, drainLoad, loadIntegrity, pipelineSummary } from './metrics.mjs';
 import { verifyCreatedTasks, verifyFinishedSnapshot } from './integrity.mjs';
 import { runSteadyArrivals } from './steady-workload.mjs';
+import { assessSteadyPhase } from './steady-assessment.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
@@ -142,6 +143,7 @@ try {
 } catch (error) {
   finalIntegrity.error = error instanceof ApiFailure ? error.code : error.name;
 }
+for (const phase of phases) phase.sustainability = assessSteadyPhase(phase, observation.samples);
 const report = {
   profile: 'steady',
   sourceCommit,
@@ -175,11 +177,13 @@ report.passed =
     sample.containers.every((item) => item.running && !item.oom && !item.restarted),
   ) &&
   finalIntegrity.passed;
+report.sustainable = report.passed && phases.every((phase) => phase.sustainability.passed);
 await mkdir(new URL('../results/', import.meta.url), { recursive: true });
 await writeFile(new URL('../results/steady.json', import.meta.url), JSON.stringify(report, null, 2));
 console.log(
   JSON.stringify({
     passed: report.passed,
+    sustainable: report.sustainable,
     sourceCommit,
     created: created.length,
     plannedArrivalSeconds: report.plannedArrivalSeconds,
