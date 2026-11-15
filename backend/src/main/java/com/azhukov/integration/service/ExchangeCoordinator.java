@@ -8,13 +8,16 @@ import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
  * Runs HTTP between claim/finish transactions: bounded in-flight requests and at most
- * 32 claims per pass. This bean owns/closes the per-task virtual executor.
+ * 32 claims per pass. Completed selections do not wait for a slow reply before
+ * the next pass. This bean owns/closes the per-task virtual executor.
  * These bounds protect resources; they are not a throughput promise.
  */
 @Service
@@ -25,6 +28,7 @@ public class ExchangeCoordinator implements AutoCloseable {
     private final int maxInFlight;
     private static final int MAX_CLAIMS_PER_PASS = 32;
     private final ExecutorService senders;
+    private final Semaphore slots;
     private Instant retryAfter = Instant.MIN;
     private volatile int feedFailures;
     private volatile boolean feedPaused;
@@ -42,6 +46,7 @@ public class ExchangeCoordinator implements AutoCloseable {
         this.tasks = tasks;
         this.client = client;
         this.maxInFlight = maxInFlight;
+        this.slots = new Semaphore(maxInFlight);
         this.senders = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("delivery-", 0).factory());
         log.info("delivery-worker slots={} selectionsPerPass={}", maxInFlight, MAX_CLAIMS_PER_PASS);
     }
@@ -66,48 +71,71 @@ public class ExchangeCoordinator implements AutoCloseable {
     }
 
     public void deliver() {
-        // An empty queue costs one probe; maintenance must not masquerade as emptiness.
+        // The limit spans scheduler passes, including claim/HTTP/finish of an old slow reply.
+        if (!slots.tryAcquire()) return;
         int submitted = 0;
         ClaimResult first;
-        do {
-            first = claim();
-            submitted++;
-        } while (first.outcome() == ClaimResult.Outcome.SKIPPED && submitted < MAX_CLAIMS_PER_PASS);
-        if (first.attempt() == null) return;
+        try {
+            // An empty queue costs one probe; maintenance must not masquerade as emptiness.
+            do {
+                first = claim();
+                submitted++;
+            } while (first.outcome() == ClaimResult.Outcome.SKIPPED && submitted < MAX_CLAIMS_PER_PASS);
+            if (first.attempt() == null) {
+                slots.release();
+                return;
+            }
+        } catch (RuntimeException | Error failure) {
+            slots.release();
+            throw failure;
+        }
         var initial = first.attempt();
         var pending = new ArrayList<CompletableFuture<Boolean>>();
+        pending.add(
+                submit(() -> {
+                    deliverClaim(initial);
+                    return true;
+                }));
         boolean exhausted = false;
-        try {
-            pending.add(
-                    CompletableFuture.supplyAsync(
-                            () -> {
-                                deliverClaim(initial);
-                                return true;
-                            },
-                            senders));
-            while (!exhausted && submitted < MAX_CLAIMS_PER_PASS) {
-                while (pending.size() < maxInFlight && submitted < MAX_CLAIMS_PER_PASS) {
-                    pending.add(
-                            CompletableFuture.supplyAsync(
-                                    () -> {
-                                        var next = claim();
-                                        if (next.attempt() != null) deliverClaim(next.attempt());
-                                        return next.outcome() != ClaimResult.Outcome.EMPTY;
-                                    },
-                                    senders));
-                    submitted++;
-                }
-                CompletableFuture.anyOf(pending.toArray(CompletableFuture[]::new)).join();
-                for (var completed = pending.iterator(); completed.hasNext(); ) {
-                    var future = completed.next();
-                    if (future.isDone()) {
-                        if (!future.join()) exhausted = true;
-                        completed.remove();
-                    }
+        while (!exhausted && submitted < MAX_CLAIMS_PER_PASS) {
+            while (pending.size() < maxInFlight && submitted < MAX_CLAIMS_PER_PASS && slots.tryAcquire()) {
+                pending.add(
+                        submit(() -> {
+                            var next = claim();
+                            if (next.attempt() != null) deliverClaim(next.attempt());
+                            return next.outcome() != ClaimResult.Outcome.EMPTY;
+                        }));
+                submitted++;
+            }
+            if (pending.isEmpty()) return;
+            CompletableFuture.anyOf(pending.toArray(CompletableFuture[]::new)).join();
+            // The next tick can fill free slots without waiting for this pass's slow tail.
+            if (submitted == MAX_CLAIMS_PER_PASS) return;
+            for (var completed = pending.iterator(); completed.hasNext(); ) {
+                var future = completed.next();
+                if (future.isDone()) {
+                    if (!future.join()) exhausted = true;
+                    completed.remove();
                 }
             }
-        } finally {
-            CompletableFuture.allOf(pending.toArray(CompletableFuture[]::new)).join();
+        }
+    }
+
+    /** The caller reserves a slot before claim; completion returns it, even after this pass returns. */
+    private CompletableFuture<Boolean> submit(Supplier<Boolean> work) {
+        try {
+            return CompletableFuture.supplyAsync(work, senders)
+                    .whenComplete((value, failure) -> {
+                        slots.release();
+                        if (failure != null) {
+                            var cause = failure.getCause() == null ? failure : failure.getCause();
+                            // A detached attempt must never fail silently; messages can contain SQL values.
+                            log.error("delivery slot failed exception={}", cause.getClass().getSimpleName());
+                        }
+                    });
+        } catch (RuntimeException | Error failure) {
+            slots.release();
+            throw failure;
         }
     }
 

@@ -17,6 +17,81 @@ import org.junit.jupiter.api.Test;
 
 class ExchangeCoordinatorTest {
     @Test
+    void aFinishedSelectionPassDoesNotWaitForOneSlowReplyBeforeFillingFreeSlotsAgain() throws Exception {
+        var tasks = mock(ExchangeService.class);
+        var client = mock(ExternalExchangeClient.class);
+        var claimed = new AtomicInteger();
+        var finished = new AtomicInteger();
+        var active = new AtomicInteger();
+        var peak = new AtomicInteger();
+        var peakUnfinished = new AtomicInteger();
+        var firstFast = new CountDownLatch(31);
+        var allFast = new CountDownLatch(63);
+        var slowEntered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        UUID slow = UUID.randomUUID();
+        when(tasks.claim())
+                .thenAnswer(call -> {
+                    int n = claimed.incrementAndGet();
+                    peakUnfinished.accumulateAndGet(n - finished.get(), Math::max);
+                    return ClaimResult.claimed(
+                            new DeliveryAttempt(
+                                    n == 1 ? slow : UUID.randomUUID(),
+                                    UUID.randomUUID(),
+                                    "PUT",
+                                    1,
+                                    1,
+                                    new TaskInput("REQ-900001", 25)));
+                });
+        doAnswer(
+                        call -> {
+                            finished.incrementAndGet();
+                            return null;
+                        })
+                .when(tasks)
+                .finish(any(), any());
+        when(client.deliver(any()))
+                .thenAnswer(call -> {
+                    DeliveryAttempt attempt = call.getArgument(0);
+                    peak.accumulateAndGet(active.incrementAndGet(), Math::max);
+                    try {
+                        if (attempt.operationId().equals(slow)) {
+                            slowEntered.countDown();
+                            assertTrue(release.await(5, TimeUnit.SECONDS));
+                        } else {
+                            firstFast.countDown();
+                            allFast.countDown();
+                        }
+                        return new ExternalExchangeClient.DeliveryReply(
+                                DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
+                    } finally {
+                        active.decrementAndGet();
+                    }
+                });
+        try (var runner = Executors.newVirtualThreadPerTaskExecutor();
+                var worker = new ExchangeCoordinator(tasks, client, 8)) {
+            var firstPass = runner.submit(worker::deliver);
+            try {
+                assertTrue(slowEntered.await(1, TimeUnit.SECONDS));
+                assertTrue(firstFast.await(2, TimeUnit.SECONDS));
+                firstPass.get(250, TimeUnit.MILLISECONDS);
+                worker.deliver();
+                assertTrue(
+                        allFast.await(2, TimeUnit.SECONDS),
+                        "The next pass must use free slots while the old reply is held");
+                assertEquals(1, release.getCount());
+                assertTrue(peak.get() <= 8, "The bound applies across overlapping passes");
+                assertTrue(peakUnfinished.get() <= 8, "No attempt can be preclaimed ahead of a free slot");
+            } finally {
+                release.countDown();
+                firstPass.get(5, TimeUnit.SECONDS);
+            }
+        }
+        assertEquals(64, claimed.get(), "Each pass selects at most 32 candidates");
+        verify(tasks, times(64)).finish(any(), any());
+    }
+
+    @Test
     void drainsMoreThanOneBatchButBoundsEachCycleAndParallelHttpCalls() throws Exception {
         var tasks = mock(ExchangeService.class);
         var client = mock(ExternalExchangeClient.class);
@@ -51,12 +126,12 @@ class ExchangeCoordinatorTest {
                 });
         try (var worker = new ExchangeCoordinator(tasks, client, 8)) {
             worker.deliver();
-            assertTrue(claimed.get() > 8, "a backlog should not wait after every eight records");
-            assertTrue(claimed.get() <= 32, "one scheduler turn must remain bounded");
-            assertTrue(peak.get() <= 8);
-            verify(tasks, times(claimed.get())).finish(any(), any());
-            assertEquals(claimed.get(), threads.size(), "Each delivery is its own virtual thread");
         }
+        assertTrue(claimed.get() > 8, "a backlog should not wait after every eight records");
+        assertTrue(claimed.get() <= 32, "one scheduler turn must remain bounded");
+        assertTrue(peak.get() <= 8);
+        verify(tasks, times(claimed.get())).finish(any(), any());
+        assertEquals(claimed.get(), threads.size(), "Each delivery is its own virtual thread");
     }
 
     @Test
@@ -122,10 +197,10 @@ class ExchangeCoordinatorTest {
                 release.countDown();
                 cycle.get(5, TimeUnit.SECONDS);
             }
-            assertEquals(32, claimed.get());
-            assertTrue(peakUnfinishedClaims.get() <= 8, "No attempts may be claimed ahead of free slots");
-            verify(tasks, times(32)).finish(any(), any());
         }
+        assertEquals(32, claimed.get());
+        assertTrue(peakUnfinishedClaims.get() <= 8, "No attempts may be claimed ahead of free slots");
+        verify(tasks, times(32)).finish(any(), any());
     }
 
     @Test
@@ -169,9 +244,9 @@ class ExchangeCoordinatorTest {
                 release.countDown();
                 cycle.get(5, TimeUnit.SECONDS);
             }
-            assertEquals(32, claimed.get());
-            verify(tasks, times(32)).finish(any(), any());
         }
+        assertEquals(32, claimed.get());
+        verify(tasks, times(32)).finish(any(), any());
     }
 
     @Test
@@ -213,9 +288,9 @@ class ExchangeCoordinatorTest {
                 release.countDown();
                 cycle.get(5, TimeUnit.SECONDS);
             }
-            assertEquals(32, claims.get());
-            verify(tasks, times(31)).finish(any(), any());
         }
+        assertEquals(32, claims.get());
+        verify(tasks, times(31)).finish(any(), any());
     }
 
     @Test
@@ -243,9 +318,9 @@ class ExchangeCoordinatorTest {
                                 DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null));
         try (var worker = new ExchangeCoordinator(tasks, client, 8)) {
             worker.deliver();
-            verify(tasks).finish(any(), any());
-            assertTrue(calls.get() <= 32);
         }
+        verify(tasks).finish(any(), any());
+        assertTrue(calls.get() <= 32);
     }
 
     @Test
@@ -297,9 +372,9 @@ class ExchangeCoordinatorTest {
                     release.countDown();
                     cycle.get(5, TimeUnit.SECONDS);
                 }
-                assertEquals(32, claimed.get());
-                verify(tasks, times(32)).finish(any(), any());
             }
+            assertEquals(32, claimed.get());
+            verify(tasks, times(32)).finish(any(), any());
         }
     }
 
@@ -313,7 +388,7 @@ class ExchangeCoordinatorTest {
     }
 
     @Test
-    void aFailedPeerIsPropagatedAndOtherSubmittedAttemptsFinishBeforeReturn() {
+    void aFailedPeerIsReportedAndOtherSubmittedAttemptsFinishBeforeShutdownReturns() {
         var tasks = mock(ExchangeService.class);
         var client = mock(ExternalExchangeClient.class);
         var claimed = new AtomicInteger();
@@ -339,9 +414,66 @@ class ExchangeCoordinatorTest {
                     return new ExternalExchangeClient.DeliveryReply(
                             DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
                 });
-        try (var worker = new ExchangeCoordinator(tasks, client, 8)) {
-            assertThrows(java.util.concurrent.CompletionException.class, worker::deliver);
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(ExchangeCoordinator.class);
+        var events = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        events.start();
+        logger.addAppender(events);
+        try {
+            try (var worker = new ExchangeCoordinator(tasks, client, 8)) {
+                try {
+                    worker.deliver();
+                } catch (java.util.concurrent.CompletionException failure) {
+                    assertInstanceOf(IllegalStateException.class, failure.getCause());
+                }
+            }
             verify(tasks, times(3)).finish(any(), any());
+            assertEquals(
+                    1,
+                    events.list.stream()
+                            .filter(event ->
+                                    event.getLevel() == ch.qos.logback.classic.Level.ERROR
+                                            && event.getFormattedMessage()
+                                                    .equals("delivery slot failed exception=IllegalStateException"))
+                            .count());
+            assertTrue(
+                    events.list.stream()
+                            .noneMatch(event -> event.getFormattedMessage().contains("Controlled peer failure")),
+                    "Exception messages may contain SQL values");
+        } finally {
+            logger.detachAppender(events);
+            events.stop();
+        }
+    }
+
+    @Test
+    void failedInitialProbeReturnsItsReservedSlot() {
+        var tasks = mock(ExchangeService.class);
+        var client = mock(ExternalExchangeClient.class);
+        when(tasks.claim())
+                .thenThrow(new IllegalStateException("Controlled claim failure"))
+                .thenReturn(ClaimResult.empty());
+        try (var worker = new ExchangeCoordinator(tasks, client, 1)) {
+            assertThrows(IllegalStateException.class, worker::deliver);
+            worker.deliver();
+            verify(tasks, times(2)).claim();
+            verifyNoInteractions(client);
+        }
+    }
+
+    @Test
+    void failedSenderReturnsItsReservedSlotBeforeAnotherPass() {
+        var tasks = mock(ExchangeService.class);
+        var client = mock(ExternalExchangeClient.class);
+        var attempt =
+                new DeliveryAttempt(UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput("REQ-900001", 25));
+        when(tasks.claim()).thenReturn(ClaimResult.claimed(attempt), ClaimResult.empty());
+        when(client.deliver(attempt)).thenThrow(new IllegalStateException("Controlled sender failure"));
+        try (var worker = new ExchangeCoordinator(tasks, client, 1)) {
+            assertThrows(java.util.concurrent.CompletionException.class, worker::deliver);
+            worker.deliver();
+            assertEquals(0, worker.diagnostics().deliveryInFlight());
+            verify(tasks, times(2)).claim();
+            verify(tasks, never()).finish(any(), any());
         }
     }
 
