@@ -26,12 +26,15 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** Real JDBC-call frequency and elapsed time for a fixed workflow, not a load benchmark. */
 @Import({SqlWorkflowProfileTest.SqlObservation.class, ReadSqlCapture.class})
 class SqlWorkflowProfileTest extends PostgresTest {
     private static final Map<String, Timing> TIMINGS = new ConcurrentHashMap<>();
     @Autowired ExchangeService exchange;
+    @Autowired PlatformTransactionManager transactions;
     private final List<Map<String, Object>> steps = new java.util.ArrayList<>();
     private final List<ReadSqlCapture.Statement> generatedReads = new java.util.ArrayList<>();
 
@@ -124,6 +127,23 @@ class SqlWorkflowProfileTest extends PostgresTest {
         TIMINGS.clear();
         assertNotNull(exchange.claim().attempt());
         assertEquals(1, taskReadCalls(), "The task selected and locked for a claim must not be loaded again");
+    }
+
+    @Test
+    void emptyQueueSelectionReusesItsServerPreparedPlanOnTheManagedConnection() {
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(tx -> {
+                    for (int n = 0; n < 30; n++) assertNull(exchange.claim().attempt());
+                    long uses =
+                            jdbc.queryForObject(
+                                    """
+                                    SELECT coalesce(sum(generic_plans),0) FROM pg_prepared_statements
+                                    WHERE statement LIKE 'SELECT t.* FROM (%' AND statement LIKE '%delivery_queue%'
+                                      AND NOT from_sql
+                                    """,
+                                    Long.class);
+                    assertTrue(uses >= 10, "The static selection must reuse a server-prepared plan: " + uses);
+                });
     }
 
     @Test
