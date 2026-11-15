@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import com.azhukov.integration.client.ExternalExchangeClient;
 import com.azhukov.integration.client.http.ExchangeReply;
 import com.azhukov.integration.domain.exchange.DeliveryAttempt;
+import com.azhukov.integration.dto.exchange.ClaimResult;
 import com.azhukov.integration.repository.ExchangeRepository;
 import com.azhukov.integration.service.ExchangeCoordinator;
 import com.azhukov.integration.service.ExchangeService;
@@ -52,13 +53,15 @@ class DeliveryClaimConcurrencyTest extends PostgresTest {
     @Test
     void aStaleCandidateCannotInterruptAnUnexpiredCommittedLease() throws Exception {
         created(login("initiator.one"), UUID.randomUUID());
-        var firstClaim = exchange.claim();
+        var firstClaim = exchange.claim().attempt();
         assertNotNull(firstClaim);
         var stale = rows.exchange(firstClaim.operationId(), false);
         doReturn(stale).when(rows).lockDueExchange();
         int historyBefore = count("task_history");
 
-        assertNull(exchange.claim());
+        var result = exchange.claim();
+        assertEquals(ClaimResult.Outcome.SKIPPED, result.outcome());
+        assertNull(result.attempt());
         assertEquals(
                 firstClaim.attemptId(),
                 jdbc.queryForObject(
@@ -80,7 +83,7 @@ class DeliveryClaimConcurrencyTest extends PostgresTest {
     @Test
     void aStaleCandidateCannotBypassACommittedFutureRetryTime() throws Exception {
         created(login("initiator.one"), UUID.randomUUID());
-        var firstClaim = exchange.claim();
+        var firstClaim = exchange.claim().attempt();
         finish(exchange, firstClaim, new ExchangeReply(503, null, false, null));
         jdbc.update(
                 "UPDATE delivery_queue SET due_at=clock_timestamp()+interval '1 hour' WHERE operation_id=?",
@@ -89,7 +92,9 @@ class DeliveryClaimConcurrencyTest extends PostgresTest {
         doReturn(stale).when(rows).lockDueExchange();
         int historyBefore = count("task_history");
 
-        assertNull(exchange.claim());
+        var result = exchange.claim();
+        assertEquals(ClaimResult.Outcome.SKIPPED, result.outcome());
+        assertNull(result.attempt());
         assertEquals(1, count("delivery_attempts"));
         assertEquals(
                 1,

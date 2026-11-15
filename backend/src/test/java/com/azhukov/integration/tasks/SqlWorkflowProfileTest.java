@@ -47,7 +47,7 @@ class SqlWorkflowProfileTest extends PostgresTest {
         status(200, step("rename-replay", () -> rename(owner, task, renameKey, "Новое имя", 1)));
         status(200, step("list", () -> mvc.perform(get("/api/tasks").session(owner.session())).andReturn()));
         status(200, step("card", () -> mvc.perform(get("/api/tasks/" + task).session(owner.session())).andReturn()));
-        var claim = step("claim", exchange::claim);
+        var claim = step("claim", () -> exchange.claim().attempt());
         assertNotNull(claim);
         var identity = Map.of("operationId", claim.operationId(), "request", claim.request());
         var acknowledgement = new java.util.LinkedHashMap<String, Object>(identity);
@@ -122,7 +122,7 @@ class SqlWorkflowProfileTest extends PostgresTest {
     void claimReadsItsLockedTaskOnlyOnce() throws Exception {
         created(login("initiator.one"), UUID.randomUUID());
         TIMINGS.clear();
-        assertNotNull(exchange.claim());
+        assertNotNull(exchange.claim().attempt());
         assertEquals(1, taskReadCalls(), "The task selected and locked for a claim must not be loaded again");
     }
 
@@ -132,7 +132,7 @@ class SqlWorkflowProfileTest extends PostgresTest {
         var page = json.createArrayNode();
         for (int n = 0; n < 50; n++) {
             created(owner, UUID.randomUUID());
-            var claim = exchange.claim();
+            var claim = exchange.claim().attempt();
             for (int version = 1; version <= 2; version++) {
                 var result =
                         json.createObjectNode()

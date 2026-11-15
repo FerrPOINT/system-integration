@@ -2,6 +2,7 @@ package com.azhukov.integration.service;
 
 import com.azhukov.integration.client.ExternalExchangeClient;
 import com.azhukov.integration.domain.exchange.DeliveryAttempt;
+import com.azhukov.integration.dto.exchange.ClaimResult;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
@@ -23,6 +24,7 @@ public class ExchangeCoordinator implements AutoCloseable {
     private final ExchangeService tasks;
     private final ExternalExchangeClient client;
     private static final int MAX_IN_FLIGHT = 8;
+    private static final int MAX_CLAIMS_PER_PASS = 32;
     private final ExecutorService senders =
             Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("delivery-", 0).factory());
     private Instant nextRead = Instant.MIN;
@@ -53,29 +55,33 @@ public class ExchangeCoordinator implements AutoCloseable {
     }
 
     public void deliver() {
-        // Probe once while idle. Only reserved slots may claim work after this.
-        var first = claim();
-        if (first == null) return;
+        // An empty queue costs one probe; maintenance must not masquerade as emptiness.
+        int submitted = 0;
+        ClaimResult first;
+        do {
+            first = claim();
+            submitted++;
+        } while (first.outcome() == ClaimResult.Outcome.SKIPPED && submitted < MAX_CLAIMS_PER_PASS);
+        if (first.attempt() == null) return;
+        var initial = first.attempt();
         var pending = new ArrayList<CompletableFuture<Boolean>>();
-        int submitted = 1;
         boolean exhausted = false;
         try {
             pending.add(
                     CompletableFuture.supplyAsync(
                             () -> {
-                                deliverClaim(first);
+                                deliverClaim(initial);
                                 return true;
                             },
                             senders));
-            while (!exhausted && submitted < 32) {
-                while (pending.size() < MAX_IN_FLIGHT && submitted < 32) {
+            while (!exhausted && submitted < MAX_CLAIMS_PER_PASS) {
+                while (pending.size() < MAX_IN_FLIGHT && submitted < MAX_CLAIMS_PER_PASS) {
                     pending.add(
                             CompletableFuture.supplyAsync(
                                     () -> {
                                         var next = claim();
-                                        if (next == null) return false;
-                                        deliverClaim(next);
-                                        return true;
+                                        if (next.attempt() != null) deliverClaim(next.attempt());
+                                        return next.outcome() != ClaimResult.Outcome.EMPTY;
                                     },
                                     senders));
                     submitted++;
@@ -94,10 +100,11 @@ public class ExchangeCoordinator implements AutoCloseable {
         }
     }
 
-    private DeliveryAttempt claim() {
+    private ClaimResult claim() {
         long started = System.nanoTime();
         var result = tasks.claim();
-        log.debug("delivery-claim durationMs={}", (System.nanoTime() - started) / 1_000_000);
+        log.debug(
+                "delivery-claim durationMs={} outcome={}", (System.nanoTime() - started) / 1_000_000, result.outcome());
         return result;
     }
 

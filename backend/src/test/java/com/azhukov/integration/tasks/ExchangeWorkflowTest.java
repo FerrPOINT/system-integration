@@ -32,34 +32,34 @@ class ExchangeWorkflowTest extends PostgresTest {
                 "UPDATE delivery_queue SET claim_id = ?,claimed_until = clock_timestamp() + interval '1 hour' WHERE operation_id = (SELECT operation_id FROM tasks WHERE id = ?)",
                 UUID.randomUUID(),
                 leased);
-        var selected = exchange.claim();
+        var selected = exchange.claim().attempt();
         assertNotNull(selected);
         assertEquals(
                 jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id = ?", UUID.class, ready),
                 selected.operationId());
-        assertNull(exchange.claim());
+        assertNull(exchange.claim().attempt());
         jdbc.update(
                 "UPDATE delivery_queue SET due_at = clock_timestamp() - interval '1 second' WHERE operation_id = (SELECT operation_id FROM tasks WHERE id = ?)",
                 future);
-        var next = exchange.claim();
+        var next = exchange.claim().attempt();
         assertNotNull(next);
         assertEquals(
                 jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id = ?", UUID.class, future),
                 next.operationId());
-        assertNull(exchange.claim());
+        assertNull(exchange.claim().attempt());
     }
 
     @Test
     void ambiguityUsesGetAndTheSameAttemptCounter() throws Exception {
         var owner = login("initiator.one");
         UUID id = created(owner, UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         assertEquals("PUT", claim.step());
         finish(exchange, claim, new ExchangeReply(503, null, false, null));
         assertEquals("UNKNOWN", delivery(id));
         assertEquals(1, count("exchange_issues"));
         dueNow();
-        var check = exchange.claim();
+        var check = exchange.claim().attempt();
         assertEquals("GET", check.step());
         assertEquals(2, check.number());
         finish(
@@ -72,7 +72,7 @@ class ExchangeWorkflowTest extends PostgresTest {
                         null));
         assertEquals("RETRY_WAIT", delivery(id));
         dueNow();
-        var repeat = exchange.claim();
+        var repeat = exchange.claim().attempt();
         assertEquals(claim.operationId(), repeat.operationId());
         assertEquals(claim.request(), repeat.request());
         assertEquals("PUT", repeat.step());
@@ -85,7 +85,7 @@ class ExchangeWorkflowTest extends PostgresTest {
         UUID operation = jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id = ?", UUID.class, id);
         for (int n = 1; n <= 5; n++) {
             dueNow();
-            var attempt = exchange.claim();
+            var attempt = exchange.claim().attempt();
             assertNotNull(attempt);
             assertEquals(n, attempt.number());
             assertEquals(n, attempt.automaticNumber());
@@ -100,7 +100,7 @@ class ExchangeWorkflowTest extends PostgresTest {
                                 Double.class,
                                 operation);
                 assertTrue(remaining > delay - 1 && remaining <= delay);
-                assertNull(exchange.claim(), "Backoff must not be bypassed");
+                assertNull(exchange.claim().attempt(), "Backoff must not be bypassed");
             }
         }
         assertEquals("NEEDS_REVIEW", delivery(id));
@@ -109,7 +109,7 @@ class ExchangeWorkflowTest extends PostgresTest {
         long history = count("task_history");
         for (int n = 0; n < 8; n++) {
             dueNow();
-            assertNull(exchange.claim());
+            assertNull(exchange.claim().attempt());
         }
         assertEquals(5, count("delivery_attempts"));
         assertEquals(history, count("task_history"));
@@ -129,7 +129,7 @@ class ExchangeWorkflowTest extends PostgresTest {
         assertTrue(body(historyResponse).get("items").toString().contains("исчерпан лимит 5 попыток"));
         UUID other = created(login("initiator.two"), UUID.randomUUID());
         dueNow();
-        var next = exchange.claim();
+        var next = exchange.claim().attempt();
         assertNotNull(next);
         assertEquals(
                 jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?", UUID.class, other),
@@ -141,11 +141,11 @@ class ExchangeWorkflowTest extends PostgresTest {
         UUID id = created(login("initiator.one"), UUID.randomUUID());
         for (int n = 1; n < 5; n++) {
             dueNow();
-            var attempt = exchange.claim();
+            var attempt = exchange.claim().attempt();
             finish(exchange, attempt, new ExchangeReply(503, null, false, null));
         }
         dueNow();
-        var last = exchange.claim();
+        var last = exchange.claim().attempt();
         assertEquals(5, last.automaticNumber());
         finish(exchange, last, new ExchangeReply(200, ack(last).put("executions", 0).putNull("result"), false, null));
         assertEquals("ACKNOWLEDGED", delivery(id));
@@ -164,12 +164,12 @@ class ExchangeWorkflowTest extends PostgresTest {
         UUID id = created(login("initiator.one"), UUID.randomUUID());
         for (int n = 1; n < 5; n++) {
             dueNow();
-            finish(exchange, exchange.claim(), new ExchangeReply(503, null, false, null));
+            finish(exchange, exchange.claim().attempt(), new ExchangeReply(503, null, false, null));
         }
         dueNow();
-        var last = exchange.claim();
+        var last = exchange.claim().attempt();
         jdbc.update("UPDATE delivery_queue SET claimed_until=clock_timestamp()-interval '1 second'");
-        assertNull(exchange.claim());
+        assertNull(exchange.claim().attempt());
         assertEquals("NEEDS_REVIEW", delivery(id));
         assertEquals(
                 "INTERRUPTED",
@@ -181,7 +181,7 @@ class ExchangeWorkflowTest extends PostgresTest {
                         Long.class);
         for (int n = 0; n < 4; n++) {
             dueNow();
-            assertNull(exchange.claim());
+            assertNull(exchange.claim().attempt());
         }
         finish(exchange, last, new ExchangeReply(200, ack(last).put("executions", 0).putNull("result"), false, null));
         assertEquals("NEEDS_REVIEW", delivery(id));
@@ -198,7 +198,7 @@ class ExchangeWorkflowTest extends PostgresTest {
     void historicalOverLimitQueueCannotAcquireAnotherNetworkAttempt() throws Exception {
         UUID id = created(login("initiator.one"), UUID.randomUUID());
         jdbc.update("UPDATE delivery_queue SET attempts=208,automatic_attempts=208");
-        assertNull(exchange.claim());
+        assertNull(exchange.claim().attempt());
         assertEquals("NEEDS_REVIEW", delivery(id));
         assertEquals(0, count("delivery_attempts"));
         assertEquals(208, jdbc.queryForObject("SELECT attempts FROM delivery_queue", Integer.class));
@@ -211,7 +211,7 @@ class ExchangeWorkflowTest extends PostgresTest {
         DeliveryAttempt last = null;
         for (int n = 1; n <= 5; n++) {
             dueNow();
-            last = exchange.claim();
+            last = exchange.claim().attempt();
             finish(exchange, last, new ExchangeReply(503, null, false, null));
         }
         consume(exchange, 0, page(1, result(last, 2, "SUCCEEDED")));
@@ -230,10 +230,10 @@ class ExchangeWorkflowTest extends PostgresTest {
         UUID id = created(login("initiator.one"), UUID.randomUUID());
         for (int n = 1; n < 5; n++) {
             dueNow();
-            finish(exchange, exchange.claim(), new ExchangeReply(503, null, false, null));
+            finish(exchange, exchange.claim().attempt(), new ExchangeReply(503, null, false, null));
         }
         dueNow();
-        var last = exchange.claim();
+        var last = exchange.claim().attempt();
         jdbc.execute(
                 "ALTER TABLE task_history ADD CONSTRAINT si10_reject_pause CHECK (summary NOT LIKE 'Автоматическая доставка приостановлена:%')");
         try {
@@ -255,7 +255,7 @@ class ExchangeWorkflowTest extends PostgresTest {
                         "SELECT count(*) FROM task_history WHERE event_type='DELIVERY_ATTEMPT' AND summary LIKE 'Автоматическая доставка приостановлена:%'",
                         Integer.class));
         jdbc.update("UPDATE delivery_queue SET claimed_until=clock_timestamp()-interval '1 second'");
-        assertNull(exchange.claim());
+        assertNull(exchange.claim().attempt());
         assertEquals("NEEDS_REVIEW", delivery(id));
         assertEquals(5, count("delivery_attempts"));
     }
@@ -263,9 +263,9 @@ class ExchangeWorkflowTest extends PostgresTest {
     @Test
     void expiredLeaseIsCountedAndCannotApplyALateResponse() throws Exception {
         UUID id = created(login("initiator.one"), UUID.randomUUID());
-        var old = exchange.claim();
+        var old = exchange.claim().attempt();
         jdbc.update("UPDATE delivery_queue SET claimed_until = clock_timestamp() - interval '3 seconds'");
-        assertNull(exchange.claim());
+        assertNull(exchange.claim().attempt());
         assertEquals("UNKNOWN", delivery(id));
         assertEquals(
                 "INTERRUPTED",
@@ -274,7 +274,7 @@ class ExchangeWorkflowTest extends PostgresTest {
         finish(exchange, old, new ExchangeReply(202, ack(old), false, null));
         assertEquals("UNKNOWN", delivery(id));
         dueNow();
-        var next = exchange.claim();
+        var next = exchange.claim().attempt();
         assertEquals(2, next.number());
         assertEquals("GET", next.step());
     }
@@ -282,7 +282,7 @@ class ExchangeWorkflowTest extends PostgresTest {
     @Test
     void earlyResultConfirmsDeliveryAndLateHttpFailureCannotRollItBack() throws Exception {
         UUID id = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         assertTrue(consume(exchange, 0, page(1, result(claim, 2, "SUCCEEDED"))));
         assertEquals("ACKNOWLEDGED", delivery(id));
         assertEquals("SUCCEEDED", business(id));
@@ -301,7 +301,7 @@ class ExchangeWorkflowTest extends PostgresTest {
     @Test
     void duplicateLateAndConflictingResultsHaveDifferentEffects() throws Exception {
         UUID id = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         var finalResult = result(claim, 2, "SUCCEEDED");
         consume(exchange, 0, page(1, finalResult));
         long history = count("task_history");
@@ -322,7 +322,7 @@ class ExchangeWorkflowTest extends PostgresTest {
     @Test
     void wrongImmutableInputCannotConfirmDeliveryBeforePut() throws Exception {
         UUID id = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         var wrong = result(claim, 2, "SUCCEEDED").deepCopy();
         ((tools.jackson.databind.node.ObjectNode) wrong.get("request")).put("quantity", 26);
         consume(exchange, 0, page(1, wrong));
@@ -339,7 +339,7 @@ class ExchangeWorkflowTest extends PostgresTest {
     @Test
     void pausedAndStoppedObserveBothRunningAndFinalWithoutApplying() throws Exception {
         UUID id = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         finish(exchange, claim, new ExchangeReply(400, null, false, null));
         for (int version : new int[] {1, 2}) {
             var incoming = result(claim, version, version == 1 ? "RUNNING" : "SUCCEEDED");
@@ -371,7 +371,7 @@ class ExchangeWorkflowTest extends PostgresTest {
     @Test
     void cursorAndResultRollbackTogetherAndAnOldConsumerCannotReapply() throws Exception {
         UUID id = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         var transaction = new TransactionTemplate(transactions);
         transaction.executeWithoutResult(status -> {
             consume(exchange, 0, page(1, result(claim, 2, "SUCCEEDED")));
@@ -387,7 +387,7 @@ class ExchangeWorkflowTest extends PostgresTest {
     @Test
     void observationAuditFollowsTheCommitAndDeduplicationOfItsHistoryRecord() throws Exception {
         UUID id = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         finish(exchange, claim, new ExchangeReply(400, null, false, null));
         var incoming = result(claim, 2, "SUCCEEDED");
         var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(JdbcTaskRepository.class);
@@ -462,7 +462,7 @@ class ExchangeWorkflowTest extends PostgresTest {
     @Test
     void onePageKeepsItsUpdatedStateForDuplicateLateAndConflictingEvents() throws Exception {
         UUID id = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         var page = json.createArrayNode();
         var running = result(claim, 1, "RUNNING");
         var terminal = result(claim, 2, "SUCCEEDED");
@@ -488,7 +488,7 @@ class ExchangeWorkflowTest extends PostgresTest {
     @Test
     void onePagePreservesDiagnosticAssociationForInvalidAndUnknownResults() throws Exception {
         UUID id = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         var invalid = (tools.jackson.databind.node.ObjectNode) result(claim, 1, "RUNNING");
         invalid.put("version", 3);
         var unknown = (tools.jackson.databind.node.ObjectNode) result(claim, 2, "SUCCEEDED");

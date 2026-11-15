@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import com.azhukov.integration.client.ExternalExchangeClient;
 import com.azhukov.integration.domain.exchange.DeliveryAttempt;
 import com.azhukov.integration.domain.task.TaskInput;
+import com.azhukov.integration.dto.exchange.ClaimResult;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -25,9 +26,15 @@ class ExchangeCoordinatorTest {
         var threads = java.util.concurrent.ConcurrentHashMap.<Thread>newKeySet();
         when(tasks.claim())
                 .thenAnswer(call -> {
-                    if (claimed.incrementAndGet() > 40) return null;
-                    return new DeliveryAttempt(
-                            UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput("REQ-900001", 25));
+                    if (claimed.incrementAndGet() > 40) return ClaimResult.empty();
+                    return ClaimResult.claimed(
+                            new DeliveryAttempt(
+                                    UUID.randomUUID(),
+                                    UUID.randomUUID(),
+                                    "PUT",
+                                    1,
+                                    1,
+                                    new TaskInput("REQ-900001", 25)));
                 });
         when(client.deliver(any()))
                 .thenAnswer(call -> {
@@ -76,13 +83,14 @@ class ExchangeCoordinatorTest {
                 .thenAnswer(call -> {
                     int n = claimed.incrementAndGet();
                     peakUnfinishedClaims.accumulateAndGet(n - finished.get(), Math::max);
-                    return new DeliveryAttempt(
-                            n == 1 ? slow : UUID.randomUUID(),
-                            UUID.randomUUID(),
-                            "PUT",
-                            1,
-                            1,
-                            new TaskInput("REQ-900001", 25));
+                    return ClaimResult.claimed(
+                            new DeliveryAttempt(
+                                    n == 1 ? slow : UUID.randomUUID(),
+                                    UUID.randomUUID(),
+                                    "PUT",
+                                    1,
+                                    1,
+                                    new TaskInput("REQ-900001", 25)));
                 });
         when(client.deliver(any()))
                 .thenAnswer(call -> {
@@ -136,8 +144,14 @@ class ExchangeCoordinatorTest {
                         assertTrue(release.await(5, TimeUnit.SECONDS));
                     }
                     if (number > 2) otherClaim.countDown();
-                    return new DeliveryAttempt(
-                            UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput("REQ-900001", 25));
+                    return ClaimResult.claimed(
+                            new DeliveryAttempt(
+                                    UUID.randomUUID(),
+                                    UUID.randomUUID(),
+                                    "PUT",
+                                    1,
+                                    1,
+                                    new TaskInput("REQ-900001", 25)));
                 });
         when(client.deliver(any()))
                 .thenReturn(
@@ -161,6 +175,92 @@ class ExchangeCoordinatorTest {
     }
 
     @Test
+    void aSkippedCandidateDoesNotExhaustOtherAvailableWork() throws Exception {
+        var tasks = mock(ExchangeService.class);
+        var client = mock(ExternalExchangeClient.class);
+        var claims = new AtomicInteger();
+        var ninth = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        when(tasks.claim())
+                .thenAnswer(call -> {
+                    int n = claims.incrementAndGet();
+                    if (n == 2) return ClaimResult.skipped();
+                    if (n == 9) ninth.countDown();
+                    return ClaimResult.claimed(
+                            new DeliveryAttempt(
+                                    UUID.randomUUID(),
+                                    UUID.randomUUID(),
+                                    "PUT",
+                                    1,
+                                    1,
+                                    new TaskInput("REQ-900001", 25)));
+                });
+        when(client.deliver(any()))
+                .thenAnswer(call -> {
+                    assertTrue(release.await(5, TimeUnit.SECONDS));
+                    return new ExternalExchangeClient.DeliveryReply(
+                            DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
+                });
+        try (var runner = Executors.newVirtualThreadPerTaskExecutor();
+                var worker = new ExchangeCoordinator(tasks, client)) {
+            var cycle = runner.submit(worker::deliver);
+            try {
+                assertTrue(
+                        ninth.await(2, TimeUnit.SECONDS),
+                        "One stale candidate must not end a pass with other available work");
+                assertEquals(9, claims.get(), "Eight leases plus one skipped candidate");
+            } finally {
+                release.countDown();
+                cycle.get(5, TimeUnit.SECONDS);
+            }
+            assertEquals(32, claims.get());
+            verify(tasks, times(31)).finish(any(), any());
+        }
+    }
+
+    @Test
+    void maintenanceBeforeTheFirstLeaseDoesNotHideReadyWork() {
+        var tasks = mock(ExchangeService.class);
+        var client = mock(ExternalExchangeClient.class);
+        var calls = new AtomicInteger();
+        when(tasks.claim())
+                .thenAnswer(call -> {
+                    int n = calls.incrementAndGet();
+                    if (n == 1) return ClaimResult.skipped();
+                    if (n > 2) return ClaimResult.empty();
+                    return ClaimResult.claimed(
+                            new DeliveryAttempt(
+                                    UUID.randomUUID(),
+                                    UUID.randomUUID(),
+                                    "PUT",
+                                    1,
+                                    1,
+                                    new TaskInput("REQ-900001", 25)));
+                });
+        when(client.deliver(any()))
+                .thenReturn(
+                        new ExternalExchangeClient.DeliveryReply(
+                                DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null));
+        try (var worker = new ExchangeCoordinator(tasks, client)) {
+            worker.deliver();
+            verify(tasks).finish(any(), any());
+            assertTrue(calls.get() <= 32);
+        }
+    }
+
+    @Test
+    void aPassWithOnlyChangedCandidatesStillHasAFiniteSelectionLimit() {
+        var tasks = mock(ExchangeService.class);
+        var client = mock(ExternalExchangeClient.class);
+        when(tasks.claim()).thenReturn(ClaimResult.skipped());
+        try (var worker = new ExchangeCoordinator(tasks, client)) {
+            worker.deliver();
+            verify(tasks, times(32)).claim();
+            verifyNoInteractions(client);
+        }
+    }
+
+    @Test
     void allEightSlotsCanStartWithoutClaimingWorkAheadOfTheirReplies() throws Exception {
         var tasks = mock(ExchangeService.class);
         var client = mock(ExternalExchangeClient.class);
@@ -170,8 +270,14 @@ class ExchangeCoordinatorTest {
         when(tasks.claim())
                 .thenAnswer(call -> {
                     claimed.incrementAndGet();
-                    return new DeliveryAttempt(
-                            UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput("REQ-900001", 25));
+                    return ClaimResult.claimed(
+                            new DeliveryAttempt(
+                                    UUID.randomUUID(),
+                                    UUID.randomUUID(),
+                                    "PUT",
+                                    1,
+                                    1,
+                                    new TaskInput("REQ-900001", 25)));
                 });
         when(client.deliver(any()))
                 .thenAnswer(call -> {
@@ -204,14 +310,15 @@ class ExchangeCoordinatorTest {
         when(tasks.claim())
                 .thenAnswer(call -> {
                     int n = claimed.incrementAndGet();
-                    if (n > 4) return null;
-                    return new DeliveryAttempt(
-                            n == 2 ? failed : UUID.randomUUID(),
-                            UUID.randomUUID(),
-                            "PUT",
-                            1,
-                            1,
-                            new TaskInput("REQ-900001", 25));
+                    if (n > 4) return ClaimResult.empty();
+                    return ClaimResult.claimed(
+                            new DeliveryAttempt(
+                                    n == 2 ? failed : UUID.randomUUID(),
+                                    UUID.randomUUID(),
+                                    "PUT",
+                                    1,
+                                    1,
+                                    new TaskInput("REQ-900001", 25)));
                 });
         when(client.deliver(any()))
                 .thenAnswer(call -> {
@@ -230,6 +337,7 @@ class ExchangeCoordinatorTest {
     @Test
     void emptyQueueStopsWithoutCallingTheExternalSystem() {
         var tasks = mock(ExchangeService.class);
+        when(tasks.claim()).thenReturn(ClaimResult.empty());
         var client = mock(ExternalExchangeClient.class);
         try (var worker = new ExchangeCoordinator(tasks, client)) {
             worker.deliver();
