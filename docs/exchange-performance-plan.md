@@ -1327,3 +1327,67 @@ nf08, steady, long-mixed, long-mixed-accepted-data, demo-target-incident,
 artifact-and-preservation-receipt, cleanup-receipt, post-cleanup-preservation.
 После квалифицированного fb532b0 — только документация. PR#12 подготовлен
 поверх#11; merge, публичный deploy и CI workflow не выполнялись.
+
+## E37. Архитектурный цикл P0/P1
+
+Исходная точка — tag baseline/pre-architecture-optimization-2026-11-16
+(d92e546); приложение fb532b0, генератор ed54096. Частный QA, те же
+четыре images и суммарные 2 CPU/4 ГиБ, без изменения обычного demo.
+Исследование и критерии — [общий план](performance-options.md#73-правило-повторяемого-цикла).
+
+P0: для фактической частоты SQL включён pg_stat_statements только частного
+PostgreSQL, с прежними shared_buffers/effective_cache_size/work_mem/лимитами.
+Одинаковая диагностика для всех A/B/A. Штатные observer SQL накопили
+3,59 с elapsed за первые 207 с A; это не CPU и не отдельный замер влияния
+Docker/Node или shared-preload overhead. Прежний FAIL не переименован.
+Внутри окна отдельно снималась статистика; post-run verification не включена
+в вывод о горячем SQL.
+
+P1: A → B с дополнительным tasks(owner_id,business_status) → A2.
+Индекс создан до 5000 начальных fixtures; перед каждым run штатный reset,
+одинаковый прогрев 30 с при 30 циклах/с, затем 90 циклов/с ×3×60 с,
+чтения 0/1/0. Для обоих контролей подтверждён один набор индексов.
+Новых application SQL, кэшей, пулов или таймаутов нет.
+
+| Метрика фазы с чтениями | A | B | A2 |
+| --- | ---: | ---: | ---: |
+| List p95, мс | 162,36 | 91,90 | 97,26 |
+| PG CPU, ядра, по внутренним cgroup samples | 0,9462 | 0,9126 | 0,9449 |
+| COUNT calls | 6302 | 6302 | 6302 |
+| COUNT суммарный elapsed, мс | 35434 | 17600 | 22902 |
+| COUNT buffer hits | 24419643 | 4166903 | 14975900 |
+| COUNT physical buffer reads | 0 | 0 | 0 |
+
+Все три run passed=true: без missed/notOffered/errors, по 17100 новых операций,
+ровно 22100 итоговых заданий, все внешние исполнения однократны, очередь
+разгружена и история/снимки сверены. sustainable=false: окна 60 с не отвечают
+критерию длительности, это не новая sustained qualification.
+В writes-only фазах PG CPU сопоставим (примерно 0,71–0,75), throughput сохранён;
+p95 B был 34–37 мс против 16–28 мс контролей. Не скрываем изменение latency
+и не делаем по нему вывод о write capacity без длительного повтора.
+
+Решение: индекс — кандидат для интегрированной квалификации. Сокращение
+буферной работы и read CPU повторилось относительно обоих контролей;
+почти двукратный latency-win не доказан из-за разброса A/A2. Постоянная
+миграция пока не добавлена. Полная смесь на растущих 80k и final gate впереди.
+
+Дополнительно с QA-индексом:7 SpringDataReadsTest без ошибок/пропусков,
+69 SQL sites /536 cases /1608 EXPLAIN plans; rolledBack=true.
+Первый запуск plans.py корректно отказался от непустых fixtures, оставленных
+Spring-тестом. Ошибочный запуск сохранён; после явного reset остановленных
+QA-приложений SQL corpus прошёл. Самовольного reset внутри verifier нет.
+
+Следующий малый срез P2 — RETURNING/одно replay-чтение в эмуляторе,
+затем bounded bulk faults. Дополнительная гипотеза O21: claim-selection
+сейчас fan-out, поэтому до первого EMPTY могут войти несколько пустых
+запросов. В A около 59k claim-query против 17100 завершённых attempts
+(временные окна немного отличаются). Проверить минимальный последовательный
+выбор перед немедленным async HTTP, прежде чем новый claim-batch API.
+Это ещё не измеренный выигрыш; глобальные слоты и отсутствие HTTP-барьера
+обязательны.
+
+Receipts и точные образы/настройки — ignored
+tests/results/architecture-cycle-2026-11-16: A/B/A2, comparison,
+in-window stats, index manifests, P1-read-tests и P1-sql-plans.json.gz.
+Генератор на Firebat1 вне cgroup; публичный HTTPS не измерялся.
+Merge/deploy не выполнены; цель P0–P6 остаётся активной.
