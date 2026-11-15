@@ -354,7 +354,7 @@ TypeScript входят в build; отрицательные lint fixtures пр�
 | ReviewContext / IssueLifecycleService / ReviewService | Domain-политика действий, транзакции операторского разбора и история через ReviewRepository/JdbcReviewRepository. |
 | IdempotencyService / CommandReceiptRepository | Сервис координирует lock/read/callback/save и JSON. JdbcCommandReceiptRepository только блокирует, читает и пишет; транзакция обязательна от вызывающего сценария. |
 | HttpExternalExchangeClient / ExchangeProtocol | Внешний HTTP-адаптер, строгая проверка протокола и преобразование во внутреннюю модель. |
-| ReconciliationService / ExchangeCoordinator / ExchangeScheduler | HTTP между короткими транзакциями, virtual thread на зарезервированную работу claim/HTTP/finish, ограниченную si.exchange.max-in-flight (default 32). Сверка использует два существующих bean: prepare/save в ReviewService, сеть в ReconciliationService. |
+| ReconciliationService / ExchangeCoordinator / ExchangeScheduler | HTTP между короткими транзакциями, virtual thread на зарезервированную работу claim/HTTP/finish, ограниченную si.exchange.max-in-flight (default 8). Сверка использует два существующих bean: prepare/save в ReviewService, сеть в ReconciliationService. |
 | OperationService / OperationRepository / JdbcOperationRepository эмулятора | Независимое исполнение и публикация событий, своя БД; HTTP-проекции в OperationApiMapper. |
 | TaskApiMapper / ReviewApiMapper / OperationApiMapper | Реальные MapStruct Spring beans; поля и enum/null проверяются через generated impl, бизнес-решений нет. |
 | RuleViolation / ApiExceptionHandler | Предметная ошибка и единый действующий HTTP-формат. |
@@ -625,7 +625,11 @@ SpringDataTaskReadRepository объединяет узкие TaskRows/HistoryRow
 и штатный Query/Criteria для optional-фильтров. HistoryRows использует bounded
 @Query с JOIN логина автора; остальные простые SELECT/COUNT генерируются Spring Data.
 Поля read-проекции не меняют сохранённую историю. COUNT получает те же предикаты
-без пагинации. Отдельной read-БД, JPA, Hibernate и ORM-связей нет.
+без пагинации. V8 добавляет узкий tasks(owner_id,business_status) для точного
+COUNT без периода; V6 сохраняет порядок страниц. Индекс не хранит готовый total,
+увеличивает цену записи и не обещает одинаковый выигрыш при любом churn.
+Источники, A/B/A и пределы — E37/E41–E43 журнала производительности.
+Отдельной read-БД, JPA, Hibernate и ORM-связей нет.
 Плоские TaskReadRow/HistoryReadRow описывают существующие таблицы.
 ReadMappingConfiguration добавляет чтение PostgreSQL json/jsonb как текста,
 сохраняя стандартные и dialect-конвертеры. TaskResultReader — общий владелец
@@ -768,7 +772,7 @@ Compose предоставляет приложениям 60 с до прину�
 Это не отменяет восстановление lease после SIGKILL. TC-05 дополнен остановкой
 с восемью ожидающими заданиями и проверкой завершения HTTP-запросов и закрытия пула БД (допустимы exit codes 0/143 после SIGTERM; 137 запрещён).
 Доставка создаёт virtual thread на задачу; один Semaphore координатора владеет
-лимитом si.exchange.max-in-flight (1–32, default 32) незавершённых работ
+лимитом si.exchange.max-in-flight (1–32, default 8) незавершённых работ
 claim/HTTP/finish, включая хвост предыдущего прохода. За цикл — максимум 32 выборки;
 пауза 100 мс остаётся между циклами. Освободившийся слот заполняется независимо
 от медленного HTTP или SQL соседа. Каждый зарезервированный слот сам выполняет
