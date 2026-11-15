@@ -1391,3 +1391,33 @@ tests/results/architecture-cycle-2026-11-16: A/B/A2, comparison,
 in-window stats, index manifests, P1-read-tests и P1-sql-plans.json.gz.
 Генератор на Firebat1 вне cgroup; публичный HTTPS не измерялся.
 Merge/deploy не выполнены; цель P0–P6 остаётся активной.
+
+## E38. P2: меньше чтений при приёме и replay — предварительный срез
+
+OperationService сохраняет advisory lock по operationId и проверку request.
+Вместо exists+get теперь один optional find; insert возвращает сохранённый
+Operation через PostgreSQL RETURNING и прежний row mapper. Не генерируем
+acceptedAt в Java. Для DROP_RESPONSE_AFTER_EXECUTION сохраняется чтение
+уже исполненного состояния; первый ответ и последующий replay имеют
+прежний протокол. Контракт exists и его SQL удалены, второго пути нет.
+
+Почему этот вариант: обычному приёму требуется на одно обращение меньше,
+replay тоже не читает одну операцию дважды. UPSERT без проверки request
+или удаление advisory lock меняли бы идемпотентность; новый ORM/cache не нужен.
+Это упрощение обращения к БД, пока не доказанный macro-throughput выигрыш.
+
+Проверено: Spotless; 15 EmulatorWorkflowTest без ошибок/пропусков
+(потеря ответа, conflict/replay, независимое исполнение, rollback,
+конкурентные workers, commit-order publication). В существующих HTTP/fault
+сценариях дополнительно сверяются DB acceptedAt/request в acknowledgement
+и точный сохранённый снимок при loss-after-execution.
+
+SQL inventory: 6 тестов; актуальные 68 sites /535 cases /1605 EXPLAIN
+с literal/custom/generic и RETURNING, rolledBack=true. Снижение числа cases
+объясняется удалённым EXISTS; проверка не ослаблена. QA-индекс P1 присутствует,
+его новая постоянная миграция ещё не добавлена.
+Receipts: P2-focused, P2-inventory-tests, P2-sql-plans.json.gz в каталоге E37.
+
+Предстоящий этап — тот же mixed на прежних ресурсах и с тем же QA-индексом,
+контроль нового SQL по in-window статистике и повтор контроля.
+Все scoped проверки выше не заменяют P6; публичный runtime не изменён.

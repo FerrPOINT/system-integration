@@ -7,6 +7,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -37,9 +38,11 @@ public class JdbcOperationRepository implements OperationRepository {
     }
 
     public Operation get(UUID id) {
-        return jdbc.query("SELECT * FROM operations WHERE id = ?", operationRow, id).stream()
-                .findFirst()
-                .orElseThrow(() -> new RuleViolation(RuleViolation.Code.OPERATION_NOT_FOUND));
+        return find(id).orElseThrow(() -> new RuleViolation(RuleViolation.Code.OPERATION_NOT_FOUND));
+    }
+
+    public Optional<Operation> find(UUID id) {
+        return jdbc.query("SELECT * FROM operations WHERE id = ?", operationRow, id).stream().findFirst();
     }
 
     public List<Operation> lockNext(int limit) {
@@ -87,11 +90,6 @@ public class JdbcOperationRepository implements OperationRepository {
         jdbc.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))", rs -> {}, id.toString());
     }
 
-    public boolean exists(UUID id) {
-        return Boolean.TRUE.equals(
-                jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM operations WHERE id = ?)", Boolean.class, id));
-    }
-
     public Fault lockFault(String reference) {
         return jdbc
                 .query(
@@ -103,12 +101,15 @@ public class JdbcOperationRepository implements OperationRepository {
                 .orElse(null);
     }
 
-    public void insert(UUID id, OperationRequest input) {
-        jdbc.update(
-                "INSERT INTO operations(id,reference,quantity) VALUES (?,?,?)",
-                id,
-                input.reference(),
-                input.quantity());
+    /** INSERT RETURNING avoids a second read while preserving the database timestamp. */
+    public Operation insert(UUID id, OperationRequest input) {
+        return jdbc.query(
+                        "INSERT INTO operations(id,reference,quantity) VALUES (?,?,?) RETURNING *",
+                        operationRow,
+                        id,
+                        input.reference(),
+                        input.quantity())
+                .getFirst();
     }
 
     public void bindFault(String reference, UUID id) {

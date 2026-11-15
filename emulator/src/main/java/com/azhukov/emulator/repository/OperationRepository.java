@@ -2,10 +2,13 @@ package com.azhukov.emulator.repository;
 
 import com.azhukov.emulator.domain.*;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface OperationRepository {
     Operation get(UUID id);
+
+    Optional<Operation> find(UUID id);
 
     List<Operation> lockNext(int limit);
 
@@ -17,11 +20,10 @@ public interface OperationRepository {
 
     void lockOperation(UUID id);
 
-    boolean exists(UUID id);
-
     Fault lockFault(String reference);
 
-    void insert(UUID id, OperationRequest input);
+    /** Returns the stored snapshot, including the database-assigned acceptance time. */
+    Operation insert(UUID id, OperationRequest input);
 
     void bindFault(String reference, UUID id);
 

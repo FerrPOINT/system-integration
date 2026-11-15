@@ -310,6 +310,9 @@ class EmulatorWorkflowTest {
                 json.readTree(repeat.getResponse().getContentAsString()));
         var state = mvc.perform(get("/operations/" + id)).andReturn();
         var accepted = json.readTree(state.getResponse().getContentAsString());
+        var acknowledgement = json.readTree(first.getResponse().getContentAsString());
+        assertEquals(accepted.get("acceptedAt"), acknowledgement.get("acceptedAt"));
+        assertEquals(accepted.get("request"), acknowledgement.get("request"));
         assertEquals(0, accepted.get("executions").asInt());
         assertTrue(accepted.get("result").isNull());
         var conflict =
@@ -424,7 +427,9 @@ class EmulatorWorkflowTest {
         var id = UUID.randomUUID();
         var input = new OperationRequest("REQ-000004", 25);
         service.configure(input.reference(), FaultMode.DROP_RESPONSE_AFTER_EXECUTION);
-        assertTrue(service.accept(id, input).dropResponse());
+        var acceptance = service.accept(id, input);
+        assertTrue(acceptance.dropResponse());
+        assertEquals(operations.get(id), acceptance.operation());
         var before = json.valueToTree(operations.get(id));
         assertEquals(1, before.get("executions").asInt());
         assertFalse(service.publish(1) > 0);
