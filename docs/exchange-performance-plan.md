@@ -1052,7 +1052,7 @@ SqlWorkflowProfile:30 PASS, без пропусков. Реальный successf
 
 
 Контейнерный A/B/A тем же generator6202558,90/с3×60сек: p95 исполнения
-392→607→353мс, list86,24→114,35→76,73мс (последний list уточняется по receipt).
+392→607→353мс, list86,24→114,35→74,72мс.
 Все22100 записей/1000 rename-целей каждого прогона сверены, ошибок нет.
 Backend CPU0,538→0,545, PG0,942→0,924 для первой пары: снятые четыре вызова
 не дали выигрыша приложения. Причинная атрибуция разброса не доказана.
@@ -1063,3 +1063,27 @@ Backend CPU0,538→0,545, PG0,942→0,924 для первой пары: снят
 1608 EXPLAIN связывают параметры литералами и сами по себе не показывают
 план прогретого PostgreSQL prepared statement. Ни принудительный plan mode,
 ни настройки autovacuum не выбраны до измерения.
+
+
+### E29 — prepared COUNT не подтвердил отдельную проблему плана
+
+На остановленных QA writers проверен настоящий shape Spring Data COUNT
+по owner/status с типами uuid/varchar. В одном сеансе PREPARE,12 прогревов,
+5 EXPLAIN ANALYZE/BUFFERS; auto/custom/generic считаются раздельно.
+На22100 завершённых записей все используют имеющийся Index Only Scan,
+Heap Fetches0; mean0,986/1,040/0,930мс. Auto после первых5 custom выбрал generic.
+
+Затем эти уже сверенные синтетические данные преобразованы в disposable
+planner fixture:98% SUCCEEDED/1% PENDING/1% RUNNING, spread title churn10%,
+ANALYZE. Во всех режимах Seq Scan, mean2,872/2,060/2,106мс. Это короткая
+диагностика планов, не A/B нагрузки; различие средних не приписывается
+настройке. Смена алгоритма между generic/custom не обнаружена.
+Fixture удалён штатным reset при остановленных приложениях.
+
+Решение: plan_cache_mode/prepareThreshold не менять. Исходные планы и
+параметры распределения сохранены в prepared-count-live/skew-churn.json.
+[PostgreSQL PREPARE](https://www.postgresql.org/docs/18/sql-prepare.html)
+объясняет переход custom→generic; принудительный режим не является
+автоматическим best practice. Далее один конфигурационный эксперимент:
+autovacuum_naptime10с против штатных60с, одинаковый код a405814 и Hikari8.
+Оба прогона начинают с рестарта только QA PG и штатного prepare, ручного VACUUM нет.
