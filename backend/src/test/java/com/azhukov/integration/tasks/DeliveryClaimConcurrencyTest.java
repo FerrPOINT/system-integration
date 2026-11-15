@@ -21,8 +21,9 @@ class DeliveryClaimConcurrencyTest extends PostgresTest {
     @Autowired ExchangeService exchange;
     @MockitoSpyBean ExchangeRepository rows;
 
-    @Test
-    void concurrentSlotsKeepOneCommittedAttemptPerOperation() throws Exception {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {8, 32})
+    void concurrentSlotsKeepOneCommittedAttemptPerOperation(int slots) throws Exception {
         var owner = login("initiator.one");
         for (int n = 0; n < 32; n++) created(owner, UUID.randomUUID());
         var delivered = java.util.concurrent.ConcurrentHashMap.<UUID>newKeySet();
@@ -36,7 +37,7 @@ class DeliveryClaimConcurrencyTest extends PostgresTest {
                     return new ExternalExchangeClient.DeliveryReply(
                             DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
                 });
-        try (var worker = new ExchangeCoordinator(exchange, client, 8)) {
+        try (var worker = new ExchangeCoordinator(exchange, client, slots)) {
             for (int pass = 0; count("delivery_queue") > 0 && pass < 16; pass++) worker.deliver();
         }
         assertEquals(32, delivered.size());

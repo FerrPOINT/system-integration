@@ -354,7 +354,7 @@ TypeScript входят в build; отрицательные lint fixtures пр�
 | ReviewContext / IssueLifecycleService / ReviewService | Domain-политика действий, транзакции операторского разбора и история через ReviewRepository/JdbcReviewRepository. |
 | IdempotencyService / CommandReceiptRepository | Сервис координирует lock/read/callback/save и JSON. JdbcCommandReceiptRepository только блокирует, читает и пишет; транзакция обязательна от вызывающего сценария. |
 | HttpExternalExchangeClient / ExchangeProtocol | Внешний HTTP-адаптер, строгая проверка протокола и преобразование во внутреннюю модель. |
-| ReconciliationService / ExchangeCoordinator / ExchangeScheduler | HTTP между короткими транзакциями, virtual thread на отправку и максимум четыре незавершённые попытки. Сверка использует два существующих bean: prepare/save в ReviewService, сеть в ReconciliationService. |
+| ReconciliationService / ExchangeCoordinator / ExchangeScheduler | HTTP между короткими транзакциями, virtual thread на зарезервированную работу claim/HTTP/finish, ограниченную si.exchange.max-in-flight (default 32). Сверка использует два существующих bean: prepare/save в ReviewService, сеть в ReconciliationService. |
 | OperationService / OperationRepository / JdbcOperationRepository эмулятора | Независимое исполнение и публикация событий, своя БД; HTTP-проекции в OperationApiMapper. |
 | TaskApiMapper / ReviewApiMapper / OperationApiMapper | Реальные MapStruct Spring beans; поля и enum/null проверяются через generated impl, бизнес-решений нет. |
 | RuleViolation / ApiExceptionHandler | Предметная ошибка и единый действующий HTTP-формат. |
@@ -761,13 +761,26 @@ Compose предоставляет приложениям 60 с до прину�
 Это не отменяет восстановление lease после SIGKILL. TC-05 дополнен остановкой
 с восемью ожидающими заданиями и проверкой завершения HTTP-запросов и закрытия пула БД (допустимы exit codes 0/143 после SIGTERM; 137 запрещён).
 Доставка создаёт virtual thread на задачу; pending-loop — единственный владелец
-лимита четырёх незавершённых попыток. За цикл — максимум 32 захвата;
+лимита si.exchange.max-in-flight (1–32, default 32) незавершённых работ
+claim/HTTP/finish. За цикл — максимум 32 выборки;
 пауза 100 мс остаётся между циклами. Освободившийся слот заполняется независимо
-от медленного соседа. Lease берётся перед отправкой, а не заранее для очереди
-executor. Все завершённые ошибки наблюдаются, оставшиеся отправки завершаются
+от медленного HTTP или SQL соседа. Каждый зарезервированный слот сам выполняет
+короткую транзакцию claim, HTTP и finish. Нет lease у работы, ожидающей слот.
+CLAIMED, SKIPPED и EMPTY различаются: обслуживание просроченного захвата или
+устаревший кандидат не выдаются за пустую очередь. После блокировки task
+готовность due_at/lease проверяется заново под блокировкой queue; действующий
+lease и будущий retry не изменяются. Task→queue остаётся общим порядком.
+Ошибка передаётся планировщику; оставшиеся отправки завершаются
 перед выходом из прохода. Сеть работает вне транзакции.
 Эмулятор ограничивает цикл 50 исполнениями и 100 событиями публикации
-с fixedDelay 250 мс. Публикация использует 25 событий за транзакцию по умолчанию
+с fixedDelay 250 мс. Исполнение использует одну атомарную группу до 5 операций
+(si.emulator.execution-batch-size / SI_EMULATOR_EXECUTION_BATCH_SIZE, 1–25).
+Выборка LIMIT ? FOR UPDATE SKIP LOCKED блокирует только выбранную пачку;
+ошибка откатывает все результаты и события этой группы. DROP_RESPONSE_AFTER_EXECUTION
+по-прежнему исполняется внутри транзакции приёма. Максимум 50 за проход
+сохраняется даже при неделящем его размере группы; пустая выборка прекращает проход.
+Это группировка commits, без дополнительного batch writer/очереди.
+Публикация использует 25 событий за транзакцию по умолчанию
 (si.emulator.publication-batch-size, диапазон 1–100). Счётчик блокируется до
 выбора начального набора событий; общий со снятием сбоя порядок блокировок —
 operation_id/version/copy_number. Вновь допустимый поздний RUNNING относится
@@ -904,7 +917,7 @@ statement_timestamp(); будущее задание и действующий l
 Источники настройки тайм-аутов:
 [Hikari validationTimeout](https://github.com/brettwooldridge/HikariCP#gear-configuration-knobs-baby),
 [HTTP body timeout в Java 26](https://inside.java/2026/03/04/jdk-26-http-client/#timeout-update).
-Предел четыре относится к delivery; receive и операторские сверки выполняют
+Настраиваемый предел слотов относится к delivery; receive и операторские сверки выполняют
 свои HTTP-запросы. Общий semaphore не вводится без измеренной необходимости.
 
 ## Конечная серия доставки (SI-10)
