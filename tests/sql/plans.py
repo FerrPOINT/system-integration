@@ -58,7 +58,7 @@ params={
 'JdbcReviewRepository.saveReconciliation/2:2':[R,T],'JdbcReviewRepository.reconciliation/2:1':[R,T],'JdbcReviewRepository.resumeDelivery/2:1':['probe',I],
 'JdbcReviewRepository.resolve/2:1':['{"decision":"STOP","reason":"probe"}',I],
 'JdbcOperationRepository.find/1:1':[O],'JdbcOperationRepository.lockNext/1:1':[1],'JdbcOperationRepository.events/2:1':[0,100],
-'JdbcOperationRepository.fault/1:1':[O],'JdbcOperationRepository.event/3:1':[O,1,1,result,False],
+'JdbcOperationRepository.event/3:1':[O,1,1,result,False],
 'JdbcOperationRepository.lockOperation/1:1':[O],'JdbcOperationRepository.lockFault/1:1':['REQ-100001'],
 'JdbcOperationRepository.insert/2:1':[NO,'REQ-110001',25],'JdbcOperationRepository.bindFault/2:1':[uid(100003),'REQ-100002'],
 'JdbcOperationRepository.complete/1:1':[result,'2026-01-02T00:00:00Z',O],'JdbcOperationRepository.publish/1:1':[],
@@ -68,6 +68,10 @@ params={
 for key,values in params.items():static(key,values)
 for batch in [1,10,50]:static('JdbcOperationRepository.publish/1:2',[batch],f'batch={batch}')
 for batch in [5,10,25]:static('JdbcOperationRepository.lockNext/1:1',[batch],f'batch={batch}')
+for n in [1,5,25]:
+ add('JdbcOperationRepository.faults/1:1','SELECT bound_operation_id,mode FROM faults WHERE bound_operation_id IN ('+','.join('?'*n)+') ORDER BY reference FOR UPDATE',
+     [uid(i+100001) for i in range(n)],f'ids={n}')
+add('JdbcOperationRepository.faults/1:1','SELECT bound_operation_id,mode FROM faults WHERE bound_operation_id IN (?) ORDER BY reference FOR UPDATE',[uid(999999)],'unconfigured')
 static('JdbcExchangeRepository.ownsClaim/2:1',[uid(100006),uid(500006)],'active-lease-owned')
 static('JdbcReviewRepository.temporary/1:1',[T],'no-temporary-issue')
 static('JdbcReviewRepository.confirm/1:1',[T],'no-temporary-issue')

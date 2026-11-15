@@ -2,6 +2,7 @@ package com.azhukov.emulator.repository;
 
 import com.azhukov.emulator.domain.*;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -14,7 +15,8 @@ public interface OperationRepository {
 
     List<ResultEvent> events(long after, int limit);
 
-    FaultMode fault(UUID id);
+    /** Locks configured fault modes for an already selected bounded execution batch. */
+    Map<UUID, FaultMode> faults(List<UUID> ids);
 
     void event(OperationResult result, int copy, boolean held);
 

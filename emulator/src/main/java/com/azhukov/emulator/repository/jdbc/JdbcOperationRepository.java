@@ -6,7 +6,9 @@ import java.sql.Statement;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -62,15 +64,19 @@ public class JdbcOperationRepository implements OperationRepository {
                 limit);
     }
 
-    public FaultMode fault(UUID id) {
-        return jdbc
-                .query(
-                        "SELECT mode FROM faults WHERE bound_operation_id = ? FOR UPDATE",
-                        (rs, n) -> FaultMode.valueOf(rs.getString(1)),
-                        id)
-                .stream()
-                .findFirst()
-                .orElse(FaultMode.NONE);
+    public Map<UUID, FaultMode> faults(List<UUID> ids) {
+        if (ids.isEmpty()) return Map.of();
+        var modes = new HashMap<UUID, FaultMode>();
+        var placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+        jdbc.query(
+                "SELECT bound_operation_id,mode FROM faults WHERE bound_operation_id IN ("
+                        + placeholders
+                        + ") ORDER BY reference FOR UPDATE",
+                rs -> {
+                    modes.put(rs.getObject(1, UUID.class), FaultMode.valueOf(rs.getString(2)));
+                },
+                ids.toArray());
+        return modes;
     }
 
     public void event(OperationResult result, int copy, boolean held) {

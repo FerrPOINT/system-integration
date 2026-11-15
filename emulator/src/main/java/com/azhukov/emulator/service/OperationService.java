@@ -69,7 +69,8 @@ public class OperationService {
     public int executeNext(int limit) {
         if (limit < 1 || limit > MAX_EXECUTION_BATCH) throw new RuleViolation(RuleViolation.Code.VALIDATION_FAILED);
         var rows = operations.lockNext(limit);
-        for (var operation : rows) execute(operation, operations.fault(operation.operationId()));
+        var modes = operations.faults(rows.stream().map(Operation::operationId).toList());
+        for (var operation : rows) execute(operation, modes.getOrDefault(operation.operationId(), FaultMode.NONE));
         return rows.size();
     }
 
