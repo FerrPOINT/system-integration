@@ -69,8 +69,9 @@ public class JdbcExchangeRepository implements ExchangeRepository {
      * misestimate correlated task status after an empty queue grows and scan the
      * already-delivered population for every claim. The ordered subquery keeps queue
      * sorting before the lateral row lock, so LIMIT never locks an unrelated tail.
-     * An explicit empty argument array selects JdbcTemplate's PreparedStatement
-     * overload, so pgJDBC can reuse this hot static query's server plan.
+     * Intentionally use the static Statement overload: a server-prepared plan made
+     * on an empty queue can keep scanning its entire later backlog until ANALYZE.
+     * This parameter-free selection must adapt immediately as the queue grows.
      * See DeliveryClaimPlanTest and docs/exchange-performance-plan.md.
      */
     public ExchangeState lockDueExchange() {
@@ -91,8 +92,7 @@ public class JdbcExchangeRepository implements ExchangeRepository {
                         ) t
                         ORDER BY q.due_at,q.operation_id LIMIT 1
                         """,
-                        rowMapper::exchange,
-                        new Object[0])
+                        rowMapper::exchange)
                 .stream()
                 .findFirst()
                 .orElse(null);

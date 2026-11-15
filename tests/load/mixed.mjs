@@ -80,7 +80,7 @@ const phases = arrival.phases.map((phase, index) => {
   return result;
 });
 const drain = await drainLoad(resources, 300000);
-const integrity = { passed: false, expectedRecords: 5000 + workload.created.length };
+const integrity = { passed: false, acceptedDataCorrect: false, expectedRecords: 5000 + workload.created.length };
 try {
   integrity.snapshot = await loadIntegrity(resources);
   verifyFinishedSnapshot(integrity.snapshot, integrity.expectedRecords);
@@ -108,13 +108,19 @@ try {
     }
   });
   integrity.renamed = { checked: renamed.length, errors: renameErrors };
-  integrity.passed =
+  integrity.acceptedDataCorrect =
     drain.drained &&
     !Object.keys(renameErrors).length &&
     phases.every(
       (p) =>
-        p.verified.completed === p.arrivals.planned && !p.verified.pending && !Object.keys(p.verified.errors).length,
+        p.verified.completed === p.verified.checked &&
+        !p.verified.pending &&
+        !p.verified.notAccepted &&
+        !Object.keys(p.verified.errors).length,
     );
+  // Planned arrivals remain mandatory for capacity; correct admitted data cannot
+  // turn an overloaded profile into a PASS.
+  integrity.passed = integrity.acceptedDataCorrect && phases.every((p) => p.verified.completed === p.arrivals.planned);
 } catch (error) {
   integrity.error = error instanceof ApiFailure ? error.code : error.name;
 }

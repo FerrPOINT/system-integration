@@ -1611,3 +1611,93 @@ README/архитектура/default обновляются вместе. По�
 партиций, новых процессов, классов-обёрток и очередей в памяти не добавлено.
 Следующий gate: полный mixed50/70/90, затем длительный выбранный профиль,
 NF08/continuous50, общий тестовый набор и повторный аудит.
+
+## E44. Кандидат540075f: короткие ступени и отрицательный длинный прогон
+
+G50/G70/G90:5000 fixtures, warm30/30, полная смесь reads1/1/1,
+3×120с, прежние CPU/RAM, slots8 и V8. Ошибок/пропусков нет;
+23 900 /31 100 /38 300 итоговых задач согласованы. List p95 по фазам:
+8,26/6,74/8,62;36,08/8,33/9,84;64,68/51,73/68,62мс.
+PG CPU:0,457–0,513;0,587–0,666;0,710–0,814 ядра.
+Sustainable=false у всех: разница pending превышала неизменный порог2
+(фаза1 у50/70, фаза3 у90), без сопоставимого роста возраста.
+Это не объявлено доказанной ошибкой наблюдателя или PASS устойчивости.
+
+Затем собственный QA пересоздан после сверки; все11 обычных контейнеров
+сохранены. Stock Compose, без pg_stat_statements/JFR; чистые V1–V8 прошли.
+G90L1: тот же540075f, warm90×30с, full mixed90×3×300с.
+Ресурсы/пулы/пороги прежние. Повышение прогрева не решило проблему.
+
+Результат FAIL:5204 missed в измерении,149 missed в прогреве,
+95 HTTP503 в измерении, включая20 create. Все83 327 реально принятых
+записей и1000 rename-целей сверены после разгрузки: request/owner/result/
+history/cursor совпали, исполнение один раз, pending/queue/open issues0.
+FinalIntegrity.passed=false также из-за planned!=completed; это не потеря
+принятых данных. Drain завершился примерно за172с, вне окна API.
+
+PG по трём фазам0,770/0,936/1,000 ядра; последняя throttled periods100%.
+Backend0,433/0,375/0,297; emulator0,080/0,055/0,028.
+Очередь доставки достигла27 669; первый вызов попытки p95 около340с.
+После остановки API-потока она отработала. Рост Hikari не выбран как лечение.
+
+Три диагностические пары EXPLAIN SELECT в том же read-only RR snapshot,
+uuid/varchar из native capture:24 260 rows — Index Only Scan1,28/1,27мс;
+38 691 —2,57/2,03мс;79 121 — Bitmap Heap Scan97,10/97,91мс.
+Физических чтений0. Последний замер включает конкуренцию/CPU throttling,
+не является чистым CPU запроса. В момент позднего снимка queued24k;
+непосредственная причина не назначена одному COUNT по этому числу.
+
+У claim обнаружен SeqScan+Sort очереди перед выбором одной строки.
+Проверить stale prepared plan отдельно от SQL shape — следующий срез E45.
+Raw G50/G70/G90/G90L1, L1-live-count/activity/degradation/claim-plan и
+stock-start/flyway receipts в каталоге E37. Все отрицательные результаты сохранены.
+
+## E45. Пересмотр E42: cached empty-queue plan
+
+[PostgreSQL PREPARE](https://www.postgresql.org/docs/18/sql-prepare.html)
+указывает: без параметров используется generic plan; DDL/обновление
+статистики вызывают перепланирование. Само наличие новых строк не гарантирует
+немедленной адаптации уже сохранённого плана.
+[PG18 set_subquery_pathlist](https://github.com/postgres/postgres/blob/REL_18_STABLE/src/backend/optimizer/path/allpaths.c)
+также объясняет осторожную передачу LIMIT/tuple_fraction через join/sort.
+Это основания гипотез, не доказательство вины любого prepared-запроса.
+
+SQL-spike:10k доставленных, пустая очередь; десять вызовов для прогрева
+server PREPARE, затем20k due без ANALYZE. Старый cached SQL посещает20k
+queue rows за3,162мс; свежий тот же SQL —1 row/0,067мс.
+После ANALYZE и cached, и fresh посещают1 row.
+Альтернатива с scalar selection/EXISTS дала тот же cached scan20k,
+два task lookup вместо одного и без выигрыша fresh (0,077мс).
+Она отклонена, production SQL не переписывается. Все fixtures откатились.
+Первый запуск spike не создал fixtures из-за отсутствующего тестового
+owner после reset; исправлена только подготовка synthetic owner, ошибка сохранена.
+
+Native RED: новый DeliveryClaimPlanTest в настоящем Spring connection
+прогревает30 пустых выборок, вставляет20k задач и проверяет EXPLAIN пути
+драйвера — EXPLAIN EXECUTE, если сервер держит этот prepared statement,
+обычный EXPLAIN для Statement. Свежий EXPLAIN вместо EXECUTE скрыл бы ошибку.
+Оба варианта initial delivered0/10k упали на чтении всего хвоста.
+Autovacuum отключён только внутри откатываемой тестовой транзакции,
+чтобы момент фонового ANALYZE не делал регрессию случайной.
+
+Решение: вернуть статическую Statement-перегрузку только lockDueExchange.
+SQL, глобальные driver settings, task-before-queue, SKIP LOCKED, lease и
+сохранённая попытка не меняются. Цена повторного планирования принята:
+малый выигрыш E43 не оправдывает дорогую выборку растущей очереди.
+Javadoc объясняет намеренный выбор. Тест реализации generic reuse удалён;
+вместо него проверяется нужное поведение empty→large queue.
+Параметризованные запросы остальных сценариев остаются прежними.
+
+GREEN:11 DeliveryClaimPlan/Concurrency/SqlWorkflow PostgreSQL-тестов,
+затем7 свежих SpringDataReads,6 inventory и1617 SQL-планов — PASS;
+fixtures rolledBack=true. Это проверки рабочего среза до коммита, не P6.
+
+В mixed-report отдельно выводится acceptedDataCorrect: полная сверка
+реально принятых операций. Старый capacity PASS по-прежнему требует
+всех planned arrivals и SLA; ошибки/пропуски не превращаются в успех.
+Адресные mixed/integrity unit-проверки прошли. Это уточнение отчёта,
+не изменение правил устойчивости и не переоценка G90L1 как PASS.
+
+Raw claim-shape-spike, claim-growth-red/green/reads/plans и report-tests
+в каталоге E37. Следующее сравнение — новый кандидат на той же полной смеси,
+с чистым stock QA, прежними CPU/RAM и прогревом на целевой частоте.

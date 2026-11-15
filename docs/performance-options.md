@@ -188,7 +188,7 @@ Rows и total читаются в согласованной транзакци�
 | O07 | Мягкая настройка autovacuum/ANALYZE/fillfactor конкретной tasks | Лучше visibility map, статистика, HOT updates. | Фоновая работа и больше страниц могут съесть выигрыш; вариант naptime10 уже проиграл. | P2, по измеренным heap fetches/bloat. |
 | O08 | shared_buffers/effective_cache_size/work_mem | Снизить реальные чтения/спиллы или улучшить оценку плана. | Это не кэш результата COUNT; при CPU-bound эффект может отсутствовать. | P2, по BUFFERS/IO/temp delta. |
 | O09 | Настройки WAL/checkpoints | Сгладить подтверждённые fsync/checkpoint пики. | Не лечит CPU COUNT; нельзя ослаблять сохранность. | P2, только по WAL/IO evidence. |
-| O10 | Prepared plan/JIT/parallel aggregation | Убрать подтверждённые planning/JIT расходы либо использовать доступный CPU. | Прежняя проблема bound generic-plan не подтвердилась; E42 отдельно выявил повторное планирование static Statement. Больше workers на малой квоте может мешать. | P2 при новом evidence. |
+| O10 | Prepared plan/JIT/parallel aggregation | Убрать подтверждённые planning/JIT расходы либо использовать доступный CPU. | Прежняя проблема bound generic-plan не подтвердилась. E42–E45 отдельно проверили static prepare: выигрыш CPU отклонён после RED на cached empty-queue scan. Больше workers на малой квоте может мешать. | P2 при новом evidence. |
 | O11 | Один SQL с COUNT OVER или CTE вместо двух round trips | Single-statement snapshot может сохранить согласованность при RC. | Проверено: CTE не дал SQL-выигрыша; Window COUNT существенно медленнее и теряет total пустой страницы. | Не первый кандидат; macro-выигрыш не доказан. |
 | O12 | Точные транзакционные счётчики в PostgreSQL | Общий count без периода может читать несколько агрегатов вместо тысяч tasks. | Новое производное состояние, миграция, write contention и все пути изменения; см. раздел 5. | P2 после простых вариантов. |
 | O13 | Шардированные точные счётчики | Снизить конкуренцию за горячую строку счётчика O12. | Больше состояния и инвариантов; нужен только после доказанной проблемы простого счётчика. | P3. |
@@ -407,11 +407,14 @@ SQL-spike O05 и варианты single-statement уже исследованы
 Prometheus/Grafana стек для этого не нужен.
 
 У старого mixed-report finalIntegrity=false также получается из-за
-completed != planned при missed arrivals. На будущее разнести поля:
+completed != planned при missed arrivals. После E45 mixed-report различает:
 
-- `capacityPassed`: выполнен весь запланированный поток, SLA и устойчивость.
-- `acceptedDataCorrect`: сверены все действительно принятые операции.
-- `passed`: соответствует условиям данного профиля, не подменяется вторым полем.
+- `finalIntegrity.acceptedDataCorrect`: все действительно принятые операции
+  сверены с исходным запросом, результатом, историей и двумя БД.
+- `finalIntegrity.passed`: дополнительно выполнены все planned arrivals.
+- `passed`: также соблюдены SLA, ресурсы, неизменность исходников и runtime.
+- `sustainable`: дополнительно пройдены прежние проверки очереди каждой фазы.
+  Успех сверки принятых данных не подменяет ни capacity, ни устойчивость.
 
 13 null outcome в старом pipeline названы IN_FLIGHT. Это не число реально
 работающих HTTP-запросов; диагностика живых слотов остаётся у координатора.
