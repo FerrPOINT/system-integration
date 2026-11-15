@@ -23,7 +23,7 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Command SQL and the sole append-only history writer. History requires the service
  * transaction; deduplicated observations audit only after a real insert commits.
- * UI reads are owned by SpringDataTaskReadRepository.
+ * UI reads are owned by TaskReadRepositoryAdapter.
  */
 @Repository
 @RequiredArgsConstructor

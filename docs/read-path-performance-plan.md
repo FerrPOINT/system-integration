@@ -1,8 +1,9 @@
 # План уменьшения задержек API и фонового обмена
 
 Дата: 15 ноября 2026 года.
-Статус: исполнение авторизовано, начат этап 1. Прикладные изменения,
-настройка runtime и новые нагрузки этого цикла ещё не выполнялись.
+Статус: этап 1 измерен, подготовлен и адресно проверен кандидат этапа 2.
+Время занятия соединения в native-чтении уменьшено; контейнерная нагрузка,
+SQL-планы растущего набора, выбор конфигурации и конечная квалификация впереди.
 Проверенная база: Firebat1 /opt/dev/system-integration/.local/structure,
 HEAD c7bdd4c, прикладной код a405814. Разница между ними — документы.
 Основание: диагностические профили и receipts в ignored
@@ -91,7 +92,7 @@ SqlWorkflowProfileTest не измеряет acquisition/commit — явно у�
 
 ## 2. Уменьшить Java-расходы реестра
 
-Места: SpringDataTaskReadRepository.page, TaskReadRow,
+Места: TaskReadRepositoryAdapter.page, TaskReadRow,
 TaskResultReader.outcome, TaskApiMapper; проверки SpringDataReadsTest,
 ReadBoundaryTest, SqlWorkflowProfileTest.
 
@@ -119,7 +120,7 @@ TaskResultReader остаётся единственным владельцем 
 
 ## 3. Проверить и уменьшить стоимость COUNT
 
-Места: SpringDataTaskReadRepository.page, миграция V6 как существующая база,
+Места: TaskReadRepositoryAdapter.page, миграция V6 как существующая база,
 tests/sql/plans.py, тесты counted-пагинации.
 
 Для реальных owner/status/date-фильтров и ролей снять

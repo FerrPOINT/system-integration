@@ -27,6 +27,10 @@ Java 25 и Spring Boot. Текущая структура пакетов опи�
   repository/jdbc, repository/springdata, repository/mapping или client/http. Интерфейс для каждого service не нужен.
 - repository — прикладные контракты хранения. TaskReadRepository и его
   repository/springdata адаптер читают карточку, counted-реестр и историю.
+  Горячая counted-пагинация в TaskReadRepositoryAdapter — измеренное исключение:
+  NamedParameterJdbcTemplate с одним predicate для SELECT/COUNT и общим TaskRowMapper.
+  Карточка/история остаются Spring Data, один datasource/transaction manager сохраняется.
+  Причины и проверки — docs/read-path-performance-plan.md и E23 журнала.
   Плоские persistence records и Pageable не покидают адаптер; узкие Spring Data
   интерфейсы не имеют save/delete/findAll. HistoryRows использует один bounded
   @Query с JOIN автора: это read-проекция без N+1, ручной SQL остаётся внутри

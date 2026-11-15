@@ -874,3 +874,46 @@ claim/finish p95 106/188 мс, после отключения чтений 6/6 
 превращаются в доказательство необходимости нового пула или архитектуры.
 Последующая квалификация выполняется на конечном прикладном кандидате;
 старые PASS не выдаются за результаты нового цикла.
+
+
+### E23 — измерение connection и кандидат горячей пагинации
+
+ReadSqlCapture дополнен scoped wall-timings acquisition/usage/read execute/commit
+и overhead наблюдателя (включая driver parameter metadata). Новый native профиль
+5000 завершённых синтетических строк:50 прогревов/200 чтений. Реальный тест
+исчерпанного Hikari подтверждает учёт ожидания, полный service-вызов возвращает
+ровно одно соединение. Наблюдатель не добавлен в production.
+
+Текущий Spring Data путь: mean wall 2,35–2,37 мс; mean connection 2,30–2,32,
+read execute около 0,62, commit0,10; остаток вне SQL/commit/observer около1,37.
+Это wall, не CPU. Два чередующихся сравнения равенства полных Page<Task>
+с прямым SELECT/COUNT и существующим TaskRowMapper: mean wall1,31/1,38 мс.
+В обоих случаях один snapshot, точные2500/20 и все terminal results совпали.
+
+Spring Data4.1.2 документирует custom RowMapper для string-based @Query;
+JdbcAggregateOperations.findAll(Query,Class) не имеет такого overload.
+Десятки finder-методов или nullable OR-предикаты вместо нынешних динамических
+условий не добавляются. [Официальный контракт mapper](https://docs.spring.io/spring-data/relational/reference/jdbc/query-methods.html)
+проверен вместе с точным API локального4.1.2.
+
+Минимальный кандидат: TaskReadRepositoryAdapter (переименован, потому что теперь
+смешивает два уместных средства хранения). Только page заменён parameterized
+SQL и общим TaskRowMapper; один where используется строками и COUNT.
+Карточка/история остаются на TaskRows/HistoryRows, общий pool/транзакция
+REPEATABLE_READ, микросекундные границы, права и полный API результат прежние.
+Новых классов production, datasource, migration, кэша и fallback нет.
+Query/Criteria/JdbcAggregateOperations из этого пути удалены.
+
+На кандидате native mean wall1,43 мс / connection1,37 мс, против2,35–2,37
+на базе. Это отбор гипотезы, не доказательство выигрыша контейнерной нагрузки.
+Первый адресный gate: ReadBoundary5 и PostgreSQL12 — PASS.
+Guard дополнен запретом JDBC mutation в read-адаптерах с отрицательным примером;
+повтор ReadBoundary5/PostgreSQL12 прошёл. Шесть тестов SQL observer — PASS;
+coverage-only gate видит71 call sites/536 cases, в том числе207 runtime registry
+shapes. Это проверка покрытия, не выполненные EXPLAIN-планы. Временный сравнительный
+nativeProbe удалён, сохранены исходныеJSON; профиль измеряет единственный текущий путь.
+
+Далее: адресный повтор guard/профиля, актуализация SQL inventory и разбор
+COUNT на растущих наборах, затем одинаковый fixed-mix/контейнерный контроль.
+До подтверждения не менять Hikari8, worker32, emulator batch5 и CPU2/4ГиБ.
+Конечные NF08/continuous/UI/recovery и повторный аудит ещё впереди.

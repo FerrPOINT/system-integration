@@ -176,11 +176,7 @@ class SqlWorkflowProfileTest extends PostgresTest {
         long started = System.nanoTime();
         try {
             var observed = ReadSqlCapture.record(operation::get);
-            generatedReads.addAll(
-                    observed.statements().stream()
-                            .filter(s ->
-                                    s.sql().contains("FROM \"tasks\"") || s.sql().contains("FROM \"task_history\""))
-                            .toList());
+            generatedReads.addAll(observed.statements());
             return observed.value();
         } finally {
             long after = TIMINGS.values().stream().mapToLong(t -> t.calls.sum()).sum();

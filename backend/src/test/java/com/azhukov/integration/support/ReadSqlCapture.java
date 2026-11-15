@@ -28,10 +28,28 @@ public class ReadSqlCapture {
 
     public record Statement(String sql, List<Parameter> parameters) {}
 
-    public record Captured<T>(T value, List<Statement> statements) {}
+    /** Wall timings, not CPU. A complete use case encloses connection acquisition and close. */
+    public record Timings(
+            long wallNanos,
+            long acquisitionNanos,
+            long connectionNanos,
+            long readExecuteNanos,
+            long commitNanos,
+            long observerNanos,
+            int acquiredConnections,
+            int closedConnections) {}
+
+    public record Captured<T>(T value, List<Statement> statements, Timings timings) {}
 
     private static class Trace {
         final List<Statement> statements = new ArrayList<>();
+        long acquisitionNanos;
+        long connectionNanos;
+        long readExecuteNanos;
+        long commitNanos;
+        long observerNanos;
+        int acquiredConnections;
+        int closedConnections;
         Runnable afterSelect;
 
         Trace(Runnable hook) {
@@ -48,8 +66,20 @@ public class ReadSqlCapture {
         if (ACTIVE.get() != null) throw new IllegalStateException("Nested SQL capture");
         var trace = new Trace(afterSelect);
         ACTIVE.set(trace);
+        long started = System.nanoTime();
         try {
-            return new Captured<>(work.call(), List.copyOf(trace.statements));
+            T value = work.call();
+            var timings =
+                    new Timings(
+                            System.nanoTime() - started,
+                            trace.acquisitionNanos,
+                            trace.connectionNanos,
+                            trace.readExecuteNanos,
+                            trace.commitNanos,
+                            trace.observerNanos,
+                            trace.acquiredConnections,
+                            trace.closedConnections);
+            return new Captured<>(value, List.copyOf(trace.statements), timings);
         } finally {
             ACTIVE.remove();
         }
@@ -72,12 +102,16 @@ public class ReadSqlCapture {
 
         @Override
         public Connection getConnection() throws SQLException {
-            return connection(super.getConnection());
+            long started = System.nanoTime();
+            var delegate = super.getConnection();
+            return connection(delegate, started);
         }
 
         @Override
         public Connection getConnection(String user, String password) throws SQLException {
-            return connection(super.getConnection(user, password));
+            long started = System.nanoTime();
+            var delegate = super.getConnection(user, password);
+            return connection(delegate, started);
         }
 
         @Override
@@ -86,12 +120,19 @@ public class ReadSqlCapture {
         }
     }
 
-    private static Connection connection(Connection delegate) {
+    private static Connection connection(Connection delegate, long acquiredAt) {
+        var trace = ACTIVE.get();
+        long borrowedAt = System.nanoTime();
+        if (trace != null) {
+            trace.acquisitionNanos += borrowedAt - acquiredAt;
+            trace.acquiredConnections++;
+        }
         return (Connection)
                 Proxy.newProxyInstance(
                         ReadSqlCapture.class.getClassLoader(),
                         new Class<?>[] {Connection.class},
                         (proxy, method, args) -> {
+                            long calledAt = System.nanoTime();
                             try {
                                 Object value = method.invoke(delegate, args);
                                 if (method.getName().equals("prepareStatement")
@@ -101,6 +142,13 @@ public class ReadSqlCapture {
                                 return value;
                             } catch (InvocationTargetException error) {
                                 throw error.getCause();
+                            } finally {
+                                if (trace != null && method.getName().equals("commit"))
+                                    trace.commitNanos += System.nanoTime() - calledAt;
+                                if (trace != null && method.getName().equals("close")) {
+                                    trace.connectionNanos += System.nanoTime() - borrowedAt;
+                                    trace.closedConnections++;
+                                }
                             }
                         });
     }
@@ -112,8 +160,10 @@ public class ReadSqlCapture {
                         ReadSqlCapture.class.getClassLoader(),
                         new Class<?>[] {PreparedStatement.class},
                         (proxy, method, args) -> {
+                            long calledAt = System.nanoTime();
                             try {
                                 Object value = method.invoke(delegate, args);
+                                long executedAt = System.nanoTime();
                                 if (ACTIVE.get() == null) return value;
                                 if (method.getName().startsWith("set")
                                         && args != null
@@ -132,6 +182,8 @@ public class ReadSqlCapture {
                                 if (method.getName().equals("executeQuery")
                                         && sql.stripLeading().toUpperCase(java.util.Locale.ROOT).startsWith("SELECT")
                                         && sql.matches("(?is).*FROM\\s+\"?(tasks|task_history)\"?.*")) {
+                                    var trace = ACTIVE.get();
+                                    trace.readExecuteNanos += executedAt - calledAt;
                                     var metadata = delegate.getParameterMetaData();
                                     var parameters = new ArrayList<Parameter>();
                                     for (var binding : bindings.values())
@@ -142,7 +194,6 @@ public class ReadSqlCapture {
                                                         binding.javaType(),
                                                         metadata.getParameterTypeName(binding.index()),
                                                         binding.value()));
-                                    var trace = ACTIVE.get();
                                     trace.statements.add(
                                             new Statement(
                                                     sql.strip().replaceAll("\\s+", " "), List.copyOf(parameters)));
@@ -150,6 +201,7 @@ public class ReadSqlCapture {
                                     trace.afterSelect = null;
                                     if (hook != null) hook.run();
                                 }
+                                ACTIVE.get().observerNanos += System.nanoTime() - executedAt;
                                 return value;
                             } catch (InvocationTargetException error) {
                                 throw error.getCause();

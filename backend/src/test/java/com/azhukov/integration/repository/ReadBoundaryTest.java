@@ -53,18 +53,28 @@ class ReadBoundaryTest {
                     .should()
                     .callMethodWhere(
                             com.tngtech.archunit.base.DescribedPredicate.describe(
-                                    "mutating aggregate operations",
+                                    "mutating aggregate or JDBC operations",
                                     call ->
-                                            call.getTargetOwner()
-                                                            .isAssignableTo(
-                                                                    org.springframework.data.jdbc.core
-                                                                            .JdbcAggregateOperations.class)
+                                            (call.getTargetOwner()
+                                                                    .isAssignableTo(
+                                                                            org.springframework.data.jdbc.core
+                                                                                    .JdbcAggregateOperations.class)
+                                                            || call.getTargetOwner()
+                                                                    .isAssignableTo(
+                                                                            org.springframework.jdbc.core.JdbcOperations
+                                                                                    .class)
+                                                            || call.getTargetOwner()
+                                                                    .isAssignableTo(
+                                                                            org.springframework.jdbc.core.namedparam
+                                                                                    .NamedParameterJdbcOperations
+                                                                                    .class))
                                                     && call.getTarget()
                                                             .getName()
-                                                            .matches("(save|insert|update|delete|upsert).*")));
+                                                            .matches(
+                                                                    "(save|insert|update|delete|upsert|batchUpdate|execute).*")));
 
     @Test
-    void readAdaptersCannotCallAggregateWrites() {
+    void readAdaptersCannotCallDataWrites() {
         NO_MUTATION.check(
                 new ClassFileImporter()
                         .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
@@ -74,6 +84,19 @@ class ReadBoundaryTest {
                         AssertionError.class,
                         () -> NO_MUTATION.check(new ClassFileImporter().importClasses(BadAggregateWrite.class)));
         assertTrue(error.getMessage().contains("deleteAll"));
+        var jdbcError =
+                assertThrows(
+                        AssertionError.class,
+                        () -> NO_MUTATION.check(new ClassFileImporter().importClasses(BadJdbcWrite.class)));
+        assertTrue(jdbcError.getMessage().contains("update"));
+    }
+
+    private static class BadJdbcWrite {
+        private org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations jdbc;
+
+        void write() {
+            jdbc.update("DELETE FROM tasks", java.util.Map.of());
+        }
     }
 
     private static class BadAggregateWrite {

@@ -51,7 +51,7 @@ TaskService обслуживал get/list/history и команды; JdbcTaskRep
 | Сценарий и владелец до переноса | Цель | Причина и ограничение |
 | --- | --- | --- |
 | Карточка: TaskService.get → TaskRepository.get | Spring Data JDBC, запрос по id с owner для инициатора | Простое чтение одной строки. Чужой и отсутствующий id по-прежнему дают одинаковый 404. |
-| Реестр: TaskService.list → list/countTasks | Spring Data JDBC через штатные Query/Criteria и JdbcAggregateOperations внутри read-адаптера | Динамические optional-фильтры не превращаем в десятки finder-методов. Обязательны SQL-планы и сравнение NF08. |
+| Реестр: TaskService.list → TaskReadRepository.page | Связанный SQL и общий RowMapper в существующем read-адаптере | Измеренное исключение E23: aggregate mapping увеличивал время занятия соединения. Один predicate для SELECT/COUNT, тот же снимок и контракт; runtime/NF08 ещё проверяются. |
 | История: TaskService.history → history/countHistory | Генерируемый Spring Data repository: taskId, Pageable, стабильный sort | Сначала проверка доступа к заданию; затем только ограниченная страница истории, без дочерней коллекции Task. |
 | Изменения задания: insert/rename, проверки перед replay и lock-read | Существующий JDBC command-путь | Сохранить общую транзакцию с outbox, историей и квитанцией; не заменять на save всего read-record. |
 | Запись history/observe | JdbcTaskRepository | Один владелец append-only записи, dedupe и afterCommit audit; Spring Data history только читает. |
@@ -67,7 +67,7 @@ TaskService обслуживал get/list/history и команды; JdbcTaskRep
 
 Сохраняем controller → service → repository. Добавляем один контракт
 TaskReadRepository для get/page/history и его адаптер
-SpringDataTaskReadRepository в repository/springdata. Он возвращает текущие
+TaskReadRepositoryAdapter в repository/springdata. Он возвращает текущие
 domain/dto-типы; сервисы не импортируют Spring Data, persistence records и Pageable.
 
 В repository/springdata размещаем только используемые записи хранения
