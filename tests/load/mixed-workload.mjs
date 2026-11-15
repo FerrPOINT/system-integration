@@ -3,6 +3,39 @@ import { ApiFailure } from '../support/http.mjs';
 
 // A fixed cycle owns one create/rename and optional reads. No phase waits for
 // responses from an earlier phase; runSteadyArrivals owns the sole pacing clock.
+
+// Warmup uses the same operations at a gentler fixed rate; measured arrivals do
+// not change. Keeping all phases on one schedule avoids response-tail barriers.
+export function mixedSchedule(env = {}) {
+  const rate = Number(env.SI_MIXED_RATE || 90);
+  const warmRate = Number(env.SI_MIXED_WARMUP_RATE || Math.min(rate, 30));
+  const seconds = Number(env.SI_MIXED_PHASE_SECONDS || 60);
+  const warmSeconds = Number(env.SI_MIXED_WARMUP_SECONDS || 30);
+  const flags = (env.SI_MIXED_READS || '0,1,0').split(',');
+  if (
+    !Number.isInteger(rate) ||
+    rate < 1 ||
+    rate > 100 ||
+    !Number.isInteger(warmRate) ||
+    warmRate < 1 ||
+    warmRate > rate ||
+    !Number.isInteger(seconds) ||
+    seconds < 1 ||
+    !Number.isInteger(warmSeconds) ||
+    warmSeconds < 1 ||
+    !flags.length ||
+    flags.some((flag) => !['0', '1'].includes(flag)) ||
+    warmRate * warmSeconds + rate * flags.length * seconds > 399000
+  )
+    throw new Error(
+      'Invalid mixed schedule: rate 1..100, warm rate 1..rate, positive durations, reads 0/1 and finite references',
+    );
+  return [
+    { rate: warmRate, durationMs: warmSeconds * 1000, reads: true },
+    ...flags.map((flag) => ({ rate, durationMs: seconds * 1000, reads: flag === '1' })),
+  ];
+}
+
 export function mixedWorkload(clients, accounts, readsByPhase) {
   if (!clients.length || accounts.length !== 2 || accounts.some((a) => !a.tasks.length))
     throw new Error('Mixed workload requires two prepared owners and their tasks');

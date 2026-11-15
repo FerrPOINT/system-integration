@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { ApiFailure, localOrigin, parallel } from '../support/http.mjs';
 import { prepareNf08Clients } from './nf08-workload.mjs';
-import { mixedWorkload } from './mixed-workload.mjs';
+import { mixedWorkload, mixedSchedule } from './mixed-workload.mjs';
 import { runSteadyArrivals } from './steady-workload.mjs';
 import { assessSteadyPhase } from './steady-assessment.mjs';
 import { qualifiedLoadEnvironment } from './environment.mjs';
@@ -17,25 +17,8 @@ if (git('status', '--porcelain')) throw new Error('Commit the mixed-load generat
 const sourceCommit = process.env.SI_MIXED_APP_COMMIT || generatorCommit;
 if (!/^[a-f0-9]{40}$/.test(sourceCommit) || git('rev-parse', sourceCommit + '^{commit}') !== sourceCommit)
   throw new Error('SI_MIXED_APP_COMMIT must identify an existing immutable commit');
-const rate = Number(process.env.SI_MIXED_RATE || 90);
-const phaseSeconds = Number(process.env.SI_MIXED_PHASE_SECONDS || 60);
-const warmupSeconds = Number(process.env.SI_MIXED_WARMUP_SECONDS || 30);
-const flags = (process.env.SI_MIXED_READS || '0,1,0').split(',');
-if (
-  !Number.isInteger(rate) ||
-  rate < 1 ||
-  rate > 100 ||
-  !Number.isInteger(phaseSeconds) ||
-  phaseSeconds < 1 ||
-  !Number.isInteger(warmupSeconds) ||
-  warmupSeconds < 1 ||
-  !flags.length ||
-  flags.some((v) => !['0', '1'].includes(v)) ||
-  rate * (warmupSeconds + flags.length * phaseSeconds) > 399000
-)
-  throw new Error('Invalid mixed schedule: rate 1..100, positive durations, reads 0/1 and finite reference range');
-const reads = [true, ...flags.map((v) => v === '1')];
-const seconds = [warmupSeconds, ...flags.map(() => phaseSeconds)];
+const schedule = mixedSchedule(process.env);
+const reads = schedule.map((phase) => phase.reads);
 const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19680');
 const external = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19681');
 const resources = qualifiedLoadEnvironment(sourceCommit);
@@ -51,7 +34,7 @@ const cpuBefore = process.cpuUsage();
 let arrival;
 try {
   arrival = await runSteadyArrivals({
-    phases: seconds.map((duration) => ({ rate, durationMs: duration * 1000 })),
+    phases: schedule,
     maxInFlight: 64,
     perform: workload.perform,
     shouldStop: () =>
@@ -84,8 +67,8 @@ const phases = arrival.phases.map((phase, index) => {
       );
     });
   const result = {
-    targetCreatesPerSecond: rate,
-    plannedSeconds: seconds[index],
+    targetCreatesPerSecond: phase.rate,
+    plannedSeconds: phase.plannedDurationMs / 1000,
     reads: reads[index],
     startedAt: phase.startedAt,
     finishedAt: phase.finishedAt,

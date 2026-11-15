@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mixedWorkload } from './mixed-workload.mjs';
+import { mixedWorkload, mixedSchedule } from './mixed-workload.mjs';
 import { ApiFailure } from '../support/http.mjs';
 
 function fixture(change = () => {}) {
@@ -101,4 +101,23 @@ test('a failed create is counted while the independent rename still settles', as
   assert.equal(work.metrics[0].rename.successes, 1);
   assert.equal(work.created.length, 0);
   assert.equal(work.targets[0][0].busy, false);
+});
+
+test('gentle warmup does not reduce measured rate or insert a phase barrier', () => {
+  const schedule = mixedSchedule({ SI_MIXED_RATE: '90', SI_MIXED_PHASE_SECONDS: '60' });
+  assert.deepEqual(
+    schedule.map((p) => [p.rate, p.durationMs, p.reads]),
+    [
+      [30, 30000, true],
+      [90, 60000, false],
+      [90, 60000, true],
+      [90, 60000, false],
+    ],
+  );
+  assert.deepEqual(
+    mixedSchedule({ SI_MIXED_RATE: '10' }).map((p) => p.rate),
+    [10, 10, 10, 10],
+  );
+  assert.throws(() => mixedSchedule({ SI_MIXED_WARMUP_RATE: '91' }), /Invalid mixed/);
+  assert.throws(() => mixedSchedule({ SI_MIXED_PHASE_SECONDS: '999999' }), /finite references/);
 });
