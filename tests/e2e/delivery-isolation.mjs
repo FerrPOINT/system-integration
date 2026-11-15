@@ -18,6 +18,7 @@ const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19680
 const external = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19681');
 assert.ok(process.env.SI_DEMO_PASSWORD);
 const report = {
+  startedAt: new Date().toISOString(),
   applicationCommit,
   testSourceCommit,
   resources,
@@ -141,6 +142,7 @@ report.passed =
   report.sourceUnchanged &&
   !report.cleanupError &&
   JSON.stringify(resources) === JSON.stringify(report.resourcesAfter);
+report.finishedAt = new Date().toISOString();
 await writeFile(new URL('../results/delivery-isolation.json', import.meta.url), JSON.stringify(report, null, 2));
 console.log(
   JSON.stringify(
