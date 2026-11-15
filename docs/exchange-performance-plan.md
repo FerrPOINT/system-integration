@@ -488,3 +488,30 @@ batch10 444,08, batch25 430,05. Медиана transaction p95 соответс�
 Java/check/Javadoc/JAR, SQL inventory/plans, Node/frontend/codegen/assets,
 component/UI/API, recovery и demo, затем повтор NF08 и устойчивый поток.
 Нагрузочный стенд остаётся отдельным; публичный runtime не меняется.
+
+Квалификация c7e603c завершена без ошибок: Java 249 (116+98 backend,
+15+20 emulator), без skips; Node/load 17, frontend/API 60 и assets 2,
+build graph/context 2, SQL observer 1, HTTP smoke 4, component 112,
+desktop/mobile E2E 76, recovery 10, demo 6. Пройдены check, bootJar,
+Javadoc, Spotless/Prettier/ESLint/TypeScript и обе генерации контрактов.
+SQL: 69 call sites, 536 вариантов, 1608 inline/custom/generic планов;
+фикстуры откатаны. Новые размеры исполнения 5/10/25 включены в EXPLAIN.
+Обычные 11 контейнеров сохранили ID/image/StartedAt. Исходное ТЗ,
+контракты, frontend/src и обе папки миграций побайтно равны baseline.
+
+qualified-artifacts.json фиксирует SHA-256 обоих JAR и трёх entry JS/CSS;
+байты JS/CSS через loopback HTTPS-independent frontend, внутри контейнера
+и в native dist совпали. Это тестовый runtime, не публичный deploy.
+Полные результаты — ignored performance-cycle-2026-11-15; последующий
+commit ниже меняет только документацию. Перед нагрузкой новая revision
+образов будет проставлена с проверкой неизменности прикладных байтов.
+
+### E14 — повтор NF08 на выбранной архитектуре
+
+Кандидат: backend32, emulator execution5/publication25, исходные 2 CPU/4ГиБ
+и Hikari8/4, без runtime overrides и DEBUG. После metadata-only сборки
+тестовые БД сбрасываются штатно, готовятся ровно 5000 завершённых записей.
+Повторяются исходные warm30/measure120, replay probe и полная сверка.
+Сравниваются и API, и завершение/очередь; снижение offered creates в
+closed-loop NF08 не выдаётся за повышение create-only capacity.
+Далее отдельный steady screening и заранее определённые 3×300 с.
