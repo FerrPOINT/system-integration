@@ -121,6 +121,46 @@ class ExchangeCoordinatorTest {
     }
 
     @Test
+    void oneSlowClaimDoesNotSerializeOtherReservedSlots() throws Exception {
+        var tasks = mock(ExchangeService.class);
+        var client = mock(ExternalExchangeClient.class);
+        var claimed = new AtomicInteger();
+        var slowEntered = new CountDownLatch(1);
+        var otherClaim = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        when(tasks.claim())
+                .thenAnswer(call -> {
+                    int number = claimed.incrementAndGet();
+                    if (number == 2) {
+                        slowEntered.countDown();
+                        assertTrue(release.await(5, TimeUnit.SECONDS));
+                    }
+                    if (number > 2) otherClaim.countDown();
+                    return new DeliveryAttempt(
+                            UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput("REQ-900001", 25));
+                });
+        when(client.deliver(any()))
+                .thenReturn(
+                        new ExternalExchangeClient.DeliveryReply(
+                                DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null));
+        try (var runner = Executors.newVirtualThreadPerTaskExecutor();
+                var worker = new ExchangeCoordinator(tasks, client)) {
+            var cycle = runner.submit(worker::deliver);
+            try {
+                assertTrue(slowEntered.await(2, TimeUnit.SECONDS));
+                assertTrue(
+                        otherClaim.await(2, TimeUnit.SECONDS),
+                        "A DB wait in one reserved slot must not serialize the other claims");
+            } finally {
+                release.countDown();
+                cycle.get(5, TimeUnit.SECONDS);
+            }
+            assertEquals(32, claimed.get());
+            verify(tasks, times(32)).finish(any(), any());
+        }
+    }
+
+    @Test
     void allEightSlotsCanStartWithoutClaimingWorkAheadOfTheirReplies() throws Exception {
         var tasks = mock(ExchangeService.class);
         var client = mock(ExternalExchangeClient.class);

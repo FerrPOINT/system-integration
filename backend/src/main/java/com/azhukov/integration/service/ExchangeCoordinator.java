@@ -1,6 +1,7 @@
 package com.azhukov.integration.service;
 
 import com.azhukov.integration.client.ExternalExchangeClient;
+import com.azhukov.integration.domain.exchange.DeliveryAttempt;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
@@ -52,59 +53,75 @@ public class ExchangeCoordinator implements AutoCloseable {
     }
 
     public void deliver() {
-        var pending = new ArrayList<CompletableFuture<Void>>();
-        int claimed = 0;
+        // Probe once while idle. Only reserved slots may claim work after this.
+        var first = claim();
+        if (first == null) return;
+        var pending = new ArrayList<CompletableFuture<Boolean>>();
+        int submitted = 1;
         boolean exhausted = false;
         try {
-            while (!exhausted && claimed < 32) {
-                while (pending.size() < MAX_IN_FLIGHT && claimed < 32) {
-                    long claimStarted = System.nanoTime();
-                    var claim = tasks.claim();
-                    log.debug("delivery-claim durationMs={}", (System.nanoTime() - claimStarted) / 1_000_000);
-                    if (claim == null) {
-                        exhausted = true;
-                        break;
-                    }
-                    claimed++;
+            pending.add(
+                    CompletableFuture.supplyAsync(
+                            () -> {
+                                deliverClaim(first);
+                                return true;
+                            },
+                            senders));
+            while (!exhausted && submitted < 32) {
+                while (pending.size() < MAX_IN_FLIGHT && submitted < 32) {
                     pending.add(
-                            CompletableFuture.runAsync(
+                            CompletableFuture.supplyAsync(
                                     () -> {
-                                        long started = System.nanoTime();
-                                        inFlight.incrementAndGet();
-                                        try {
-                                            var reply = client.deliver(claim);
-                                            long received = System.nanoTime();
-                                            tasks.finish(claim, reply);
-                                            long finished = System.nanoTime();
-                                            log.info(
-                                                    "delivery operationId={} attemptId={} step={} number={} httpStatus={} connectionFailed={} durationMs={} httpMs={} finishMs={}",
-                                                    claim.operationId(),
-                                                    claim.attemptId(),
-                                                    claim.step(),
-                                                    claim.number(),
-                                                    reply.httpStatus(),
-                                                    reply.connectionFailed(),
-                                                    (finished - started) / 1_000_000,
-                                                    (received - started) / 1_000_000,
-                                                    (finished - received) / 1_000_000);
-                                        } finally {
-                                            inFlight.decrementAndGet();
-                                        }
+                                        var next = claim();
+                                        if (next == null) return false;
+                                        deliverClaim(next);
+                                        return true;
                                     },
                                     senders));
+                    submitted++;
                 }
-                if (pending.isEmpty()) return;
                 CompletableFuture.anyOf(pending.toArray(CompletableFuture[]::new)).join();
                 for (var completed = pending.iterator(); completed.hasNext(); ) {
                     var future = completed.next();
                     if (future.isDone()) {
-                        future.join(); // Observe every completed failure before releasing its slot.
+                        if (!future.join()) exhausted = true;
                         completed.remove();
                     }
                 }
             }
         } finally {
             CompletableFuture.allOf(pending.toArray(CompletableFuture[]::new)).join();
+        }
+    }
+
+    private DeliveryAttempt claim() {
+        long started = System.nanoTime();
+        var result = tasks.claim();
+        log.debug("delivery-claim durationMs={}", (System.nanoTime() - started) / 1_000_000);
+        return result;
+    }
+
+    private void deliverClaim(DeliveryAttempt claim) {
+        long started = System.nanoTime();
+        inFlight.incrementAndGet();
+        try {
+            var reply = client.deliver(claim);
+            long received = System.nanoTime();
+            tasks.finish(claim, reply);
+            long finished = System.nanoTime();
+            log.info(
+                    "delivery operationId={} attemptId={} step={} number={} httpStatus={} connectionFailed={} durationMs={} httpMs={} finishMs={}",
+                    claim.operationId(),
+                    claim.attemptId(),
+                    claim.step(),
+                    claim.number(),
+                    reply.httpStatus(),
+                    reply.connectionFailed(),
+                    (finished - started) / 1_000_000,
+                    (received - started) / 1_000_000,
+                    (finished - received) / 1_000_000);
+        } finally {
+            inFlight.decrementAndGet();
         }
     }
 

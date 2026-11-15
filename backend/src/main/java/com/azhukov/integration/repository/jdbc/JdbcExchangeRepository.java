@@ -97,14 +97,19 @@ public class JdbcExchangeRepository implements ExchangeRepository {
 
     public Queue lockQueue(UUID id) {
         return jdbc.queryForObject(
-                "SELECT * FROM delivery_queue WHERE operation_id = ? FOR UPDATE",
+                """
+                SELECT *,due_at <= statement_timestamp()
+                    AND (claim_id IS NULL OR claimed_until <= statement_timestamp()) AS eligible
+                FROM delivery_queue WHERE operation_id = ? FOR UPDATE
+                """,
                 (rs, n) ->
                         new Queue(
                                 rs.getString("next_step"),
                                 rs.getInt("attempts"),
                                 rs.getInt("automatic_attempts"),
                                 rs.getObject("claim_id", UUID.class),
-                                rs.getObject("claimed_until", OffsetDateTime.class)),
+                                rs.getObject("claimed_until", OffsetDateTime.class),
+                                rs.getBoolean("eligible")),
                 id);
     }
 

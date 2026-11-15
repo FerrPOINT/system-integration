@@ -27,6 +27,7 @@ public interface ExchangeRepository {
     /** Locks one eligible due task with SKIP LOCKED; returns null when no task can be claimed. */
     ExchangeState lockDueExchange();
 
+    /** Recomputes current eligibility after the caller locks the task; an earlier candidate is only a hint. */
     Queue lockQueue(UUID id);
 
     void startAttempt(UUID operation, UUID claim, String step, int number);
@@ -57,7 +58,7 @@ public interface ExchangeRepository {
 
     void advanceCursor(long cursor);
 
-    record Queue(String step, int attempts, int automaticAttempts, UUID claim, OffsetDateTime until) {
+    record Queue(String step, int attempts, int automaticAttempts, UUID claim, OffsetDateTime until, boolean eligible) {
         public Queue {
             if (attempts < 0 || automaticAttempts < 0 || automaticAttempts > attempts)
                 throw new IllegalArgumentException("Некорректный счётчик попыток доставки");

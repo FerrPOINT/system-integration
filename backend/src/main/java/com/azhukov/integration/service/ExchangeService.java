@@ -32,6 +32,8 @@ public class ExchangeService {
         var state = exchanges.lockDueExchange();
         if (state == null) return null;
         var queue = exchanges.lockQueue(state.task().operationId());
+        // The nonlocking queue candidate may predate another committed claim/retry.
+        if (!queue.eligible()) return null;
         if (queue.claim() != null) {
             exchanges.finishAttempt(queue.claim(), "INTERRUPTED");
             if (DeliveryAttempt.exhausted(queue.automaticAttempts())) {
