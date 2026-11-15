@@ -36,7 +36,7 @@ class DeliveryClaimConcurrencyTest extends PostgresTest {
                     return new ExternalExchangeClient.DeliveryReply(
                             DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
                 });
-        try (var worker = new ExchangeCoordinator(exchange, client)) {
+        try (var worker = new ExchangeCoordinator(exchange, client, 8)) {
             for (int pass = 0; count("delivery_queue") > 0 && pass < 16; pass++) worker.deliver();
         }
         assertEquals(32, delivered.size());

@@ -34,7 +34,7 @@ class ResultFeedTest extends PostgresTest {
         try (var http = transport(server);
                 var worker =
                         new ExchangeCoordinator(
-                                exchange, new HttpExternalExchangeClient(http, json, settings(server)))) {
+                                exchange, new HttpExternalExchangeClient(http, json, settings(server)), 8)) {
             clearInvocations(observedSql);
             worker.receive();
             worker.receive();
@@ -64,7 +64,7 @@ class ResultFeedTest extends PostgresTest {
         var server = source(requests, page, new AtomicInteger(200));
         try (var http = transport(server)) {
             var client = new HttpExternalExchangeClient(http, json, settings(server));
-            try (var worker = new ExchangeCoordinator(exchange, client)) {
+            try (var worker = new ExchangeCoordinator(exchange, client, 8)) {
                 worker.receive();
                 worker.receive();
                 assertEquals(1, requests.get(), "A bad cursor must pause the consumer");
@@ -76,7 +76,7 @@ class ResultFeedTest extends PostgresTest {
             }
             // A valid cursor with an invalid result is diagnosed and consumed, rather than poisoning the feed.
             page.set("[{\"cursor\":8,\"result\":null}]");
-            try (var restarted = new ExchangeCoordinator(exchange, client)) {
+            try (var restarted = new ExchangeCoordinator(exchange, client, 8)) {
                 restarted.receive();
                 assertEquals(2, requests.get());
                 assertEquals(8, exchange.cursor());
@@ -99,7 +99,7 @@ class ResultFeedTest extends PostgresTest {
         try (var http = transport(server);
                 var worker =
                         new ExchangeCoordinator(
-                                exchange, new HttpExternalExchangeClient(http, json, settings(server)))) {
+                                exchange, new HttpExternalExchangeClient(http, json, settings(server)), 8)) {
             worker.receive();
             worker.receive();
             assertEquals(1, requests.get());
@@ -126,7 +126,7 @@ class ResultFeedTest extends PostgresTest {
         try (var http = transport(server);
                 var worker =
                         new ExchangeCoordinator(
-                                exchange, new HttpExternalExchangeClient(http, json, settings(server)))) {
+                                exchange, new HttpExternalExchangeClient(http, json, settings(server)), 8)) {
             worker.receive();
             assertEquals(1, count("exchange_issues"));
             assertTrue(worker.diagnostics().paused());
@@ -172,7 +172,7 @@ class ResultFeedTest extends PostgresTest {
         try (var http = transport(server);
                 var worker =
                         new ExchangeCoordinator(
-                                exchange, new HttpExternalExchangeClient(http, json, settings(server)))) {
+                                exchange, new HttpExternalExchangeClient(http, json, settings(server)), 8)) {
             worker.receive();
             assertEquals(4, exchange.cursor());
             assertEquals(2, count("exchange_issues"));
@@ -254,7 +254,7 @@ class ResultFeedTest extends PostgresTest {
         try (var http = transport(server);
                 var worker =
                         new ExchangeCoordinator(
-                                exchange, new HttpExternalExchangeClient(http, json, settings(server)))) {
+                                exchange, new HttpExternalExchangeClient(http, json, settings(server)), 8)) {
             worker.receive();
             assertEquals(2, exchange.cursor());
             assertEquals(1, count("exchange_issues"));

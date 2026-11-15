@@ -8,25 +8,23 @@ import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * Runs HTTP between claim/finish transactions: eight in-flight requests and at most
+ * Runs HTTP between claim/finish transactions: bounded in-flight requests and at most
  * 32 claims per pass. This bean owns/closes the per-task virtual executor.
  * These bounds protect resources; they are not a throughput promise.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class ExchangeCoordinator implements AutoCloseable {
     private final ExchangeService tasks;
     private final ExternalExchangeClient client;
-    private static final int MAX_IN_FLIGHT = 8;
+    private final int maxInFlight;
     private static final int MAX_CLAIMS_PER_PASS = 32;
-    private final ExecutorService senders =
-            Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("delivery-", 0).factory());
+    private final ExecutorService senders;
     private Instant nextRead = Instant.MIN;
     private volatile int feedFailures;
     private volatile boolean feedPaused;
@@ -34,6 +32,19 @@ public class ExchangeCoordinator implements AutoCloseable {
     private final java.util.concurrent.atomic.LongAdder unavailableReads = new java.util.concurrent.atomic.LongAdder();
     private final java.util.concurrent.atomic.LongAdder invalidPages = new java.util.concurrent.atomic.LongAdder();
     private final java.util.concurrent.atomic.AtomicInteger inFlight = new java.util.concurrent.atomic.AtomicInteger();
+
+    public ExchangeCoordinator(
+            ExchangeService tasks,
+            ExternalExchangeClient client,
+            @Value("${si.exchange.max-in-flight}") int maxInFlight) {
+        if (maxInFlight < 1 || maxInFlight > MAX_CLAIMS_PER_PASS)
+            throw new IllegalArgumentException("si.exchange.max-in-flight must be 1.." + MAX_CLAIMS_PER_PASS);
+        this.tasks = tasks;
+        this.client = client;
+        this.maxInFlight = maxInFlight;
+        this.senders = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("delivery-", 0).factory());
+        log.info("delivery-worker slots={} selectionsPerPass={}", maxInFlight, MAX_CLAIMS_PER_PASS);
+    }
 
     /** Process-local observations; restart resets counters, while the delivery queue stays in PostgreSQL. */
     public record FeedDiagnostics(
@@ -75,7 +86,7 @@ public class ExchangeCoordinator implements AutoCloseable {
                             },
                             senders));
             while (!exhausted && submitted < MAX_CLAIMS_PER_PASS) {
-                while (pending.size() < MAX_IN_FLIGHT && submitted < MAX_CLAIMS_PER_PASS) {
+                while (pending.size() < maxInFlight && submitted < MAX_CLAIMS_PER_PASS) {
                     pending.add(
                             CompletableFuture.supplyAsync(
                                     () -> {

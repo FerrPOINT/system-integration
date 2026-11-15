@@ -49,7 +49,7 @@ class ExchangeCoordinatorTest {
                         active.decrementAndGet();
                     }
                 });
-        try (var worker = new ExchangeCoordinator(tasks, client)) {
+        try (var worker = new ExchangeCoordinator(tasks, client, 8)) {
             worker.deliver();
             assertTrue(claimed.get() > 8, "a backlog should not wait after every eight records");
             assertTrue(claimed.get() <= 32, "one scheduler turn must remain bounded");
@@ -109,7 +109,7 @@ class ExchangeCoordinatorTest {
                     }
                 });
         try (var runner = Executors.newVirtualThreadPerTaskExecutor();
-                var worker = new ExchangeCoordinator(tasks, client)) {
+                var worker = new ExchangeCoordinator(tasks, client, 8)) {
             var cycle = runner.submit(worker::deliver);
             try {
                 assertTrue(entered.await(1, TimeUnit.SECONDS), "The slow operation must actually start");
@@ -158,7 +158,7 @@ class ExchangeCoordinatorTest {
                         new ExternalExchangeClient.DeliveryReply(
                                 DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null));
         try (var runner = Executors.newVirtualThreadPerTaskExecutor();
-                var worker = new ExchangeCoordinator(tasks, client)) {
+                var worker = new ExchangeCoordinator(tasks, client, 8)) {
             var cycle = runner.submit(worker::deliver);
             try {
                 assertTrue(slowEntered.await(2, TimeUnit.SECONDS));
@@ -202,7 +202,7 @@ class ExchangeCoordinatorTest {
                             DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
                 });
         try (var runner = Executors.newVirtualThreadPerTaskExecutor();
-                var worker = new ExchangeCoordinator(tasks, client)) {
+                var worker = new ExchangeCoordinator(tasks, client, 8)) {
             var cycle = runner.submit(worker::deliver);
             try {
                 assertTrue(
@@ -241,7 +241,7 @@ class ExchangeCoordinatorTest {
                 .thenReturn(
                         new ExternalExchangeClient.DeliveryReply(
                                 DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null));
-        try (var worker = new ExchangeCoordinator(tasks, client)) {
+        try (var worker = new ExchangeCoordinator(tasks, client, 8)) {
             worker.deliver();
             verify(tasks).finish(any(), any());
             assertTrue(calls.get() <= 32);
@@ -253,7 +253,7 @@ class ExchangeCoordinatorTest {
         var tasks = mock(ExchangeService.class);
         var client = mock(ExternalExchangeClient.class);
         when(tasks.claim()).thenReturn(ClaimResult.skipped());
-        try (var worker = new ExchangeCoordinator(tasks, client)) {
+        try (var worker = new ExchangeCoordinator(tasks, client, 8)) {
             worker.deliver();
             verify(tasks, times(32)).claim();
             verifyNoInteractions(client);
@@ -261,44 +261,55 @@ class ExchangeCoordinatorTest {
     }
 
     @Test
-    void allEightSlotsCanStartWithoutClaimingWorkAheadOfTheirReplies() throws Exception {
+    void configuredSlotsStartWithoutClaimingWorkAheadOfReplies() throws Exception {
+        for (int slots : new int[] {4, 8, 16, 32}) {
+            var tasks = mock(ExchangeService.class);
+            var client = mock(ExternalExchangeClient.class);
+            var claimed = new AtomicInteger();
+            var entered = new CountDownLatch(slots);
+            var release = new CountDownLatch(1);
+            when(tasks.claim())
+                    .thenAnswer(call -> {
+                        claimed.incrementAndGet();
+                        return ClaimResult.claimed(
+                                new DeliveryAttempt(
+                                        UUID.randomUUID(),
+                                        UUID.randomUUID(),
+                                        "PUT",
+                                        1,
+                                        1,
+                                        new TaskInput("REQ-900001", 25)));
+                    });
+            when(client.deliver(any()))
+                    .thenAnswer(call -> {
+                        entered.countDown();
+                        assertTrue(release.await(5, TimeUnit.SECONDS));
+                        return new ExternalExchangeClient.DeliveryReply(
+                                DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
+                    });
+            try (var runner = Executors.newVirtualThreadPerTaskExecutor();
+                    var worker = new ExchangeCoordinator(tasks, client, slots)) {
+                var cycle = runner.submit(worker::deliver);
+                try {
+                    assertTrue(entered.await(2, TimeUnit.SECONDS), "All configured slots must start: " + slots);
+                    assertEquals(slots, claimed.get(), "Every occupied slot owns exactly one lease");
+                } finally {
+                    release.countDown();
+                    cycle.get(5, TimeUnit.SECONDS);
+                }
+                assertEquals(32, claimed.get());
+                verify(tasks, times(32)).finish(any(), any());
+            }
+        }
+    }
+
+    @Test
+    void invalidSlotConfigurationFailsBeforeStartingWork() {
         var tasks = mock(ExchangeService.class);
         var client = mock(ExternalExchangeClient.class);
-        var claimed = new AtomicInteger();
-        var entered = new CountDownLatch(8);
-        var release = new CountDownLatch(1);
-        when(tasks.claim())
-                .thenAnswer(call -> {
-                    claimed.incrementAndGet();
-                    return ClaimResult.claimed(
-                            new DeliveryAttempt(
-                                    UUID.randomUUID(),
-                                    UUID.randomUUID(),
-                                    "PUT",
-                                    1,
-                                    1,
-                                    new TaskInput("REQ-900001", 25)));
-                });
-        when(client.deliver(any()))
-                .thenAnswer(call -> {
-                    entered.countDown();
-                    assertTrue(release.await(5, TimeUnit.SECONDS));
-                    return new ExternalExchangeClient.DeliveryReply(
-                            DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
-                });
-        try (var runner = Executors.newVirtualThreadPerTaskExecutor();
-                var worker = new ExchangeCoordinator(tasks, client)) {
-            var cycle = runner.submit(worker::deliver);
-            try {
-                assertTrue(entered.await(2, TimeUnit.SECONDS));
-                assertEquals(8, claimed.get(), "Every occupied slot owns exactly one lease");
-            } finally {
-                release.countDown();
-                cycle.get(5, TimeUnit.SECONDS);
-            }
-            assertEquals(32, claimed.get());
-            verify(tasks, times(32)).finish(any(), any());
-        }
+        for (int value : new int[] {-1, 0, 33})
+            assertThrows(IllegalArgumentException.class, () -> new ExchangeCoordinator(tasks, client, value));
+        verifyNoInteractions(tasks, client);
     }
 
     @Test
@@ -328,7 +339,7 @@ class ExchangeCoordinatorTest {
                     return new ExternalExchangeClient.DeliveryReply(
                             DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
                 });
-        try (var worker = new ExchangeCoordinator(tasks, client)) {
+        try (var worker = new ExchangeCoordinator(tasks, client, 8)) {
             assertThrows(java.util.concurrent.CompletionException.class, worker::deliver);
             verify(tasks, times(3)).finish(any(), any());
         }
@@ -339,7 +350,7 @@ class ExchangeCoordinatorTest {
         var tasks = mock(ExchangeService.class);
         when(tasks.claim()).thenReturn(ClaimResult.empty());
         var client = mock(ExternalExchangeClient.class);
-        try (var worker = new ExchangeCoordinator(tasks, client)) {
+        try (var worker = new ExchangeCoordinator(tasks, client, 8)) {
             worker.deliver();
             verify(tasks).claim();
             verifyNoInteractions(client);
