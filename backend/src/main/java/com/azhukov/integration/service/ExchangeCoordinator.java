@@ -11,7 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * Runs HTTP between claim/finish transactions: four in-flight requests and at most
+ * Runs HTTP between claim/finish transactions: eight in-flight requests and at most
  * 32 claims per pass. This bean owns/closes the per-task virtual executor.
  * These bounds protect resources; they are not a throughput promise.
  */
@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 public class ExchangeCoordinator implements AutoCloseable {
     private final ExchangeService tasks;
     private final ExternalExchangeClient client;
-    private static final int MAX_IN_FLIGHT = 4;
+    private static final int MAX_IN_FLIGHT = 8;
     private final ExecutorService senders =
             Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("delivery-", 0).factory());
     private Instant nextRead = Instant.MIN;

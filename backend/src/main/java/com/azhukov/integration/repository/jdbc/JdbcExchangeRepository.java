@@ -67,7 +67,7 @@ public class JdbcExchangeRepository implements ExchangeRepository {
     /**
      * Visit the ordered queue before looking up/locking a task. A flat join can
      * misestimate correlated task status after an empty queue grows and scan the
-     * completed population for every claim. The ordered subquery keeps queue
+     * already-delivered population for every claim. The ordered subquery keeps queue
      * sorting before the lateral row lock, so LIMIT never locks an unrelated tail.
      * See DeliveryClaimPlanTest and docs/exchange-performance-plan.md.
      */

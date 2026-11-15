@@ -22,7 +22,7 @@ class DeliveryClaimPlanTest extends PostgresTest {
     @MockitoSpyBean JdbcTemplate observedSql;
 
     @Test
-    void aGrowingQueueDoesNotRequireReadingTheCompletedTaskPopulation() {
+    void aGrowingQueueDoesNotRequireReadingAlreadyDeliveredTasks() {
         jdbc.update(
                 """
                 INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,delivery_status)

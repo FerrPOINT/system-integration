@@ -44,16 +44,16 @@ class ExchangeCoordinatorTest {
                 });
         try (var worker = new ExchangeCoordinator(tasks, client)) {
             worker.deliver();
-            assertTrue(claimed.get() > 4, "a backlog should not wait after every four records");
+            assertTrue(claimed.get() > 8, "a backlog should not wait after every eight records");
             assertTrue(claimed.get() <= 32, "one scheduler turn must remain bounded");
-            assertTrue(peak.get() <= 4);
+            assertTrue(peak.get() <= 8);
             verify(tasks, times(claimed.get())).finish(any(), any());
             assertEquals(claimed.get(), threads.size(), "Each delivery is its own virtual thread");
         }
     }
 
     @Test
-    void oneSlowResponseDoesNotHoldTheOtherThreeSlotsOrPreclaimWaitingWork() throws Exception {
+    void oneSlowResponseDoesNotHoldTheOtherSevenSlotsOrPreclaimWaitingWork() throws Exception {
         var tasks = mock(ExchangeService.class);
         var client = mock(ExternalExchangeClient.class);
         var claimed = new AtomicInteger();
@@ -62,7 +62,7 @@ class ExchangeCoordinatorTest {
         UUID slow = UUID.randomUUID();
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
-        var sevenFast = new CountDownLatch(7);
+        var fifteenFast = new CountDownLatch(15);
         var finished = new AtomicInteger();
         var peakUnfinishedClaims = new AtomicInteger();
         doAnswer(
@@ -93,7 +93,7 @@ class ExchangeCoordinatorTest {
                         if (attempt.operationId().equals(slow)) {
                             entered.countDown();
                             assertTrue(release.await(5, TimeUnit.SECONDS));
-                        } else sevenFast.countDown();
+                        } else fifteenFast.countDown();
                         return new ExternalExchangeClient.DeliveryReply(
                                 DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
                     } finally {
@@ -105,17 +105,52 @@ class ExchangeCoordinatorTest {
             var cycle = runner.submit(worker::deliver);
             try {
                 assertTrue(entered.await(1, TimeUnit.SECONDS), "The slow operation must actually start");
-                assertTrue(sevenFast.await(1, TimeUnit.SECONDS), "Free slots must progress before the slow response");
+                assertTrue(fifteenFast.await(1, TimeUnit.SECONDS), "Free slots must progress before the slow response");
                 assertEquals(1, release.getCount(), "The slow response is still held");
-                assertTrue(peak.get() <= 4);
-                // Only one active request plus up to three other slots can own unfinished attempts.
+                assertTrue(peak.get() <= 8);
+                // Only one active request plus up to seven other slots can own unfinished attempts.
                 assertTrue(claimed.get() <= 32, "A turn must stay bounded");
             } finally {
                 release.countDown();
                 cycle.get(5, TimeUnit.SECONDS);
             }
             assertEquals(32, claimed.get());
-            assertTrue(peakUnfinishedClaims.get() <= 4, "No attempts may be claimed ahead of free slots");
+            assertTrue(peakUnfinishedClaims.get() <= 8, "No attempts may be claimed ahead of free slots");
+            verify(tasks, times(32)).finish(any(), any());
+        }
+    }
+
+    @Test
+    void allEightSlotsCanStartWithoutClaimingWorkAheadOfTheirReplies() throws Exception {
+        var tasks = mock(ExchangeService.class);
+        var client = mock(ExternalExchangeClient.class);
+        var claimed = new AtomicInteger();
+        var entered = new CountDownLatch(8);
+        var release = new CountDownLatch(1);
+        when(tasks.claim())
+                .thenAnswer(call -> {
+                    claimed.incrementAndGet();
+                    return new DeliveryAttempt(
+                            UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput("REQ-900001", 25));
+                });
+        when(client.deliver(any()))
+                .thenAnswer(call -> {
+                    entered.countDown();
+                    assertTrue(release.await(5, TimeUnit.SECONDS));
+                    return new ExternalExchangeClient.DeliveryReply(
+                            DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
+                });
+        try (var runner = Executors.newVirtualThreadPerTaskExecutor();
+                var worker = new ExchangeCoordinator(tasks, client)) {
+            var cycle = runner.submit(worker::deliver);
+            try {
+                assertTrue(entered.await(2, TimeUnit.SECONDS));
+                assertEquals(8, claimed.get(), "Every occupied slot owns exactly one lease");
+            } finally {
+                release.countDown();
+                cycle.get(5, TimeUnit.SECONDS);
+            }
+            assertEquals(32, claimed.get());
             verify(tasks, times(32)).finish(any(), any());
         }
     }
