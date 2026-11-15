@@ -28,7 +28,49 @@ class ResultFeedTest extends PostgresTest {
     @MockitoSpyBean JdbcTemplate observedSql;
 
     @Test
-    void emptyFeedKeepsItsIdleDelayWithoutWritingTheCursor() throws Exception {
+    void aPublishedResultAfterAnEmptyReadIsConsumedOnTheNextSchedulerTrigger() throws Exception {
+        var task = created(login("initiator.one"), java.util.UUID.randomUUID());
+        var operation = jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?", java.util.UUID.class, task);
+        var requests = new AtomicInteger();
+        var page = new AtomicReference<>("[]");
+        var server = source(requests, page, new AtomicInteger(200));
+        try (var http = transport(server);
+                var worker =
+                        new ExchangeCoordinator(
+                                exchange, new HttpExternalExchangeClient(http, json, settings(server)), 8)) {
+            worker.receive();
+            assertEquals(0, exchange.cursor());
+            page.set(
+                    json.writeValueAsString(
+                            java.util.List.of(
+                                    java.util.Map.of(
+                                            "cursor",
+                                            1,
+                                            "result",
+                                            java.util.Map.of(
+                                                    "operationId",
+                                                    operation,
+                                                    "request",
+                                                    java.util.Map.of("reference", "REQ-000001", "quantity", 25),
+                                                    "version",
+                                                    2,
+                                                    "status",
+                                                    "SUCCEEDED",
+                                                    "completedAt",
+                                                    java.time.Instant.now().toString())))));
+            worker.receive();
+            assertEquals(2, requests.get(), "A successful empty read must leave normal pacing to the scheduler");
+            assertEquals(1, exchange.cursor());
+            assertEquals(
+                    "SUCCEEDED",
+                    jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?", String.class, task));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void emptyFeedUsesTheSchedulerCadenceWithoutWritingTheCursor() throws Exception {
         var requests = new AtomicInteger();
         var server = source(requests, new AtomicReference<>("[]"), new AtomicInteger(200));
         try (var http = transport(server);
@@ -38,7 +80,7 @@ class ResultFeedTest extends PostgresTest {
             clearInvocations(observedSql);
             worker.receive();
             worker.receive();
-            assertEquals(1, requests.get(), "The empty feed must retain its idle delay");
+            assertEquals(2, requests.get(), "The scheduler bounds normal reads, including empty pages");
             long writes =
                     mockingDetails(observedSql).getInvocations().stream()
                             .filter(call ->

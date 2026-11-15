@@ -25,7 +25,7 @@ public class ExchangeCoordinator implements AutoCloseable {
     private final int maxInFlight;
     private static final int MAX_CLAIMS_PER_PASS = 32;
     private final ExecutorService senders;
-    private Instant nextRead = Instant.MIN;
+    private Instant retryAfter = Instant.MIN;
     private volatile int feedFailures;
     private volatile boolean feedPaused;
     private volatile Instant lastSuccessfulRead;
@@ -144,14 +144,14 @@ public class ExchangeCoordinator implements AutoCloseable {
     }
 
     public void receive() {
-        if (feedPaused || Instant.now().isBefore(nextRead)) return;
+        if (feedPaused || Instant.now().isBefore(retryAfter)) return;
         long after = tasks.cursor();
         var reply = client.events(after);
         if (reply.status() == ExternalExchangeClient.FeedStatus.UNAVAILABLE) {
             feedFailures++;
             unavailableReads.increment();
             int seconds = feedFailures == 1 ? 2 : feedFailures == 2 ? 5 : 15;
-            nextRead = Instant.now().plusSeconds(seconds);
+            retryAfter = Instant.now().plusSeconds(seconds);
             log.warn("result-feed unavailable after={} retrySeconds={}", after, seconds);
             return;
         }
@@ -166,7 +166,8 @@ public class ExchangeCoordinator implements AutoCloseable {
         if (!reply.events().isEmpty() && tasks.consume(after, reply.events()))
             log.info("result-feed consumed after={} count={}", after, reply.events().size());
         lastSuccessfulRead = Instant.now();
-        nextRead = lastSuccessfulRead.plusMillis(reply.events().isEmpty() ? 1000 : 0);
+        // The scheduler owns normal cadence; successful reads clear failure backoff.
+        retryAfter = Instant.MIN;
     }
 
     @Override
