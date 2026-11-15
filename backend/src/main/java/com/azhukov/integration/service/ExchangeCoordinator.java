@@ -58,7 +58,9 @@ public class ExchangeCoordinator implements AutoCloseable {
         try {
             while (!exhausted && claimed < 32) {
                 while (pending.size() < MAX_IN_FLIGHT && claimed < 32) {
+                    long claimStarted = System.nanoTime();
                     var claim = tasks.claim();
+                    log.debug("delivery-claim durationMs={}", (System.nanoTime() - claimStarted) / 1_000_000);
                     if (claim == null) {
                         exhausted = true;
                         break;
@@ -71,16 +73,20 @@ public class ExchangeCoordinator implements AutoCloseable {
                                         inFlight.incrementAndGet();
                                         try {
                                             var reply = client.deliver(claim);
+                                            long received = System.nanoTime();
                                             tasks.finish(claim, reply);
+                                            long finished = System.nanoTime();
                                             log.info(
-                                                    "delivery operationId={} attemptId={} step={} number={} httpStatus={} connectionFailed={} durationMs={}",
+                                                    "delivery operationId={} attemptId={} step={} number={} httpStatus={} connectionFailed={} durationMs={} httpMs={} finishMs={}",
                                                     claim.operationId(),
                                                     claim.attemptId(),
                                                     claim.step(),
                                                     claim.number(),
                                                     reply.httpStatus(),
                                                     reply.connectionFailed(),
-                                                    (System.nanoTime() - started) / 1_000_000);
+                                                    (finished - started) / 1_000_000,
+                                                    (received - started) / 1_000_000,
+                                                    (finished - received) / 1_000_000);
                                         } finally {
                                             inFlight.decrementAndGet();
                                         }
