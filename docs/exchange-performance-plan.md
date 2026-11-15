@@ -674,6 +674,7 @@ ID/image/StartedAt, публичный HTTPS200 и его JS/CSS провере�
 обычный runtime остаётся 2e97ce4.
 
 Компактный receipt: ignored final-qualification.json, исходные NF08/steady
-JSON и summaries в performance-cycle-2026-11-15. Собственные завершённые
+JSON и summaries в performance-cycle-2026-11-15 (крупные отчёты сжаты
+в .json.gz с проверкой обратного распаковывания и SHA-256). Собственные завершённые
 логи/скрипты/overrides убраны; общие SDK/кэши и выбранные образы сохранены.
 Документы/код в Git; backup/dump/cold copies не создавались.
