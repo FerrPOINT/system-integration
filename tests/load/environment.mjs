@@ -71,11 +71,7 @@ export function loadEnvironment({ frontend = 'container' } = {}) {
       startedAt: container.State.StartedAt,
       sourceCommit: container.Config.Labels?.['org.opencontainers.image.revision'],
       runtimeSettings: Object.fromEntries(
-        [
-          'SI_EXCHANGE_MAX_IN_FLIGHT',
-          'SI_EMULATOR_EXECUTION_BATCH_SIZE',
-          'SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE',
-        ]
+        ['SI_EXCHANGE_MAX_IN_FLIGHT', 'SI_EMULATOR_EXECUTION_BATCH_SIZE', 'SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE']
           .filter((key) => Object.hasOwn(env, key))
           .map((key) => [key, env[key]]),
       ),
