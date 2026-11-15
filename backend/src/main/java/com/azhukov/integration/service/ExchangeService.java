@@ -230,11 +230,18 @@ public class ExchangeService {
         }
     }
 
+    /**
+     * Applies a snapshot while the caller holds the task row lock. ACKNOWLEDGED
+     * commits atomically with queue removal and temporary-issue resolution; later
+     * snapshots must not repeat that completed cleanup.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public ExchangeState apply(ExchangeState state, OperationResult result, UUID actor) {
         exchanges.applyResult(result);
-        exchanges.removeQueue(result.operationId());
-        issues.confirm(state);
+        if (state.task().deliveryStatus() != DeliveryStatus.ACKNOWLEDGED) {
+            exchanges.removeQueue(result.operationId());
+            issues.confirm(state);
+        }
         tasks.history(
                 state.task(),
                 actor,
