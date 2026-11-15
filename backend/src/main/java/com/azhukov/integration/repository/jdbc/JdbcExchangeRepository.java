@@ -181,11 +181,13 @@ public class JdbcExchangeRepository implements ExchangeRepository {
                 status.name());
     }
 
-    public void applyResult(OperationResult result) {
+    public void applyResult(OperationResult result, int advances) {
+        if (advances < 1) throw new IllegalArgumentException("An applied result must advance the exchange version");
         jdbc.update(
-                "UPDATE tasks SET accepted_result = ?::jsonb,business_status = ?,delivery_status = 'ACKNOWLEDGED',exchange_version = exchange_version + 1 WHERE operation_id = ?",
+                "UPDATE tasks SET accepted_result = ?::jsonb,business_status = ?,delivery_status = 'ACKNOWLEDGED',exchange_version = exchange_version + ? WHERE operation_id = ?",
                 json.writeValueAsString(result),
                 result.status().name(),
+                advances,
                 result.operationId());
     }
 

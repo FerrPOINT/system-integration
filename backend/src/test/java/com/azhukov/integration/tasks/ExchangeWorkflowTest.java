@@ -372,14 +372,29 @@ class ExchangeWorkflowTest extends PostgresTest {
     void cursorAndResultRollbackTogetherAndAnOldConsumerCannotReapply() throws Exception {
         UUID id = created(login("initiator.one"), UUID.randomUUID());
         var claim = exchange.claim().attempt();
+        var received =
+                json.createArrayNode()
+                        .add(json.createObjectNode().put("cursor", 1).set("result", result(claim, 1, "RUNNING")))
+                        .add(json.createObjectNode().put("cursor", 2).set("result", result(claim, 2, "SUCCEEDED")));
         var transaction = new TransactionTemplate(transactions);
         transaction.executeWithoutResult(status -> {
-            consume(exchange, 0, page(1, result(claim, 2, "SUCCEEDED")));
+            consume(exchange, 0, received);
             status.setRollbackOnly();
         });
         assertEquals(0, exchange.cursor());
         assertEquals("PENDING", business(id));
-        assertTrue(consume(exchange, 0, page(1, result(claim, 2, "SUCCEEDED"))));
+        assertEquals(1, jdbc.queryForObject("SELECT exchange_version FROM tasks WHERE id=?", Long.class, id));
+        assertEquals(
+                0,
+                jdbc.queryForObject(
+                        "SELECT count(*) FROM task_history WHERE event_type='RESULT_APPLIED'", Integer.class));
+        assertTrue(consume(exchange, 0, received));
+        assertEquals(2, exchange.cursor());
+        assertEquals(3, jdbc.queryForObject("SELECT exchange_version FROM tasks WHERE id=?", Long.class, id));
+        assertEquals(
+                2,
+                jdbc.queryForObject(
+                        "SELECT count(*) FROM task_history WHERE event_type='RESULT_APPLIED'", Integer.class));
         assertFalse(consume(exchange, 0, page(1, result(claim, 2, "REJECTED"))));
         assertEquals("SUCCEEDED", business(id));
     }
@@ -457,6 +472,30 @@ class ExchangeWorkflowTest extends PostgresTest {
             logger.detachAppender(appender);
             appender.stop();
         }
+    }
+
+    @Test
+    void runningOnlyPageIsPersistedWithoutWaitingForATerminalEvent() throws Exception {
+        UUID id = created(login("initiator.one"), UUID.randomUUID());
+        var claim = exchange.claim().attempt();
+        assertTrue(consume(exchange, 0, page(1, result(claim, 1, "RUNNING"))));
+        assertEquals("RUNNING", business(id));
+        assertEquals("ACKNOWLEDGED", delivery(id));
+        assertEquals(2, jdbc.queryForObject("SELECT exchange_version FROM tasks WHERE id=?", Long.class, id));
+        assertEquals(1, exchange.cursor());
+        assertEquals(0, count("delivery_queue"));
+        assertEquals(
+                1,
+                jdbc.queryForObject(
+                        "SELECT count(*) FROM task_history WHERE event_type='RESULT_APPLIED'", Integer.class));
+        assertTrue(consume(exchange, 1, page(2, result(claim, 2, "SUCCEEDED"))));
+        assertEquals("SUCCEEDED", business(id));
+        assertEquals(3, jdbc.queryForObject("SELECT exchange_version FROM tasks WHERE id=?", Long.class, id));
+        assertEquals(2, exchange.cursor());
+        assertEquals(
+                2,
+                jdbc.queryForObject(
+                        "SELECT count(*) FROM task_history WHERE event_type='RESULT_APPLIED'", Integer.class));
     }
 
     @Test
