@@ -27,7 +27,7 @@ LABEL org.opencontainers.image.revision=$VCS_REF
 WORKDIR /app
 USER 10001:10001
 EXPOSE 8080
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=65.0", "-XX:ActiveProcessorCount=2", "-jar", "/app/app.jar"]
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=65.0", "-jar", "/app/app.jar"]
 
 FROM runtime AS backend
 COPY --from=backend-build --chown=10001:10001 /work/backend/build/libs/system-integration.jar /app/app.jar

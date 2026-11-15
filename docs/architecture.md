@@ -756,6 +756,13 @@ JDK 25 имеет [BodySubscribers.limiting](https://docs.oracle.com/en/java/jav
 неопределённый исход сохраняется для GET.
 На Java 25 одного HttpRequest.timeout недостаточно для зависшего тела.
 
+Runtime JVM определяет число процессоров по cgroup-квоте контейнера через
+штатный UseContainerSupport; ActiveProcessorCount не переопределён. На квотах
+backend0,6 и emulator0,3 CPU проверен effective count1. Число одновременно
+зарезервированных работ отдельно ограничивает Semaphore. MaxRAMPercentage65
+сохраняет запас для памяти вне Java heap. Параметры Gradle-сборки не являются
+runtime-настройками. Основание и повторные измерения — E35 журнала производительности.
+
 Spring Boot использует graceful HTTP shutdown (до 30 с на lifecycle phase);
 Compose предоставляет приложениям 60 с до принудительного завершения.
 Это не отменяет восстановление lease после SIGKILL. TC-05 дополнен остановкой
