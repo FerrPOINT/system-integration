@@ -628,7 +628,11 @@ SpringDataTaskReadRepository объединяет узкие TaskRows/HistoryRow
 без пагинации. V8 добавляет узкий tasks(owner_id,business_status) для точного
 COUNT без периода; V6 сохраняет порядок страниц. Индекс не хранит готовый total,
 увеличивает цену записи и не обещает одинаковый выигрыш при любом churn.
-Источники, A/B/A и пределы — E37/E41–E43 журнала производительности.
+V9 снижает только tasks.autovacuum_vacuum_scale_factor до0,05: чаще допускается
+обычный autovacuum при частых изменениях задач. Глобальные интервалы/пороги,
+ресурсы, durability и остальные таблицы не меняются. Это обслуживание страниц,
+а не кэш total; новый COUNT по-прежнему выполняется в том же RR snapshot.
+Источники, A/B/A и пределы — E37/E41–E46 журнала производительности.
 Отдельной read-БД, JPA, Hibernate и ORM-связей нет.
 Плоские TaskReadRow/HistoryReadRow описывают существующие таблицы.
 ReadMappingConfiguration добавляет чтение PostgreSQL json/jsonb как текста,
