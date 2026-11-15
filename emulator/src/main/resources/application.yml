@@ -42,3 +42,4 @@ management:
 si:
   emulator:
     publication-batch-size: ${SI_EMULATOR_PUBLICATION_BATCH_SIZE:25}
+    execution-batch-size: ${SI_EMULATOR_EXECUTION_BATCH_SIZE:5}

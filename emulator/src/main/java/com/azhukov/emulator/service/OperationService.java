@@ -23,6 +23,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Slf4j
 public class OperationService {
     public static final int MAX_PUBLICATION_BATCH = 100;
+    public static final int MAX_EXECUTION_BATCH = 25;
     private final OperationRepository operations;
 
     public record Accepted(Operation operation, boolean created, boolean dropResponse) {}
@@ -55,13 +56,17 @@ public class OperationService {
         return operations.events(after, limit);
     }
 
+    /**
+     * Executes one bounded, atomic group. Locks are skipped by competing workers;
+     * operation results and their events roll back together on any failure.
+     * Grouping commits reduces transaction overhead without changing fault rules.
+     */
     @Transactional
-    public boolean executeNext() {
-        var rows = operations.lockNext();
-        if (rows.isEmpty()) return false;
-        var operation = rows.getFirst();
-        execute(operation, operations.fault(operation.operationId()));
-        return true;
+    public int executeNext(int limit) {
+        if (limit < 1 || limit > MAX_EXECUTION_BATCH) throw new RuleViolation(RuleViolation.Code.VALIDATION_FAILED);
+        var rows = operations.lockNext(limit);
+        for (var operation : rows) execute(operation, operations.fault(operation.operationId()));
+        return rows.size();
     }
 
     private void execute(Operation operation, FaultMode mode) {

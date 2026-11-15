@@ -34,7 +34,7 @@ import tools.jackson.databind.ObjectMapper;
 @AutoConfigureMockMvc
 class EmulatorWorkflowTest {
     @Autowired OperationService service;
-    @Autowired JdbcOperationRepository operations;
+    @MockitoSpyBean JdbcOperationRepository operations;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper json;
     @Autowired MockMvc mvc;
@@ -57,7 +57,7 @@ class EmulatorWorkflowTest {
         assertTrue(output.getAll().contains("event=accepted operationId=" + id));
         service.accept(id, request);
         assertTrue(output.getAll().contains("event=replayed operationId=" + id));
-        assertTrue(service.executeNext());
+        assertEquals(1, service.executeNext(1));
         assertTrue(output.getAll().contains("event=executed operationId=" + id));
         assertEquals(2, service.publish(25));
         assertTrue(output.getAll().contains("event=published operationId=null detail=count=2"));
@@ -79,9 +79,73 @@ class EmulatorWorkflowTest {
     }
 
     @Test
+    void executionBatchIsBoundedAndRollsBackEveryResultAndEventOnFailure(
+            org.springframework.boot.test.system.CapturedOutput output) {
+        var ids = java.util.stream.IntStream.range(0, 5).mapToObj(n -> UUID.randomUUID()).toList();
+        ids.forEach(id -> service.accept(id, new OperationRequest("REQ-000010", 25)));
+        var completed = new java.util.concurrent.atomic.AtomicInteger();
+        doAnswer(
+                        call -> {
+                            call.callRealMethod();
+                            if (completed.incrementAndGet() == 2)
+                                throw new IllegalStateException("injected second completion failure");
+                            return null;
+                        })
+                .when(operations)
+                .complete(any(OperationResult.class));
+        assertThrows(IllegalStateException.class, () -> service.executeNext(2));
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM operations WHERE executions<>0", Integer.class));
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM result_events", Integer.class));
+        ids.forEach(id -> assertFalse(output.getAll().contains("event=executed operationId=" + id)));
+        doCallRealMethod().when(operations).complete(any(OperationResult.class));
+        assertEquals(2, service.executeNext(2));
+        assertEquals(2, service.executeNext(2));
+        assertEquals(1, service.executeNext(2));
+        assertEquals(0, service.executeNext(2));
+        assertEquals(10, jdbc.queryForObject("SELECT count(*) FROM result_events", Integer.class));
+        ids.forEach(id -> assertEquals(1, service.get(id).executions()));
+        for (int invalid : new int[] {0, -1, 26}) assertThrows(RuleViolation.class, () -> service.executeNext(invalid));
+    }
+
+    @Test
+    void aSecondBatchWorkerSkipsTheFirstWorkersUncommittedOperations() throws Exception {
+        for (int n = 0; n < 5; n++) service.accept(UUID.randomUUID(), new OperationRequest("REQ-000011", 25));
+        var selected = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            var first =
+                    pool.submit(() ->
+                            new TransactionTemplate(transactions)
+                                    .execute(tx -> {
+                                        int count = service.executeNext(2);
+                                        selected.countDown();
+                                        try {
+                                            assertTrue(release.await(5, TimeUnit.SECONDS));
+                                        } catch (InterruptedException interrupted) {
+                                            Thread.currentThread().interrupt();
+                                            throw new IllegalStateException(interrupted);
+                                        }
+                                        return count;
+                                    }));
+            try {
+                assertTrue(selected.await(2, TimeUnit.SECONDS));
+                var second = pool.submit(() -> service.executeNext(2));
+                assertEquals(2, second.get(2, TimeUnit.SECONDS));
+                assertEquals(1, service.executeNext(2));
+                assertEquals(0, service.executeNext(2));
+            } finally {
+                release.countDown();
+            }
+            assertEquals(2, first.get(5, TimeUnit.SECONDS));
+        }
+        assertEquals(5, jdbc.queryForObject("SELECT count(*) FROM operations WHERE executions=1", Integer.class));
+        assertEquals(10, jdbc.queryForObject("SELECT count(*) FROM result_events", Integer.class));
+    }
+
+    @Test
     void batchCounterAndAllCursorAssignmentsRollbackTogether() {
         service.accept(UUID.randomUUID(), new OperationRequest("REQ-000008", 25));
-        assertTrue(service.executeNext());
+        assertEquals(1, service.executeNext(1));
         new TransactionTemplate(transactions)
                 .executeWithoutResult(tx -> {
                     assertEquals(2, service.publish(25));
@@ -97,7 +161,7 @@ class EmulatorWorkflowTest {
     @Test
     void concurrentPublishersExposeNoHigherCursorBeforeTheFirstBatchCommits() throws Exception {
         for (int n = 0; n < 25; n++) service.accept(UUID.randomUUID(), new OperationRequest("REQ-000009", 25));
-        while (service.executeNext()) {}
+        while (service.executeNext(1) > 0) {}
         var selected = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -138,7 +202,7 @@ class EmulatorWorkflowTest {
         var input = new OperationRequest("REQ-000010", 25);
         service.configure(input.reference(), FaultMode.DELAY_RESULT);
         service.accept(id, input);
-        assertTrue(service.executeNext());
+        assertEquals(1, service.executeNext(1));
         var selected = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         var firstBatch = new AtomicBoolean(true);
@@ -255,14 +319,14 @@ class EmulatorWorkflowTest {
         assertEquals(
                 "OPERATION_CONFLICT",
                 json.readTree(conflict.getResponse().getContentAsString()).get("code").asString());
-        assertTrue(service.executeNext());
+        assertEquals(1, service.executeNext(1));
         var completed = operations.get(id);
         assertEquals(1, completed.executions());
         assertEquals("SUCCEEDED", json.valueToTree(completed).at("/result/status").asString());
         var completedWire = mvc.perform(get("/operations/" + id)).andReturn();
         assertEquals(200, completedWire.getResponse().getStatus());
         assertEquals(json.valueToTree(completed), json.readTree(completedWire.getResponse().getContentAsString()));
-        assertFalse(service.executeNext());
+        assertEquals(0, service.executeNext(1));
         assertEquals(2, jdbc.queryForObject("SELECT count(*) FROM result_events", Integer.class));
     }
 
@@ -274,8 +338,8 @@ class EmulatorWorkflowTest {
             var first = pool.submit(() -> service.accept(id, input));
             var second = pool.submit(() -> service.accept(id, input));
             assertNotEquals(first.get().created(), second.get().created());
-            var executeOne = pool.submit(() -> service.executeNext());
-            var executeTwo = pool.submit(() -> service.executeNext());
+            var executeOne = pool.submit(() -> service.executeNext(1));
+            var executeTwo = pool.submit(() -> service.executeNext(1));
             assertNotEquals(executeOne.get(), executeTwo.get());
         }
         var result = operations.get(id);
@@ -381,7 +445,7 @@ class EmulatorWorkflowTest {
         UUID duplicateId = UUID.randomUUID(), lateId = UUID.randomUUID();
         service.accept(duplicateId, duplicate);
         service.accept(lateId, late);
-        while (service.executeNext()) {}
+        while (service.executeNext(1) > 0) {}
         assertEquals(4, service.publish(25), "Both duplicate terminal copies belong to the initial batch");
         assertEquals(1, service.publish(25), "The newly eligible late RUNNING belongs to the next batch");
         assertEquals(0, service.publish(25));
