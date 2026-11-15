@@ -3,8 +3,8 @@ import { ApiSession, localOrigin, parallel } from '../support/http.mjs';
 import { loadEnvironment } from './environment.mjs';
 
 const profile = process.env.SI_LOAD_PROFILE || 'nf08';
-if (!['nf08', 'nf08-external', 'capacity', 'steady'].includes(profile))
-  throw new Error('SI_LOAD_PROFILE must be nf08, nf08-external, capacity or steady');
+if (!['nf08', 'nf08-external', 'capacity', 'steady', 'mixed'].includes(profile))
+  throw new Error('SI_LOAD_PROFILE must be nf08, nf08-external, capacity, steady or mixed');
 const initialCount = profile === 'capacity' ? 10000 : 5000;
 loadEnvironment();
 
