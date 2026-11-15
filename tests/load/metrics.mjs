@@ -18,6 +18,7 @@ const appSql = [
   "'blocked',(SELECT coalesce(json_agg(b),'[]'::json) FROM (SELECT pid,datname,query,wait_event_type,wait_event,pg_blocking_pids(pid) AS blockers,extract(epoch FROM clock_timestamp()-xact_start) AS transaction_age_seconds FROM pg_stat_activity WHERE datname IN ('si_test','si_emulator_test') AND pid<>pg_backend_pid() AND cardinality(pg_blocking_pids(pid))>0) b),",
   "'activeQueries',(SELECT coalesce(json_agg(q),'[]'::json) FROM (SELECT datname,query,wait_event_type,wait_event,count(*) AS sessions,max(extract(epoch FROM clock_timestamp()-query_start)) AS oldest_query_seconds FROM pg_stat_activity WHERE datname IN ('si_test','si_emulator_test') AND pid<>pg_backend_pid() AND state='active' GROUP BY datname,query,wait_event_type,wait_event) q),",
   "'transactions',(SELECT json_build_object('active',count(*) FILTER (WHERE state='active'),'idleInTransaction',count(*) FILTER (WHERE state='idle in transaction'),'oldestSeconds',coalesce(max(extract(epoch FROM clock_timestamp()-xact_start)),0)) FROM pg_stat_activity WHERE datname IN ('si_test','si_emulator_test') AND pid<>pg_backend_pid() AND xact_start IS NOT NULL),",
+  "'wal',(SELECT row_to_json(w) FROM (SELECT wal_records,wal_fpi,wal_bytes,wal_buffers_full FROM pg_stat_wal) w),",
   "'database',(SELECT json_agg(d) FROM (SELECT datname,xact_commit,xact_rollback,blks_hit,blks_read,deadlocks,temp_bytes FROM pg_stat_database WHERE datname IN ('si_test','si_emulator_test')) d),",
   "'settings',(SELECT json_object_agg(name,json_build_object('value',setting,'unit',unit)) FROM pg_settings WHERE name IN ('shared_buffers','effective_cache_size','work_mem','max_connections','track_activity_query_size')));",
 ].join('\n');
@@ -54,15 +55,42 @@ async function sql(containerId, database, query) {
   return JSON.parse(result.stdout.trim());
 }
 
+/** Cgroup v2 counters; compare deltas, not absolute lifetime totals. */
+export function parseCgroupCpu(text) {
+  const values = Object.fromEntries(
+    text
+      .trim()
+      .split('\n')
+      .map((line) => {
+        const [key, raw] = line.trim().split(/\s+/);
+        const value = Number(raw);
+        if (!Number.isSafeInteger(value) || value < 0) throw new Error('Invalid cgroup CPU counter');
+        return [key, value];
+      }),
+  );
+  for (const key of ['usage_usec', 'nr_periods', 'nr_throttled', 'throttled_usec']) {
+    if (!Object.hasOwn(values, key)) throw new Error('Missing cgroup v2 CPU counter: ' + key);
+  }
+  return values;
+}
+
 export async function loadSnapshot(resources) {
   const postgres = resources.find((item) => item.service === 'postgres');
   const ids = resources.map((item) => item.containerId);
   const at = new Date().toISOString();
-  const [app, emulator, stats, states] = await Promise.all([
+  const [app, emulator, stats, states, cpu] = await Promise.all([
     sql(postgres.containerId, 'si_test', appSql),
     sql(postgres.containerId, 'si_emulator_test', emulatorSql),
     execute('docker', ['stats', '--no-stream', '--format', '{{json .}}', ...ids], { timeout: 15000 }),
     execute('docker', ['inspect', '--format', '{{json .State}}', ...ids], { timeout: 15000 }),
+    Promise.all(
+      resources.map(async (item) => {
+        const result = await execute('docker', ['exec', item.containerId, 'cat', '/sys/fs/cgroup/cpu.stat'], {
+          timeout: 15000,
+        });
+        return { service: item.service, ...parseCgroupCpu(result.stdout) };
+      }),
+    ),
   ]);
   const containers = states.stdout
     .trim()
@@ -81,6 +109,7 @@ export async function loadSnapshot(resources) {
     app,
     emulator,
     containers,
+    cpu,
     runnerProcess: {
       host: hostname(),
       pid: process.pid,
