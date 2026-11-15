@@ -446,7 +446,7 @@ bounded lock scope. Spring transaction остаётся в OperationService,
 недостаточен, отдельно исследуем driver batch. Откат всей пачки, конкуренция
 и режимы сбоев обязательны до общего сравнения.
 
-Адресные проверки: 5 unit worker и 21 workflow PostgreSQL прошли;
+Адресные проверки: 5 unit worker и 15 workflow PostgreSQL прошли;
 новые сценарии проверяют откат после второй записи, отсутствие ложного
 commit-лога и независимое выполнение второй пачки при незавершённой первой.
 ExecutionProfileTest: одинаковые 1000 pending, три порядка вариантов,
