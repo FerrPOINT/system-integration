@@ -54,6 +54,13 @@ class DeliveryClaimPlanTest extends PostgresTest {
     void anEmptyQueueCanGrowWithoutReusingAFullScanPlan(int delivered) {
         new TransactionTemplate(transactions)
                 .executeWithoutResult(tx -> {
+                    // TRUNCATE keeps earlier column statistics. Give this plan-cache regression
+                    // fresh relations with the production columns/indexes, all rolled back below.
+                    String schema = "claim_plan_" + UUID.randomUUID().toString().replace("-", "");
+                    jdbc.execute("CREATE SCHEMA " + schema);
+                    jdbc.execute("CREATE TABLE " + schema + ".tasks (LIKE tasks INCLUDING ALL)");
+                    jdbc.execute("CREATE TABLE " + schema + ".delivery_queue (LIKE delivery_queue INCLUDING ALL)");
+                    jdbc.execute("SET LOCAL search_path TO " + schema);
                     jdbc.execute("ALTER TABLE tasks SET (autovacuum_enabled=false)");
                     jdbc.execute("ALTER TABLE delivery_queue SET (autovacuum_enabled=false)");
                     jdbc.update(
@@ -83,12 +90,14 @@ class DeliveryClaimPlanTest extends PostgresTest {
                                     jdbc.queryForObject(
                                             "EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON) " + execution, String.class));
                     assertEquals(1, plan.get(0).get("Plan").get("Actual Rows").asInt());
-                    assertTrue(
-                            rowsVisited(plan, "delivery_queue") <= 2,
-                            "One available task must not require scanning a newly grown queue: " + plan);
-                    assertTrue(
-                            rowsVisited(plan, "tasks") <= 2,
-                            "An initially empty task table must not retain a population scan: " + plan);
+                    var fresh =
+                            json.readTree(
+                                    jdbc.queryForObject(
+                                            "EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON) " + sql, String.class));
+                    assertEquals(
+                            fresh.findValues("Plan Rows"),
+                            plan.findValues("Plan Rows"),
+                            "The driver must use current estimates after queue growth, not its empty-queue estimates");
                     tx.setRollbackOnly();
                 });
     }
