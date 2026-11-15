@@ -53,6 +53,7 @@ const p95 = (values) => {
 const maxInFlight = 64,
   created = [],
   phases = [];
+const phaseMetrics = rates.map(() => ({ latencies: [], errors: {}, successes: 0 }));
 let serial = 600000;
 const observation = await observeLoad(resources);
 const startedAt = new Date().toISOString();
@@ -64,71 +65,82 @@ function safetyStop() {
   if (last.app.pending > 20000 || last.app.oldestPendingSeconds > 180) return 'queue-safety-limit';
   return null;
 }
+let arrivals;
 try {
-  for (const rate of rates) {
-    const before = await loadSnapshot(resources),
-      phaseStartedAt = new Date().toISOString();
-    const latencies = [],
-      errors = {};
-    let successes = 0;
-    console.log('Steady phase: ' + rate + ' creates/s for ' + phaseSeconds + 's');
-    const arrivals = await runSteadyArrivals({
-      rate,
-      durationMs: phaseSeconds * 1000,
-      maxInFlight,
-      shouldStop: safetyStop,
-      perform: async () => {
-        const sequence = serial++,
-          client = clients[sequence % clients.length];
-        const input = { title: 'Steady ' + sequence, request: { reference: 'REQ-' + sequence, quantity: 25 } };
-        const beforeRequest = performance.now();
-        try {
-          const task = await client.session.command('POST', '/api/tasks', input);
-          if (typeof task?.taskId !== 'string') throw new ApiFailure(201, 'INVALID_CREATE_RESULT');
-          created.push({
-            taskId: task.taskId,
-            client: client.index,
-            ownerId: client.userId,
-            title: input.title,
-            reference: input.request.reference,
-          });
-          successes++;
-        } catch (error) {
-          const code = error instanceof ApiFailure ? error.status + ':' + error.code : error.name;
-          errors[code] = (errors[code] || 0) + 1;
-        } finally {
-          latencies.push(performance.now() - beforeRequest);
-        }
-      },
-    });
-    const after = await loadSnapshot(resources);
-    phases.push({
-      targetCreatesPerSecond: rate,
-      plannedSeconds: phaseSeconds,
-      startedAt: phaseStartedAt,
-      finishedAt: new Date().toISOString(),
-      arrivals: { ...arrivals, startDelaysMs: undefined, startDelayP95Ms: p95(arrivals.startDelaysMs) },
-      successes,
-      errors,
-      createP95Ms: p95(latencies),
-      before,
-      after,
-      pendingGrowth: after.app.pending - before.app.pending,
-      passed:
-        !arrivals.stoppedFor &&
-        arrivals.missed === 0 &&
-        arrivals.notOffered === 0 &&
-        arrivals.started === arrivals.planned &&
-        successes === arrivals.planned &&
-        p95(latencies) <= 3000,
-    });
-    console.log('Steady phase complete: ' + successes + ' created; pending growth=' + phases.at(-1).pendingGrowth);
-    if (arrivals.stoppedFor) break;
-  }
+  console.log('Continuous steady schedule: ' + rates.join('/') + ' creates/s, ' + phaseSeconds + 's per phase');
+  arrivals = await runSteadyArrivals({
+    phases: rates.map((rate) => ({ rate, durationMs: phaseSeconds * 1000 })),
+    maxInFlight,
+    shouldStop: safetyStop,
+    perform: async (_index, phaseIndex) => {
+      const metrics = phaseMetrics[phaseIndex];
+      const sequence = serial++,
+        client = clients[sequence % clients.length];
+      const input = { title: 'Steady ' + sequence, request: { reference: 'REQ-' + sequence, quantity: 25 } };
+      const beforeRequest = performance.now();
+      try {
+        const task = await client.session.command('POST', '/api/tasks', input);
+        if (typeof task?.taskId !== 'string') throw new ApiFailure(201, 'INVALID_CREATE_RESULT');
+        created.push({
+          taskId: task.taskId,
+          client: client.index,
+          ownerId: client.userId,
+          title: input.title,
+          reference: input.request.reference,
+        });
+        metrics.successes++;
+      } catch (error) {
+        const code =
+          error instanceof ApiFailure
+            ? error.status + ':' + error.code
+            : error instanceof Error
+              ? error.name
+              : 'UnknownFailure';
+        metrics.errors[code] = (metrics.errors[code] || 0) + 1;
+      } finally {
+        metrics.latencies.push(performance.now() - beforeRequest);
+      }
+    },
+  });
 } finally {
   await observation.stop();
 }
-const finishedAt = new Date().toISOString();
+const finishedAt = arrivals.finishedAt;
+const nearestObservation = (at) =>
+  observation.samples.reduce((nearest, sample) =>
+    Math.abs(Date.parse(sample.at) - Date.parse(at)) < Math.abs(Date.parse(nearest.at) - Date.parse(at))
+      ? sample
+      : nearest,
+  );
+for (const [index, phase] of arrivals.phases.entries()) {
+  const metrics = phaseMetrics[index],
+    before = nearestObservation(phase.startedAt),
+    after = nearestObservation(phase.finishedAt);
+  phases.push({
+    targetCreatesPerSecond: rates[index],
+    plannedSeconds: phaseSeconds,
+    startedAt: phase.startedAt,
+    finishedAt: phase.finishedAt,
+    arrivals: { ...phase, startDelaysMs: undefined, startDelayP95Ms: p95(phase.startDelaysMs) },
+    successes: metrics.successes,
+    errors: metrics.errors,
+    createP95Ms: p95(metrics.latencies),
+    before,
+    after,
+    observationOffsetsMs: {
+      before: Date.parse(before.at) - Date.parse(phase.startedAt),
+      after: Date.parse(after.at) - Date.parse(phase.finishedAt),
+    },
+    pendingGrowth: after.app.pending - before.app.pending,
+    passed:
+      !phase.stoppedFor &&
+      phase.missed === 0 &&
+      phase.notOffered === 0 &&
+      phase.started === phase.planned &&
+      metrics.successes === phase.planned &&
+      p95(metrics.latencies) <= 3000,
+  });
+}
 const drain = await drainLoad(resources, 300000);
 const finalIntegrity = { passed: false, expectedRecords: 5000 + created.length };
 try {
@@ -153,6 +165,12 @@ const report = {
   rates,
   phaseSeconds,
   maxInFlight,
+  arrivalSchedule: {
+    plannedDurationMs: arrivals.plannedDurationMs,
+    elapsedIncludingTailMs: arrivals.elapsedIncludingTailMs,
+    peakInFlight: arrivals.peakInFlight,
+    stoppedFor: arrivals.stoppedFor,
+  },
   phases,
   plannedArrivalSeconds: rates.length * phaseSeconds,
   resources,

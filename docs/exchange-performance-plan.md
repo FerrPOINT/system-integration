@@ -678,3 +678,55 @@ JSON и summaries в performance-cycle-2026-11-15 (крупные отчёты �
 в .json.gz с проверкой обратного распаковывания и SHA-256). Собственные завершённые
 логи/скрипты/overrides убраны; общие SDK/кэши и выбранные образы сохранены.
 Документы/код в Git; backup/dump/cold copies не создавались.
+
+
+### E19 — повторное ревью PR11
+
+Проверены head595bbfb/base7860311, история/refs/reflog, чистое дерево,
+комментарии и reviews GitHub (пусты), исходное ТЗ и правила слоёв.
+Один владелец ревью, новые агенты не запускались. Использованы development,
+code-review/context-map, refactor-simplify, GitHub review/workflow,
+remote-ssh-workspace и testing-workflow.
+
+**P2, измерения:** steady.mjs ожидал after snapshot и следующий before
+между фазами; оба loadSnapshot используют Docker stats/psql. Фактические
+паузы после планового конца E17 составили 3,050/4,014 с. Общее ожидание
+response tail между фазами дополнительно связывало следующий arrival
+с ответами предыдущей. Поэтому E17 не доказывает непрерывные 900 с:
+старые числа остаются историческими, непрерывная квалификация требует повтора.
+Это дефект владельца pacing, не ошибка Spring-слоёв и не повод вводить
+новый сервис/очередь/пул или ослаблять критерий нагрузки.
+
+Исправление: runSteadyArrivals получает все фазы сразу, один monotonic clock
+и один bounded active set. Между фазами нет await response tail/метрик;
+все ответы присоединяются один раз в конце. Сохранены safety stop,
+missed/notOffered, jitter, ограничение 64 и атрибуция API-исхода исходной фазе.
+Новая форма заменяет прежнюю, второго single-phase пути нет.
+Записываются реальные first/lastOfferedOffsetMs наряду с плановыми границами.
+Снимки before/after берутся из независимо собранного ряда и помечаются
+фактическим observationOffsetsMs; они не выдаются за атомарный снимок границы.
+
+Регрессия: следующая фаза должна начать запрос, пока медленный ответ
+предыдущей ещё не завершён; общий лимит сохраняется через границу.
+Старый контракт тест не прошёл, новый прошёл. Добавлены разные частоты,
+учёт не предложенных будущих фаз после safety stop и распространение
+falsy rejection callback без скрытого успеха. Адресный gate:10 PASS
+(7 pacing+3 sustainability), RED/GREEN сохранены в pr11-review-2026-11-15.
+
+Архитектурный проход: controller/domain/service/repository/client сохранены.
+Новые virtual threads вызывают настоящий Spring proxy ExchangeService,
+то есть каждая claim/finish имеет собственную короткую транзакцию;
+контекст транзакции родительского потока не предполагается.
+[Spring7 transaction implementation](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/tx-decl-explained.html)
+подтверждает thread-bound/proxy поведение. [PostgreSQL18 Read Committed](https://www.postgresql.org/docs/18/transaction-iso.html#XACT-READ-COMMITTED)
+обосновывает отдельную проверку готовности queue после task lock.
+Проверены stale lease/retry, LIMIT/LATERAL/SKIP LOCKED, порядок task→queue,
+lease до HTTP, поздний ответ, атомарность batch результата/событий и cursor.
+Копии политик между слоями не найдены; два явных worker-цикла execution/publication
+не заменяются generic batch framework ради внешнего сходства.
+
+Код backend/emulator/frontend, схемы и миграции остаются теми же, что у
+квалифицированного c7e603c. Следующий интегрированный gate: Java/архитектура,
+SQL и Node/frontend/style, совпадение runtime-байтов, затем настоящий
+непрерывный 50/с на 3×300 с, полный integrity и повторное ревью.
+Публичный runtime и обычные 11 контейнеров защищены свежим snapshot.
