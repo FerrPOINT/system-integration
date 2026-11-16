@@ -1,7 +1,7 @@
 # Переход backend на явные Spring-слои
 
 Дата исследования: 14 ноября 2026 года.
-Статус выполнения — в [текущей стадии](current-stage.md#spring-слои--реализация).
+Статус выполнения — в [текущей стадии](current-stage.md#архитектура-и-границы).
 Рабочая среда этой задачи — Firebat1 через SSH, выбранный checkout
 в /opt/dev/system-integration/.local/structure. Локальную Mini-CRM не изменяем.
 
