@@ -32,7 +32,7 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
         state &&
         events &&
         (testInfo.project.name === 'desktop'
-          ? events.x >= state.x + state.width && Math.abs(events.y - state.y) < 1
+          ? state.x >= events.x + events.width && Math.abs(events.y - state.y) < 1
           : events.y >= state.y + state.height)
       );
     })
@@ -242,7 +242,6 @@ test('TC-09: history follows automatic task updates without reopening the card',
     await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
     const applied = page.locator('[data-event-id]').filter({ hasText: 'Принят внешний результат: SUCCEEDED' });
     await expect(applied.getByText('Получен результат исполнителя', { exact: true })).toBeVisible();
-    await applied.getByText('Подробности обмена', { exact: true }).click();
     await expect(applied.getByText('Принят внешний результат: SUCCEEDED', { exact: true })).toBeVisible();
   } finally {
     expect((await request.delete(`${external}/test/faults/${reference}`)).status()).toBe(204);

@@ -21,7 +21,13 @@ async function mockApi(
   page: Page,
   role = 'INITIATOR',
   historyCount = 0,
-  control: { failTasks?: boolean; failHistory?: boolean; totalTasks?: number; signedIn?: boolean } = {},
+  control: {
+    failTasks?: boolean;
+    failHistory?: boolean;
+    totalTasks?: number;
+    signedIn?: boolean;
+    technicalHistory?: boolean;
+  } = {},
 ) {
   const reads: string[] = [];
   await page.route(
@@ -75,8 +81,10 @@ async function mockApi(
               operationId: taskId,
               occurredAt: task.createdAt,
               actor: 'SYSTEM',
-              type: 'CREATED',
-              summary: 'History event ' + (pageNumber * size + n),
+              type: control.technicalHistory ? 'DELIVERY_ATTEMPT' : 'CREATED',
+              summary: control.technicalHistory
+                ? 'Попытка ' + (pageNumber * size + n + 1) + ': PUT'
+                : 'History event ' + (pageNumber * size + n),
             })),
             page: pageNumber,
             totalItems: historyCount,
@@ -171,6 +179,95 @@ test('failed task refetch retains the measured window and does not retry through
   await page.setViewportSize({ width: 1280, height: 1000 });
   await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeGreaterThan(3);
   expect(new URL(page.url()).searchParams.get('businessStatus')).toBe('SUCCEEDED');
+});
+
+test('task history exposes descriptions and adapts the left pane to viewport height', async ({ page }, info) => {
+  if (info.project.name === 'desktop') await page.setViewportSize({ width: 1280, height: 720 });
+  await mockApi(page, 'INITIATOR', 1000, { technicalHistory: true });
+  await page.goto('/tasks/' + taskId);
+  const history = page.getByRole('region', { name: 'История', exact: true });
+  const state = page.getByRole('region', { name: 'Состояние задания', exact: true });
+  await expect(history.getByText('Попытка 1: PUT', { exact: true })).toBeVisible();
+  await expect(history.locator('details')).toHaveCount(0);
+  if (info.project.name === 'mobile') {
+    await expect(page).not.toHaveURL(/size=/);
+    await expect(history.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
+    const stateBox = (await state.boundingBox())!,
+      historyBox = (await history.boundingBox())!;
+    expect(historyBox.y).toBeGreaterThanOrEqual(stateBox.y + stateBox.height);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+    ).toBe(true);
+    return;
+  }
+  async function settledSize() {
+    await expect
+      .poll(async () => {
+        const size = Number(new URL(page.url()).searchParams.get('size'));
+        return (
+          (await history.locator('[data-event-id]').count()) === size &&
+          (await history.locator('[aria-busy]').getAttribute('aria-busy')) === 'false'
+        );
+      })
+      .toBe(true);
+    return Number(new URL(page.url()).searchParams.get('size'));
+  }
+  async function fits() {
+    await expect
+      .poll(() =>
+        history.evaluate((panel) => {
+          const content = panel.querySelector('.base-card-content')!,
+            viewport = panel.querySelector('.paged-viewport')!;
+          const footer = panel.querySelector('.pagination-footer')!.getBoundingClientRect();
+          const area = viewport.getBoundingClientRect(),
+            box = panel.getBoundingClientRect();
+          const workspace = panel.closest('.task-workspace')!.getBoundingClientRect();
+          const summary = document.querySelector('.task-summary')!.getBoundingClientRect();
+          const rows = [...panel.querySelectorAll('[data-event-id]')];
+          return {
+            historyFirst: box.right <= summary.left && Math.abs(box.top - summary.top) < 1,
+            fillsColumn: Math.abs(box.bottom - workspace.bottom) < 1,
+            footerAtBottom:
+              Math.abs(
+                content.getBoundingClientRect().bottom -
+                  parseFloat(getComputedStyle(content).paddingBottom) -
+                  footer.bottom,
+              ) < 1,
+            visibleFooter: footer.bottom <= innerHeight && area.bottom <= footer.top,
+            fittingRows:
+              rows.every((row) => row.getBoundingClientRect().bottom <= area.bottom + 1) ||
+              (rows.length === 1 && viewport.scrollHeight > viewport.clientHeight),
+            noOverflow:
+              document.documentElement.scrollWidth <= document.documentElement.clientWidth &&
+              document.querySelector('main')!.scrollTop === 0,
+          };
+        }),
+      )
+      .toEqual({
+        historyFirst: true,
+        fillsColumn: true,
+        footerAtBottom: true,
+        visibleFooter: true,
+        fittingRows: true,
+        noOverflow: true,
+      });
+  }
+  await expect(page).toHaveURL(/size=/);
+  await fits();
+  const short = await settledSize();
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeGreaterThan(short);
+  const tall = await settledSize();
+  expect(tall).toBeGreaterThan(short);
+  await fits();
+  await page.setViewportSize({ width: 820, height: 480 });
+  await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeLessThan(tall);
+  expect(await settledSize()).toBeLessThan(tall);
+  await fits();
+  await history.getByRole('button', { name: 'Далее →', exact: true }).click();
+  await expect(page).toHaveURL(/page=1/);
+  await settledSize();
+  await fits();
 });
 
 test('failed history polling retains its window and the next ordinary poll can recover @desktop', async ({ page }) => {
@@ -379,9 +476,9 @@ test('desktop navigation resets warm detail scroll and restores POP after query 
     .getByRole('region', { name: 'История', exact: true })
     .getByRole('button', { name: 'Далее →', exact: true });
   await expect(next).toBeEnabled();
-  await next.scrollIntoViewIfNeeded();
   const historyTop = await page.locator('main').evaluate((main) => main.scrollTop);
-  expect(historyTop).toBeGreaterThan(80);
+  expect(historyTop).toBe(0);
+  await expect(next).toBeInViewport();
   await next.click();
   await expect(page).toHaveURL(/page=1/);
   await expect.poll(() => page.locator('main').evaluate((main) => main.scrollTop)).toBe(historyTop);
