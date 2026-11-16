@@ -210,6 +210,16 @@ test('out-of-range task pages differ from empty lists and empty filters @desktop
   await page.goto('/tasks?businessStatus=REJECTED');
   await expect(page.getByRole('heading', { name: 'Ничего не найдено', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Сбросить фильтры', exact: true })).toBeVisible();
+  await page.route('**/api/session', (route) =>
+    route.fulfill({
+      json: { userId, username: 'operator-fixture', role: 'OPERATOR' },
+    }),
+  );
+  control.totalTasks = 0;
+  await page.goto('/tasks');
+  await expect(page.getByRole('heading', { name: 'Все задания', exact: true })).toBeVisible();
+  await expect(page.getByText('Задания появятся после создания инициатором.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Создать задание', exact: true })).toHaveCount(0);
 });
 
 test('production CSP permits modal styles with a fresh document nonce', async ({ page, request }) => {

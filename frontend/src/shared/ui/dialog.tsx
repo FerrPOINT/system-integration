@@ -1,7 +1,7 @@
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import type { ReactNode, RefObject } from 'react';
+import { useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { Button } from './button';
 
 // Consumed Base Dialog parts: Radix owns the portal, modal focus and dismissal.
@@ -82,6 +82,11 @@ export function DiscardDialog({
   discardLabel?: string;
   cancelLabel?: string;
 }) {
+  const returnTarget = useRef<HTMLElement | null>(null);
+  // Closing resets the page blocker before Radix restores focus. Keep this dialog's opening target.
+  useLayoutEffect(() => {
+    if (open) returnTarget.current = returnFocusRef.current;
+  }, [open, returnFocusRef]);
   return (
     <AlertDialogPrimitive.Root
       open={open}
@@ -94,9 +99,9 @@ export function DiscardDialog({
         <AlertDialogPrimitive.Content
           className="base-dialog-content"
           onCloseAutoFocus={(event) => {
-            if (returnFocusRef.current) {
+            if (returnTarget.current?.isConnected) {
               event.preventDefault();
-              returnFocusRef.current.focus();
+              returnTarget.current.focus();
             }
           }}
         >

@@ -46,6 +46,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
   const snapshot = () => ({
     reconciliationId: snapshotId,
     taskId,
+    issueId: taskId,
     operationId: taskId,
     checkedAt: '2026-11-14T00:00:00Z',
     checkedBy: task().ownerId,
@@ -61,6 +62,8 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     kind: 'RECONCILIATION_DIFFERENCE',
     status: state.resolved ? 'RESOLVED' : 'OPEN',
     summary: 'Fixture discrepancy',
+    taskTitle: state.title,
+    requestReference: 'REQ-000001',
     openedAt: '2026-11-14T00:00:00Z',
     latestReconciliationId: state.latestSnapshot,
     assignedTo: state.assigned ? task().ownerId : undefined,
@@ -484,7 +487,12 @@ for (const screen of ['', 'issue', 'reconciliation']) {
       await expect(page.getByRole('button', { name: 'Проверить результат сверки', exact: true })).toBeFocused();
       state.badSnapshotReceipt = undefined;
       await page.getByRole('button', { name: 'Проверить результат сверки', exact: true }).click();
-      await expect(page.getByRole('alert').filter({ hasText: 'Сверка сохранена.' })).toBeVisible();
+      if (screen === 'reconciliation') {
+        // No active task/issue read exists here; accepted recovery can finish without a failing GET.
+        await expect(page.getByRole('button', { name: 'Выполнить сверку', exact: true })).toBeEnabled();
+      } else {
+        await expect(page.getByRole('alert').filter({ hasText: 'Сверка сохранена.' })).toBeVisible();
+      }
       expect(state.commands).toHaveLength(2);
       expect(state.commands[1]).toEqual(state.commands[0]);
       state.failRead = false;
