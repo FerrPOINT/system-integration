@@ -105,7 +105,7 @@ class ReviewContextTest {
 
     @Test
     void delayedDeliveryRequiresFreshEvidenceAndOwnershipControlsOnlyTake() {
-        var state = state(DeliveryStatus.RETRY_WAIT, null, 10);
+        var state = state(DeliveryStatus.NEEDS_REVIEW, null, 10);
         var issue = issue(Issue.Kind.DELIVERY_DELAYED, Issue.Status.OPEN, operator, taskId);
         assertEquals(
                 List.of(RECONCILE),
@@ -118,6 +118,20 @@ class ReviewContextTest {
                 List.of(TAKE_OWNERSHIP, RECONCILE),
                 context(issue, state, false, null, Reconciliation.Availability.UNAVAILABLE, 10)
                         .actions(UUID.randomUUID()));
+    }
+
+    @Test
+    void delayedIssuesCannotRestartDeliveryOutsideThePausedState() {
+        var issue = issue(Issue.Kind.DELIVERY_DELAYED, Issue.Status.OPEN, operator, taskId);
+        for (var delivery :
+                new DeliveryStatus[] {DeliveryStatus.QUEUED, DeliveryStatus.RETRY_WAIT, DeliveryStatus.UNKNOWN}) {
+            var state = state(delivery, null, 10);
+            assertFalse(
+                    context(issue, state, true, null, Reconciliation.Availability.NOT_FOUND, 10)
+                            .actions(operator)
+                            .contains(RETRY),
+                    delivery::name);
+        }
     }
 
     @Test

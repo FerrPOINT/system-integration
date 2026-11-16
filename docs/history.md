@@ -27,3 +27,8 @@
 
 Frontend-аудит и интеграция PR #15: [аудит](https://github.com/FerrPOINT/system-integration/blob/caa25fbedf59e5a079e4d6c18747bceac34aa6f8/docs/frontend-full-audit-2026-11-16.md),
 [квалификация](https://github.com/FerrPOINT/system-integration/blob/caa25fbedf59e5a079e4d6c18747bceac34aa6f8/docs/current-stage.md).
+
+
+Квалификация типизации и общего UI после PR #16 сохранена
+в [документе main 1125b7f](https://github.com/FerrPOINT/system-integration/blob/1125b7fd43cb57a71284be2586c544a16660e252/docs/current-stage.md).
+Актуальная стадия не дублирует результаты этих завершённых итераций.

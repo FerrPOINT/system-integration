@@ -141,6 +141,10 @@ docker compose -p system-integration-load -f compose.yml -f compose.public.yml -
 ~~~
 
 Метки всех трёх образов должны совпадать с коммитом кандидата.
+При сравнении образов до и после V12 используйте свежий выделенный QA-том
+для каждой версии схемы: старый backend пишет удалённый http_status.
+Обычный reset данных не откатывает Flyway; завершённый QA-том удаляется
+штатной командой очистки ниже.
 
 ```sh
 docker compose -p system-integration-load -f compose.yml -f compose.public.yml -f compose.load.yml --profile app up -d --wait

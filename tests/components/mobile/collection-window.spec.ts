@@ -497,3 +497,18 @@ test('a caller-defined resource restores its own position on a new visit after c
   await expect.poll(async () => Math.abs((await row.boundingBox())!.y - anchor.top)).toBeLessThan(2);
   expect((await info(page)).cached).toBeLessThanOrEqual(100);
 });
+
+test('crossing the breakpoint switches desktop pages and the mobile feed without losing records', async ({ page }) => {
+  await server(page, 20);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/tests/collection-window.html');
+  await ready(page);
+  await expect(page.locator('.task-cards [data-record-id]').first()).toBeVisible();
+  await expect(page.getByRole('table')).toHaveCount(0);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.getByRole('table')).toBeVisible();
+  await expect(page.locator('.task-cards')).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.task-cards [data-record-id]').first()).toBeVisible();
+  await expect(page.getByRole('table')).toHaveCount(0);
+});

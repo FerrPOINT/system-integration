@@ -59,6 +59,8 @@ build/test gate выполняется на интегрированном эт�
 разрешены, generated requests принадлежат API, а URL parser получает только
 канонический BusinessStatus enum. Narrow public paths закреплены в eslint.config.js.
 StrictMode остаётся включённым; исправляйте cleanup/lifecycle, а не отключайте его.
+useMediaQuery подписывается на обязательный browser API matchMedia. Приложение
+не использует SSR; отсутствующий API вызывает явную ошибку, а не desktop default.
 
 На узком экране проверяйте scrollWidth относительно documentElement.clientWidth:
 innerWidth включает классический scrollbar. Не задавайте body жёсткий минимум,
