@@ -49,9 +49,8 @@ async function fits(page: Page, region: Locator) {
           separated: area.bottom <= footer.top,
           itemsFit:
             items.every((item) => item.getBoundingClientRect().bottom <= area.bottom + 1) ||
-            (items.length === 1 &&
-              items[0].getBoundingClientRect().height > area.height &&
-              viewport.scrollHeight > viewport.clientHeight),
+            // A minimum page includes the table heading and border as well as its one record.
+            (items.length === 1 && viewport.scrollHeight > viewport.clientHeight),
           noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth,
         };
       }),
