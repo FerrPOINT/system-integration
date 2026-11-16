@@ -9,24 +9,18 @@ export function PageNavigation({
   pageCount,
   onPageChange,
   pending,
-  compact,
   summary,
 }: {
   page: number;
   pageCount: number;
   onPageChange: (page: number) => void;
   pending?: boolean;
-  compact?: boolean;
   summary: ReactNode;
 }) {
   const current = page <= pageCount ? page : 1;
-  const pages = compact
-    ? pageCount > 0
-      ? [current]
-      : []
-    : [...new Set([1, current - 1, current, current + 1, pageCount])]
-        .filter((n) => n > 0 && n <= pageCount)
-        .sort((a, b) => a - b);
+  const pages = [...new Set([1, current - 1, current, current + 1, pageCount])]
+    .filter((n) => n > 0 && n <= pageCount)
+    .sort((a, b) => a - b);
   if (pageCount <= 1 && page <= 1)
     return (
       <div className="ui-page-summary" role="status">

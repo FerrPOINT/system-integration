@@ -38,14 +38,7 @@ public record ReviewContext(
         actions.add(RECONCILE);
         var external = fresh() ? external() : null;
         boolean protocolError = issue.kind() == Issue.Kind.PROTOCOL_ERROR;
-        boolean delayed = issue.kind() == Issue.Kind.DELIVERY_DELAYED;
-        boolean retryable =
-                pausedDelivery()
-                        || (delayed
-                                && (state.task().deliveryStatus() == DeliveryStatus.UNKNOWN
-                                        || state.task().deliveryStatus() == DeliveryStatus.RETRY_WAIT
-                                        || state.task().deliveryStatus() == DeliveryStatus.QUEUED));
-        if (retryable
+        if (pausedDelivery()
                 && queueFree
                 && fresh()
                 && reconciliation.externalAvailability() != Reconciliation.Availability.UNAVAILABLE

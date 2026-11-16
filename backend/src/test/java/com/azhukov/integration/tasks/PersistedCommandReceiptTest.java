@@ -62,13 +62,6 @@ class PersistedCommandReceiptTest extends PostgresTest {
         assertEquals(1, count("delivery_queue"));
         assertEquals(1, count("command_receipts"));
         status(409, create(owner, key, CREATE.replace("25", "26")));
-        assertEquals(
-                201,
-                jdbc.queryForObject(
-                        "SELECT http_status FROM command_receipts WHERE actor_id=? AND command_type='CREATE_TASK' AND idempotency_key=?",
-                        Integer.class,
-                        first,
-                        key));
     }
 
     @Test

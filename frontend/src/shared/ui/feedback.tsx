@@ -1,7 +1,6 @@
 import { RefreshCw } from 'lucide-react';
 import { Button } from './button';
 import { PageNavigation } from './page-navigation';
-import { useMediaQuery } from './use-media-query';
 export function Loading() {
   return (
     <div className="ui-loading-state" role="status" aria-label="Загрузка…" aria-busy="true" data-scope="page">
@@ -25,7 +24,6 @@ export function Pagination({
   pending: boolean;
   onChange: (page: number) => void;
 }) {
-  const compact = useMediaQuery('(max-width: 760px)');
   if (totalItems === undefined || totalPages === undefined)
     return <div className="pagination-footer" aria-hidden="true" />;
   const summary =
@@ -41,7 +39,6 @@ export function Pagination({
       <PageNavigation
         page={page + 1}
         pageCount={totalPages}
-        compact={compact}
         pending={pending}
         onPageChange={(next) => onChange(next - 1)}
         summary={summary}

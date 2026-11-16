@@ -1,33 +1,13 @@
-import { forwardRef, type CSSProperties, type HTMLAttributes } from 'react';
+import { forwardRef, type HTMLAttributes } from 'react';
 import { cn } from './utils';
 
-export interface IconMarkProps extends HTMLAttributes<HTMLSpanElement> {
-  size?: 'sm' | 'md';
-  /** Omit beside an existing name; a standalone mark requires its accessible name. */
-  label?: string;
-}
-
-/** Resource identity decoration. The product supplies its icon and any navigation. */
-export const IconMark = forwardRef<HTMLSpanElement, IconMarkProps>(function IconMark(
-  { size = 'md', label, children, style, className, ...props },
+/** Decorative brand mark; the adjacent product name supplies its accessible name. */
+export const IconMark = forwardRef<HTMLSpanElement, HTMLAttributes<HTMLSpanElement>>(function IconMark(
+  { children, className, ...props },
   ref,
 ) {
   return (
-    <span
-      {...props}
-      ref={ref}
-      className={cn('ui-icon-mark', className)}
-      data-size={size === 'sm' ? 'sm' : 'md'}
-      role={label ? 'img' : undefined}
-      aria-label={label || undefined}
-      aria-hidden={label ? undefined : true}
-      style={
-        {
-          ...style,
-          '--ui-icon-mark-color': 'var(--color-accent)',
-        } as CSSProperties
-      }
-    >
+    <span {...props} ref={ref} aria-hidden="true" className={cn('ui-icon-mark', className)}>
       {children}
     </span>
   );

@@ -41,7 +41,7 @@ result=json.dumps({'operationId':O,'request':{'reference':'REQ-100001','quantity
 params={
 'JdbcExchangeRepository.backlog/0:1':[],
 'JdbcExchangeRepository.databaseActivity/0:1':[],
-'JdbcCommandReceiptRepository.lock/3:1':['actor:command:key'],'JdbcCommandReceiptRepository.find/3:1':[U,'CREATE_TASK',K],'JdbcCommandReceiptRepository.insert/6:1':[U,'NEW_COMMAND',K,'probe',201,'{}'],
+'JdbcCommandReceiptRepository.lock/3:1':['actor:command:key'],'JdbcCommandReceiptRepository.find/3:1':[U,'CREATE_TASK',K],'JdbcCommandReceiptRepository.insert/5:1':[U,'NEW_COMMAND',K,'probe','{}'],
 'DemoUsers.run/1:1':[uid(900004),'sql.probe','not-a-login-secret','INITIATOR'],'JdbcUserDetailsService.loadUserByUsername/1:1':['sql.owner.one'],
 'JdbcTaskRepository.insert/2:1':[NT,U,NO,'probe','REQ-110001',25],'JdbcExchangeRepository.enqueue/1:1':[uid(105001)],'JdbcTaskRepository.rename/3:1':[ 'changed',2,T],
 'JdbcTaskRepository.history/5:1':[uid(600001),T,O,'USER',U,'RENAMED','probe','{}'],'JdbcTaskRepository.countHistory/1:1':[T],'JdbcTaskRepository.history/3:1':[T,20,0],
@@ -202,9 +202,9 @@ INSERT INTO reconciliations(id,task_id,exchange_version,checked_at,checked_by,sn
 SELECT ('00000000-0000-0000-0000-'||lpad((300000+i)::text,12,'0'))::uuid,id,1,clock_timestamp(),
 '00000000-0000-0000-0000-000000900003','{}'
 FROM tasks CROSS JOIN LATERAL (SELECT right(id::text,12)::int i) n WHERE i<=1000;
-INSERT INTO command_receipts(actor_id,command_type,idempotency_key,fingerprint,http_status,response_body)
+INSERT INTO command_receipts(actor_id,command_type,idempotency_key,fingerprint,response_body)
 SELECT '00000000-0000-0000-0000-000000900001','CREATE_TASK',
-('00000000-0000-0000-0000-'||lpad((400000+i)::text,12,'0'))::uuid,'seed',201,'{}'
+('00000000-0000-0000-0000-'||lpad((400000+i)::text,12,'0'))::uuid,'seed','{}'
 FROM generate_series(1,10000)i;
 ANALYZE users; ANALYZE tasks; ANALYZE delivery_queue; ANALYZE delivery_attempts; ANALYZE task_history; ANALYZE exchange_issues; ANALYZE reconciliations; ANALYZE command_receipts;
 """
