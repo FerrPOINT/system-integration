@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { logIn, logOut } from '../../../../build/generated/openapi/client';
 import { data } from '../../../shared/api/http';
 import { csrf } from '../../../shared/api/csrf';
-import { clearSession, sessionKey } from '../model/session-policy';
+import { clearSession, sessionGeneration, sessionKey } from '../model/session-policy';
 
 export function useLogin() {
   const client = useQueryClient();
@@ -17,8 +17,12 @@ export function useLogin() {
 export function useLogout() {
   const client = useQueryClient();
   return useMutation({
+    onMutate: () => sessionGeneration(client),
     // Each next write obtains its own rotated CSRF token before sending.
     mutationFn: async () => data(logOut(await csrf())),
-    onSuccess: () => clearSession(client),
+    onSuccess: (_data, _variables, generation) => {
+      if (generation === undefined) throw new Error('Не определено поколение команды выхода');
+      return clearSession(client, generation);
+    },
   });
 }

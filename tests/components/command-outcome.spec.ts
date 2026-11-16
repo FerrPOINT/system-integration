@@ -33,6 +33,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     createKeys: new Set<string>(),
     holdWrite: undefined as Promise<void> | undefined,
     holdLogout: undefined as Promise<void> | undefined,
+    holdRead: undefined as Promise<void> | undefined,
     rejectRename: false,
     reads: [] as string[],
   };
@@ -127,7 +128,10 @@ async function mockApi(page: Page, role = 'INITIATOR') {
           body: request.postDataJSON(),
         });
         if (request.method() === 'PATCH' && state.rejectRename)
-          return route.fulfill({ status: 409, json: { code: 'CONCURRENT_CHANGE', detail: 'Fixture title conflict' } });
+          return route.fulfill({
+            status: 409,
+            json: { code: 'TITLE_REVISION_CONFLICT', detail: 'Fixture title conflict' },
+          });
         if (path === '/api/tasks' && state.rejectCreate)
           return route.fulfill({
             status: 400,
@@ -168,6 +172,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
         return route.fulfill({ status: request.method() === 'POST' ? 201 : 200, json: { taskId } });
       }
       state.reads.push(path);
+      await state.holdRead;
       if (state.failRead) return fail();
       if (path === '/api/exchange/issues') {
         const search = new URL(request.url()).searchParams;
@@ -277,6 +282,30 @@ for (const exit of ['route', 'logout']) {
     expect(state.commands).toHaveLength(1);
   });
 }
+
+test('conflict recovery freezes the rename fields until the read closes the form', async ({ page }) => {
+  const state = await mockApi(page);
+  state.rejectRename = true;
+  await page.goto('/tests/command-outcome.html');
+  await page.getByRole('button', { name: 'Изменить название', exact: true }).click();
+  const title = page.getByRole('textbox', { name: 'Новое название', exact: true });
+  await title.fill('Conflicting title');
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
+  const update = page.getByRole('button', { name: 'Обновить карточку', exact: true });
+  await expect(update).toBeVisible();
+  let release!: () => void;
+  state.holdRead = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await update.click();
+  await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
+  await expect(title).toBeDisabled();
+  await expect(update).toBeDisabled();
+  release();
+  await expect(title).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+  expect(state.commands).toHaveLength(1);
+});
 
 for (const general of [false, true]) {
   test('closing an accepted decision preserves read recovery for ' + (general ? 'feed' : 'task'), async ({ page }) => {

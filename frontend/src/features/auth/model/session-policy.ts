@@ -20,18 +20,30 @@ export function startSessionCommand(client: QueryClient, command: object) {
   scope.commands.set(command, scope.generation);
 }
 
-async function clearPrivateCache(client: QueryClient) {
-  const owned = (query: { queryKey: readonly unknown[] }) => query.queryKey[0] !== sessionKey[0];
-  await client.cancelQueries({ predicate: owned });
-  client.removeQueries({ predicate: owned });
-  client.getMutationCache().clear();
+export function sessionGeneration(client: QueryClient) {
+  return sessionScope(client).generation;
 }
 
-export async function clearSession(client: QueryClient) {
-  sessionScope(client).generation++;
-  await client.cancelQueries({ queryKey: sessionKey, exact: true });
-  await clearPrivateCache(client);
+function clearPrivateCache(client: QueryClient) {
+  const owned = (query: { queryKey: readonly unknown[] }) => query.queryKey[0] !== sessionKey[0];
+  const cancelled = client.cancelQueries({ predicate: owned });
+  // Detach the old cache synchronously; cancellation may settle after a new login.
+  client.removeQueries({ predicate: owned });
+  client.getMutationCache().clear();
+  return cancelled;
+}
+
+export async function clearSession(client: QueryClient, expectedGeneration = sessionGeneration(client)) {
+  const scope = sessionScope(client);
+  if (scope.generation !== expectedGeneration) return;
+  const clearingGeneration = ++scope.generation;
+  const cancelled = Promise.all([
+    client.cancelQueries({ queryKey: sessionKey, exact: true }),
+    clearPrivateCache(client),
+  ]);
   clearFeedPositions();
+  await cancelled;
+  if (scope.generation !== clearingGeneration) return;
   // Preserve the observed session query so the auth gate sees the identity change.
   client.setQueryData(sessionKey, null);
 }
@@ -40,8 +52,8 @@ export async function acceptSession(client: QueryClient, next: GetSession200) {
   const previous = client.getQueryData<GetSession200 | null>(sessionKey);
   if (previous?.userId !== next.userId || previous?.role !== next.role) {
     sessionScope(client).generation++;
-    await clearPrivateCache(client);
     if (previous) clearFeedPositions();
+    await clearPrivateCache(client);
   }
   return next;
 }

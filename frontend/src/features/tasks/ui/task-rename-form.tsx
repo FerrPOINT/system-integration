@@ -40,7 +40,10 @@ export function RenameForm({ task, onClose }: { task: Task; onClose: () => void 
             );
         }}
       >
-        <fieldset className="base-form-fieldset base-form" disabled={rename.isPending || rename.isSuccess}>
+        <fieldset
+          className="base-form-fieldset base-form"
+          disabled={rename.isPending || rename.isSuccess || refresh.isPending}
+        >
           <FormField id="field-title" label="Новое название" required>
             {(attrs) => (
               <Input
@@ -70,17 +73,8 @@ export function RenameForm({ task, onClose }: { task: Task; onClose: () => void 
           )}
           <Button
             type="button"
-            disabled={rename.isPending}
-            onClick={() =>
-              guard.requestClose(
-                conflict
-                  ? () => {
-                      guard.release();
-                      refreshTask();
-                    }
-                  : onClose,
-              )
-            }
+            disabled={rename.isPending || refresh.isPending}
+            onClick={() => guard.requestClose(conflict ? refreshTask : onClose)}
           >
             {conflict ? 'Обновить карточку' : rename.isSuccess ? 'Закрыть' : 'Отмена'}
           </Button>
