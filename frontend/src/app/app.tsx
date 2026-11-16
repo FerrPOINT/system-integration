@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Outlet } from 'react-router-dom';
 import { Suspense } from 'react';
 import { AppShell } from './shell/app-shell';
-import { Brand } from './shell/brand';
+import { AppHeader } from './shell/app-header';
 import { ThemePicker, useThemePreference } from './shell/theme';
 import { sessionOptions } from '../features/auth/api/session-queries';
 import { LoginForm } from '../features/auth/ui/login-form';
@@ -14,20 +14,24 @@ import type { SessionRouteContext } from './route-context';
 export function App() {
   const appearance = <ThemePicker {...useThemePreference()} />;
   const session = useQuery(sessionOptions);
-  if (session.isPending)
+  if (!session.data)
     return (
-      <main className="base-page-stack">
-        <Loading />
-      </main>
+      <div className="app-shell">
+        <AppHeader appearance={appearance} />
+        <main className="login-page" id="main">
+          {session.isPending ? (
+            <Loading />
+          ) : session.isError ? (
+            <div className="base-page-stack">
+              <ErrorMessage error={session.error} />
+              <Button onClick={() => session.refetch()}>Повторить</Button>
+            </div>
+          ) : (
+            <LoginForm />
+          )}
+        </main>
+      </div>
     );
-  if (session.isError && !session.data)
-    return (
-      <main className="base-page-stack">
-        <ErrorMessage error={session.error} />
-        <Button onClick={() => session.refetch()}>Повторить</Button>
-      </main>
-    );
-  if (!session.data) return <LoginForm brand={<Brand />} appearance={appearance} />;
   const user = session.data;
   return (
     <AppShell key={user.userId + ':' + user.role} user={user} appearance={appearance}>

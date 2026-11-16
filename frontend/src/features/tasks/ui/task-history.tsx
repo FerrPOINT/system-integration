@@ -1,4 +1,3 @@
-import { Disclosure } from '../../../shared/ui/disclosure';
 import { technicalHistoryLabels } from '../model/task-labels';
 import { ErrorMessage } from '../../../shared/ui/error-message';
 import { Notice } from '../../../shared/ui/notice';
@@ -42,16 +41,19 @@ export function History({
   });
   const { query: history, items: historyItems, meta: historyPage } = collection;
   const { viewportRef: registryRef, restoring, positionNotice, loadNext, loadPrevious, refresh } = collection;
-  // Measure the available column, independent of the card's content height.
   return (
-    <div className="task-history-viewport" ref={registryRef} data-feed-viewport={mobile || undefined}>
+    <div className="task-history-viewport" data-feed-viewport={mobile || undefined}>
       <Card asChild>
         <section className="history-panel" aria-labelledby="task-history-title">
           <CardContent className="paged-list base-page-stack" aria-busy={history.isFetching || restoring}>
             <CardTitle asChild>
               <h2 id="task-history-title">История</h2>
             </CardTitle>
-            <div className="paged-viewport">
+            <div
+              className="paged-viewport"
+              ref={registryRef}
+              data-page-measurement={history.isError ? 'paused' : undefined}
+            >
               {mobile && valid && historyPage && (
                 <FeedStart
                   hasPrevious={history.hasPreviousPage}
@@ -91,9 +93,7 @@ export function History({
                           {technicalHistoryLabels[event.type] ? (
                             <>
                               <p>{technicalHistoryLabels[event.type]}</p>
-                              <Disclosure summary="Подробности обмена" size="sm" tone="muted">
-                                <p>{event.summary}</p>
-                              </Disclosure>
+                              <p className="muted">{event.summary}</p>
                             </>
                           ) : (
                             <p>{event.summary}</p>

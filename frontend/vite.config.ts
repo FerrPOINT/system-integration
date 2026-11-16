@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { gzipSync } from 'node:zlib';
 
 export default defineConfig({
+  html: { cspNonce: '__STYLE_NONCE__' },
   plugins: [
     react(),
     {

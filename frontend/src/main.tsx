@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { setNonce } from 'get-nonce';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { appRoutes } from './app/router';
 import { Providers } from './app/providers';
@@ -8,6 +9,9 @@ import './shared/styles/controls.css';
 import './shared/styles/patterns.css';
 import './shared/styles/layout.css';
 import './app/shell/shell.css';
+
+const nonce = document.querySelector<HTMLMetaElement>('meta[property="csp-nonce"]')?.nonce;
+if (nonce) setNonce(nonce);
 
 const router = createBrowserRouter(appRoutes);
 const container = document.getElementById('root');

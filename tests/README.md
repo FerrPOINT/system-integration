@@ -24,6 +24,19 @@ SI_BACKEND_URL=http://127.0.0.1:19680 SI_EMULATOR_URL=http://127.0.0.1:19681 nod
 
 Проверьте origin/external и свежие createdAt в `tests/results/demo.json`:
 идемпотентный replay старых заданий не является проверкой нового кандидата.
+## Production frontend без API/БД
+
+После `frontend: pnpm build` из `tests/` выполните
+`corepack pnpm exec playwright test --config production.config.ts`.
+Runner поднимает временный контейнер на 127.0.0.1:19778 из Nginx image,
+закреплённого в frontend/Dockerfile, с настоящим nginx.conf и read-only dist.
+Он использует отдельную временную сеть; API перехватывается тестами, доступа
+к Compose/БД нет. Container/network удаляются в global teardown.
+
+Проверяются nonce CSP и условный HTTP-запрос, Dialog/Select/вложенный discard,
+видимость точных границ периода и desktop scroll cold/warm/POP после Query GC.
+Эта проверка не заменяет сквозные сценарии отдельного test Compose.
+
 ## HTTP smoke
 
 Запустите отдельный тестовый Compose по [инструкции](load/README.md#запуск).
@@ -78,9 +91,9 @@ themes.spec.ts проверяет три палитры, тёмную по ум�
 сохранение выбора, синхронизацию вкладок, сохранение черновика формы,
 мобильные фильтры, общий логотип, поля с подсказками и карточки, оформление меню и отступ стрелки, клавиатуру и явное сообщение при недоступном или неверном сохранённом выборе.
 spacing.spec.ts дополнительно измеряет интервалы при удержанном HTTP-ответе, ошибке, пустом и заполненном реестре, в карточках, форме, истории и сверке.
-Основной прогон содержит 76 проверок в двух профилях экрана. Component specs
+Основной прогон выполняется в двух профилях экрана. Component specs
 находятся в `components/`, прикладные — в `e2e/`: runner разделены каталогами.
-Component discovery содержит 116 проверок: Select, отложенное измерение,
+Component discovery проверяет Select, отложенное измерение,
 идентичность/guard форм, исходы команд и follow-up GET, operator draft basis,
 route/chunk recovery и mobile window. Они используют production components/Query
 под StrictMode и перехватывают все API-запросы. Проверяются тёплый/холодный кэш,
@@ -223,6 +236,11 @@ corepack pnpm exec playwright test --config components.config.ts
 Шесть desktop/mobile-проверок покрывают required, controlled/uncontrolled reset,
 однократный FormData, disabled/fieldset, клавиатуру и недоступное значение.
 Основной playwright.config.ts эту fixture не запускает.
+
+Production UI tests (`production.config.ts`) запускают временный Nginx на
+loopback 19778 в отдельной сети 10.252.97.0/28. Сеть и контейнер удаляются
+global teardown; перед запуском проверьте отсутствие пересечений Docker/host/VPN.
+API перехватывается тестами, доступ к БД не требуется.
 
 ## Измерение пагинации и навигация
 

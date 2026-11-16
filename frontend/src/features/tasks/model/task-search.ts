@@ -69,3 +69,10 @@ function utcFilter(value: string | undefined) {
 export function utcFilterValue(value: string | undefined) {
   return utcFilter(value)?.wire.slice(0, 16) ?? '';
 }
+
+export function utcFilterHint(value: string | undefined) {
+  const wire = utcFilter(value)?.wire;
+  return wire && !wire.endsWith(':00Z')
+    ? 'Точная граница: ' + wire + '. При изменении поля время задаётся с точностью до минуты.'
+    : undefined;
+}
