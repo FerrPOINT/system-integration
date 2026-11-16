@@ -25,6 +25,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     rejectCreate: false,
     badCreateReceipt: undefined as unknown,
     badSnapshotReceipt: undefined as unknown,
+    reconciliationStatus: 200,
     createKeys: new Set<string>(),
     holdWrite: undefined as Promise<void> | undefined,
     reads: [] as string[],
@@ -125,6 +126,16 @@ async function mockApi(page: Page, role = 'INITIATOR') {
           return route.fulfill({ status: 201, json: state.badCreateReceipt });
         if (path.endsWith('/reconciliations') && state.badSnapshotReceipt !== undefined)
           return route.fulfill({ json: state.badSnapshotReceipt });
+        if (path.endsWith('/reconciliations') && state.reconciliationStatus !== 200)
+          return route.fulfill({
+            status: state.reconciliationStatus,
+            json: {
+              type: 'about:blank',
+              status: state.reconciliationStatus,
+              code: state.reconciliationStatus === 404 ? 'TASK_NOT_FOUND' : 'SERVICE_UNAVAILABLE',
+              title: state.reconciliationStatus === 404 ? 'Задание не найдено' : 'Сервис недоступен',
+            },
+          });
         state.failRead = true;
         if (path.endsWith('/take')) {
           state.assigned = true;
@@ -437,6 +448,34 @@ for (const receipt of [
     expect(state.commands[1]).toEqual(state.commands[0]);
   });
 }
+
+test('a definitive reconciliation 404 remains a rejection', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  state.reconciliationStatus = 404;
+  await page.goto('/tests/command-outcome.html');
+  await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Задание не найдено');
+  await expect(page.getByRole('button', { name: 'Выполнить сверку', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Проверить результат сверки', exact: true })).toHaveCount(0);
+});
+
+test('uncertain reconciliation stays uncertain through a failed CSRF read', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  state.reconciliationStatus = 503;
+  await page.goto('/tests/command-outcome.html');
+  await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Сверка могла сохраниться');
+  state.failCsrf = true;
+  await page.getByRole('button', { name: 'Проверить результат сверки', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Проверить результат сверки', exact: true })).toBeEnabled();
+  expect(state.commands).toHaveLength(1);
+  state.failCsrf = false;
+  state.reconciliationStatus = 200;
+  await page.getByRole('button', { name: 'Проверить результат сверки', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Сверка сохранена.' })).toBeVisible();
+  expect(state.commands).toHaveLength(2);
+  expect(state.commands[1]).toEqual(state.commands[0]);
+});
 
 test('unknown create freezes the submitted input and replays exactly one command', async ({ page }) => {
   const state = await mockApi(page);

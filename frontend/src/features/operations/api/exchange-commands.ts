@@ -39,7 +39,7 @@ export function useReconcileTask(taskId: string) {
           throw new ProtocolError(200);
         return receipt;
       } catch (error) {
-        if (error instanceof ApiError && [400, 401, 403, 409].includes(error.status)) throw error;
+        if (error instanceof ApiError && [400, 401, 403, 404, 409].includes(error.status)) throw error;
         throw new UnknownReconciliationOutcome(error);
       }
     },
