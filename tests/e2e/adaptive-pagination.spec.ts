@@ -218,7 +218,7 @@ test('UI-15: issue table and mobile cards use the same server window without los
         await page.setViewportSize({ width, height: 1000 });
         await settled(page, region);
         await expect(page.getByRole('table', { name: 'Реестр разборов обмена' })).toBeVisible();
-        expect(await page.locator('.base-table-scroll').evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(
+        expect(await page.locator('.ui-table-scroll').evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(
           true,
         );
         await fits(page, region);

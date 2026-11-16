@@ -4,7 +4,7 @@ import { PageNavigation } from './page-navigation';
 import { useMediaQuery } from './use-media-query';
 export function Loading() {
   return (
-    <div className="base-loading-state" role="status" aria-label="Загрузка…" aria-busy="true" data-scope="page">
+    <div className="ui-loading-state" role="status" aria-label="Загрузка…" aria-busy="true" data-scope="page">
       Загрузка…
     </div>
   );
@@ -62,7 +62,7 @@ export function RefreshButton({
   return (
     <Button
       type="button"
-      className="base-icon-button"
+      className="ui-icon-button"
       aria-label="Обновить"
       title={pending ? 'Обновляем…' : 'Обновить'}
       aria-busy={pending}

@@ -24,7 +24,7 @@ export function FormField({
 }) {
   const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined;
   return (
-    <div className="base-form-field">
+    <div className="ui-form-field">
       <Label htmlFor={id}>
         {label}
         {required && <span aria-hidden> *</span>}
@@ -36,7 +36,7 @@ export function FormField({
         'aria-describedby': describedBy,
       })}
       {hint && (
-        <p id={`${id}-hint`} className="base-field-hint">
+        <p id={`${id}-hint`} className="ui-field-hint">
           {hint}
         </p>
       )}

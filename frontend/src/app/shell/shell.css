@@ -66,7 +66,7 @@
   color: var(--color-text-muted);
   font-weight: 500;
 }
-.theme-control .base-choice-trigger {
+.theme-control .ui-choice-trigger {
   width: 136px;
 }
 main {
@@ -117,9 +117,9 @@ main {
   .app-header .app-brand {
     font-size: 15px;
   }
-  .app-header .base-icon-mark {
-    --base-icon-mark-size: 36px;
-    --base-icon-mark-glyph-size: 23px;
+  .app-header .ui-icon-mark {
+    --ui-icon-mark-size: 36px;
+    --ui-icon-mark-glyph-size: 23px;
   }
   .main-nav {
     order: 2;

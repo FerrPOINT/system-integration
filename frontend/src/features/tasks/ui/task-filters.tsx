@@ -27,7 +27,7 @@ export function TaskFilterFields({
   resetFilters: () => void;
 }) {
   return (
-    <div className="base-form filters">
+    <div className="ui-form filters">
       <FormField id="business-status" label="Результат">
         {(attrs) => (
           <Select
@@ -87,7 +87,7 @@ export function MobileTaskFilters({ active, children }: { active: boolean; child
       <Button
         ref={trigger}
         type="button"
-        className="base-icon-button mobile-filter-trigger"
+        className="ui-icon-button mobile-filter-trigger"
         data-active={active || undefined}
         aria-label="Фильтры заданий"
         title={active ? 'Фильтры заданий: заданы условия' : 'Фильтры заданий'}
@@ -104,9 +104,9 @@ export function MobileTaskFilters({ active, children }: { active: boolean; child
         onClose={() => setOpen(false)}
         returnFocusRef={trigger}
       >
-        <div className="base-dialog-form">
-          <div className="base-dialog-body">{children}</div>
-          <div className="base-dialog-footer">
+        <div className="ui-dialog-form">
+          <div className="ui-dialog-body">{children}</div>
+          <div className="ui-dialog-footer">
             <Button type="button" variant="default" onClick={() => setOpen(false)}>
               Готово
             </Button>

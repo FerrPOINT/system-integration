@@ -31,7 +31,7 @@ if (!params.has('cold')) client.setQueryData(taskKeys.task(tasks[1].taskId), tas
 function Harness() {
   const navigate = useNavigate();
   return (
-    <main className="base-page-stack">
+    <main className="ui-page-stack">
       <nav>
         <button onClick={() => navigate('/tasks/' + tasks[0].taskId)}>Open A</button>
         <button onClick={() => navigate('/tasks/' + tasks[1].taskId)}>Open B</button>

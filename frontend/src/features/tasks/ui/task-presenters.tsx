@@ -1,5 +1,5 @@
 import { Table } from '../../../shared/ui/table';
-import { Card, CardContent } from '../../../shared/ui/card';
+import { Card, CardContent, CardTitle } from '../../../shared/ui/card';
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { businessLabels, deliveryLabels } from '../model/task-labels';
@@ -37,7 +37,9 @@ export function TaskRecords({
                 >
                   <CardContent density="compact" className="mobile-card-content">
                     <div className="mobile-card-heading">
-                      <h2 className="base-card-title base-truncate">{task.title}</h2>
+                      <CardTitle asChild className="ui-truncate">
+                        <h2>{task.title}</h2>
+                      </CardTitle>
                       <ChevronRight size={18} aria-hidden="true" />
                     </div>
                     <div className="task-card-status" id={'task-state-' + task.taskId}>
@@ -45,7 +47,7 @@ export function TaskRecords({
                       <span>{deliveryLabels[task.deliveryStatus]}</span>
                     </div>
                     <div className="mobile-card-meta" id={'task-meta-' + task.taskId}>
-                      <span className="base-truncate">
+                      <span className="ui-truncate">
                         {task.request.reference} · {task.request.quantity} ед.
                       </span>
                       <time dateTime={task.createdAt} title={timestamp(task.createdAt)}>
@@ -72,9 +74,9 @@ export function TaskRecords({
             </thead>
             <tbody>
               {items.slice(0, size).map((task) => (
-                <tr key={task.taskId} className="base-linked-row" data-page-item data-record-id={task.taskId}>
+                <tr key={task.taskId} className="ui-linked-row" data-page-item data-record-id={task.taskId}>
                   <td>
-                    <Link className="base-truncate" title={task.title} to={'/tasks/' + task.taskId} state={returnState}>
+                    <Link className="ui-truncate" title={task.title} to={'/tasks/' + task.taskId} state={returnState}>
                       {task.title}
                     </Link>
                     <small>

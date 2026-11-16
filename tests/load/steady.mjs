@@ -181,7 +181,7 @@ const report = {
     cpuMicros: process.cpuUsage(cpuBefore),
     rssAfterBytes: process.memoryUsage().rss,
     scope:
-      'Firebat Node process outside container budget, including observation and verification; excludes child processes',
+      'Server-side Node process outside container budget, including observation and verification; excludes child processes',
   },
   observation: { samples: observation.samples, errors: observation.errors, queue: observation.queue },
   sourceUnchanged: git('rev-parse', 'HEAD') === sourceCommit && !git('status', '--porcelain'),

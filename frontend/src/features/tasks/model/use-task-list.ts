@@ -1,6 +1,7 @@
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import type { Task } from '../../../../build/generated/openapi/client';
 import { useCollection } from '../../../shared/lib/collections/use-collection';
+import { listPositionScope } from '../../../shared/lib/collections/list-position-scope';
 import { usePagination } from '../../../shared/lib/pagination/use-pagination';
 import { taskKeys } from '../api/task-keys';
 import { readTaskPage } from '../api/task-queries';
@@ -10,12 +11,14 @@ const identifyTask = (task: Task) => task.taskId;
 
 export function useTaskList(mobile: boolean) {
   const [search, setSearch] = useSearchParams();
+  const location = useLocation();
   const pagination = usePagination(mobile ? 'feed' : 'pages');
   const filters = parseTaskSearch(search);
   const validParameters = pagination.valid && filters.validParameters;
   const valid = validParameters && filters.validPeriod;
   const collection = useCollection({
     key: taskKeys.taskList(filters.params),
+    positionScope: listPositionScope(location),
     page: pagination.page,
     size: pagination.size,
     feed: mobile,

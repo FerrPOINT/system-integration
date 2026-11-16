@@ -45,7 +45,7 @@ function IssueDetails({ id }: { id: string }) {
       <ErrorMessage error={issue.error} />
       <Card asChild>
         <section aria-labelledby="issue-summary-title">
-          <CardContent className="base-page-stack">
+          <CardContent className="ui-page-stack">
             <div className="issue-summary-heading">
               <CardTitle asChild>
                 <h2 id="issue-summary-title">{item.status === 'OPEN' ? 'Открытый разбор' : 'Разбор завершён'}</h2>
@@ -100,7 +100,7 @@ function IssueDetails({ id }: { id: string }) {
         {item.evidence && (
           <Card asChild>
             <section aria-labelledby="issue-evidence-title">
-              <CardContent className="base-page-stack">
+              <CardContent className="ui-page-stack">
                 <CardTitle asChild>
                   <h2 id="issue-evidence-title">Диагностика первого события</h2>
                 </CardTitle>
@@ -125,7 +125,7 @@ function IssueDetails({ id }: { id: string }) {
         {item.resolution && (
           <Card asChild>
             <section aria-labelledby="issue-resolution-title">
-              <CardContent className="base-page-stack">
+              <CardContent className="ui-page-stack">
                 <CardTitle asChild>
                   <h2 id="issue-resolution-title">Решение</h2>
                 </CardTitle>

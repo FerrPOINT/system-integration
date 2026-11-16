@@ -1,68 +1,68 @@
-/* Base controls adapted to plain CSS; origin and changes: README.md. */
-.base-control {
+/* Shared controls; source notices: ../ui/NOTICE.txt. */
+.ui-control {
   min-height: 44px;
   font: inherit;
 }
-.base-input,
-.base-textarea {
+.ui-input,
+.ui-textarea {
   width: 100%;
   min-width: 0;
-  padding: var(--base-control-padding-block) var(--base-control-padding-inline);
+  padding: var(--ui-control-padding-block) var(--ui-control-padding-inline);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--base-radius);
+  border-radius: var(--ui-radius);
   background: var(--color-surface);
   color: var(--color-text-primary);
 }
-.base-textarea {
+.ui-textarea {
   resize: vertical;
 }
-.base-input::placeholder,
-.base-textarea::placeholder {
+.ui-input::placeholder,
+.ui-textarea::placeholder {
   color: var(--color-text-muted);
   opacity: 1;
 }
-.base-control:focus-visible {
+.ui-control:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
-.base-control:disabled {
+.ui-control:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
-.base-button {
+.ui-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   max-width: 100%;
-  padding: var(--base-control-padding-block) var(--base-control-padding-inline);
+  padding: var(--ui-control-padding-block) var(--ui-control-padding-inline);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--base-radius);
+  border-radius: var(--ui-radius);
   background: transparent;
   color: var(--color-text-primary);
   font-weight: 500;
   cursor: pointer;
   text-decoration: none;
 }
-.base-icon-button {
+.ui-icon-button {
   width: 44px;
   height: 44px;
   padding: 0;
   flex-shrink: 0;
 }
-.base-button:hover:not(:disabled) {
+.ui-button:hover:not(:disabled) {
   background: var(--color-surface-raised);
 }
-.base-button[data-variant='default'] {
+.ui-button[data-variant='default'] {
   background: var(--color-accent);
   color: var(--color-accent-foreground);
   border-color: transparent;
 }
-.base-button[data-variant='default']:hover:not(:disabled) {
+.ui-button[data-variant='default']:hover:not(:disabled) {
   background: var(--color-accent-hover);
   color: var(--color-accent-hover-foreground);
 }
-.base-badge {
+.ui-badge {
   display: inline-flex;
   align-items: center;
   padding: 4px 9px;
@@ -72,71 +72,60 @@
   background: var(--color-surface-raised);
   color: var(--color-text-secondary);
 }
-.base-badge[data-tone='info'] {
+.ui-badge[data-tone='info'] {
   color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
 }
-.base-badge[data-tone='success'] {
+.ui-badge[data-tone='success'] {
   color: var(--color-success);
   background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface));
 }
-.base-badge[data-tone='danger'] {
+.ui-badge[data-tone='danger'] {
   color: var(--color-danger);
   background: color-mix(in srgb, var(--color-danger) 12%, var(--color-surface));
 }
-.base-choice-trigger {
+.ui-choice-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
   height: 40px;
-  padding: var(--base-control-padding-block) var(--base-control-padding-inline);
+  padding: var(--ui-control-padding-block) var(--ui-control-padding-inline);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--base-radius, 6px);
+  border-radius: var(--ui-radius, 6px);
   background: var(--color-surface);
   color: var(--color-text-primary);
   font: inherit;
-  font-size: var(--base-font-body, 0.875rem);
+  font-size: var(--ui-font-body, 0.875rem);
   text-align: left;
   cursor: pointer;
 }
-.base-choice-trigger > svg {
+.ui-choice-trigger > svg {
   flex-shrink: 0;
 }
-.base-choice-trigger:hover:not(:disabled) {
+.ui-choice-trigger:hover:not(:disabled) {
   background: var(--color-surface-raised);
 }
-.base-choice-trigger:focus-visible {
+.ui-choice-trigger:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
-.base-choice-trigger[aria-invalid='true'] {
+.ui-choice-trigger[aria-invalid='true'] {
   border-color: var(--color-danger);
 }
-.base-choice-trigger:disabled {
+.ui-choice-trigger:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
-.base-choice-summary {
+.ui-choice-summary {
   display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.base-choice-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: start;
-}
-.base-choice-option .base-choice-label {
-  white-space: normal;
-}
-.base-choice-panel {
+.ui-choice-panel {
   z-index: 110;
   min-width: var(--radix-select-trigger-width, var(--radix-dropdown-menu-trigger-width, 160px));
   max-width: calc(100vw - 16px);
@@ -150,28 +139,28 @@
   overflow: hidden;
   padding: 4px;
 }
-.base-choice-option {
-  padding-inline-start: calc(var(--base-control-padding-inline) + 16px);
+.ui-choice-option {
+  padding-inline-start: calc(var(--ui-control-padding-inline) + 16px);
   white-space: normal;
   cursor: pointer;
 }
 
-.base-choice-indicator {
+.ui-choice-indicator {
   position: absolute;
   left: 8px;
   display: flex;
   align-items: center;
 }
-.base-choice-scroll {
+.ui-choice-scroll {
   display: flex;
   justify-content: center;
   height: 24px;
 }
-.base-choice-empty {
+.ui-choice-empty {
   padding: 12px;
   color: var(--color-text-muted);
 }
-.base-choice-bridge {
+.ui-choice-bridge {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -180,30 +169,30 @@
   clip-path: inset(50%);
 }
 /* Hidden native controls must not extend a clipped field's document scroll area. */
-.base-choice-bridge,
-select[form^='base-choice-presentation-'] {
+.ui-choice-bridge,
+select[form^='ui-choice-presentation-'] {
   top: 0;
   left: 0;
 }
 @media (max-width: 640px) {
-  .base-choice-trigger,
-  .base-choice-option {
+  .ui-choice-trigger,
+  .ui-choice-option {
     min-height: 44px;
   }
 }
 
-.base-choice-trigger {
+.ui-choice-trigger {
   width: 100%;
   min-height: 44px;
 }
-.base-choice-panel {
+.ui-choice-panel {
   background: var(--color-surface);
   color: var(--color-text-primary);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--base-radius-menu);
+  border-radius: var(--ui-radius-menu);
   box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
 }
-.base-choice-option {
+.ui-choice-option {
   position: relative;
   display: flex;
   align-items: center;
@@ -217,29 +206,29 @@ select[form^='base-choice-presentation-'] {
   user-select: none;
   outline: none;
 }
-.base-choice-option[data-highlighted] {
+.ui-choice-option[data-highlighted] {
   background: var(--color-selection);
   color: var(--color-selection-foreground);
 }
-.base-choice-option[data-disabled] {
+.ui-choice-option[data-disabled] {
   opacity: 0.5;
   pointer-events: none;
 }
 @media (max-width: 760px) {
-  .base-input,
-  .base-textarea,
-  .base-choice-trigger {
+  .ui-input,
+  .ui-textarea,
+  .ui-choice-trigger {
     font-size: 16px;
   }
 }
 
-.base-choice-trigger > :first-child {
+.ui-choice-trigger > :first-child {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.base-choice-option:focus-visible {
+.ui-choice-option:focus-visible {
   outline: none;
 }

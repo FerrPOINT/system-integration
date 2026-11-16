@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { ActionGroup } from './action-group';
 import { cn } from './utils';
 
-// Base PageHeader: ordinary title, context and actions used by this product.
 export function PageHeader({
   title,
   context,
@@ -17,16 +16,16 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn('base-page-header', className)}>
-      <div className="base-page-heading">
+    <div className={cn('ui-page-header', className)}>
+      <div className="ui-page-heading">
         {back}
-        <div className="base-page-copy">
-          <h1 className="base-page-title">{title}</h1>
-          {context && <div className="base-page-context">{context}</div>}
+        <div className="ui-page-copy">
+          <h1 className="ui-page-title">{title}</h1>
+          {context && <div className="ui-page-context">{context}</div>}
         </div>
       </div>
       {actions && (
-        <ActionGroup align="start" className="base-page-actions">
+        <ActionGroup align="start" className="ui-page-actions">
           {actions}
         </ActionGroup>
       )}

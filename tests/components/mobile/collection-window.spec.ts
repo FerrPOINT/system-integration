@@ -1,7 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
 type WindowInfo = { pages: number[]; cached: number; fetching: boolean };
-type Fixture = { fixtureCollectionInfo: () => WindowInfo; fixtureEvictInactiveLists: () => void };
+type Fixture = {
+  fixtureCollectionInfo: () => WindowInfo;
+  fixtureEvictInactiveLists: () => void;
+  fixtureVisitList: () => Promise<void>;
+};
 const info = (page: Page) => page.evaluate(() => (window as unknown as Fixture).fixtureCollectionInfo());
 const owner = '00000000-0000-4000-8000-000000000003';
 const id = (sequence: number) => '10000000-0000-4000-8000-' + String(sequence).padStart(12, '0');
@@ -439,3 +443,22 @@ for (const total of [20, 100, 1000, 5000]) {
       .toBeLessThan(2);
   });
 }
+
+test('a caller-defined resource restores its own position on a new visit after cache eviction', async ({ page }) => {
+  await server(page, 1000);
+  await page.goto('/tests/collection-window.html?alternate');
+  await expect(page).toHaveURL(/\/work-items$/);
+  await ready(page);
+  for (let count = 0; count < 7; count++) await forward(page);
+  const anchor = await visibleAnchor(page);
+  await page.locator('[data-record-id="' + anchor.id + '"] .mobile-card-link').click();
+  await expect(page.getByRole('heading', { name: 'Состояние задания', exact: true })).toBeVisible();
+  await page.evaluate(() => (window as unknown as Fixture).fixtureEvictInactiveLists());
+  await page.evaluate(() => (window as unknown as Fixture).fixtureVisitList());
+  await expect(page).toHaveURL(/\/work-items$/);
+  await ready(page);
+  const row = page.locator('[data-record-id="' + anchor.id + '"]');
+  await expect(row).toBeVisible();
+  await expect.poll(async () => Math.abs((await row.boundingBox())!.y - anchor.top)).toBeLessThan(2);
+  expect((await info(page)).cached).toBeLessThanOrEqual(100);
+});

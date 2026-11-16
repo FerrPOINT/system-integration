@@ -23,7 +23,7 @@ export function IssueActions({ issue }: { issue: Issue }) {
   return (
     <Card asChild>
       <section aria-labelledby="issue-actions-title">
-        <CardContent className="base-page-stack">
+        <CardContent className="ui-page-stack">
           <CardTitle asChild>
             <h2 id="issue-actions-title">Действия оператора</h2>
           </CardTitle>

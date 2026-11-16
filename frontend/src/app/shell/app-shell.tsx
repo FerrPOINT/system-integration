@@ -24,7 +24,7 @@ export function AppShell({
           К содержимому
         </a>
         <AppHeader user={user} appearance={appearance} pending={logout.isPending} onLogout={() => logout.mutate()} />
-        <main id="main" className="base-page-stack" tabIndex={-1}>
+        <main id="main" className="ui-page-stack" tabIndex={-1}>
           <ErrorMessage error={logout.error} />
           {children}
         </main>

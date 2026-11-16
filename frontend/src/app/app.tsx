@@ -16,13 +16,13 @@ export function App() {
   const session = useQuery(sessionOptions);
   if (session.isPending)
     return (
-      <main className="base-page-stack">
+      <main className="ui-page-stack">
         <Loading />
       </main>
     );
   if (session.isError && !session.data)
     return (
-      <main className="base-page-stack">
+      <main className="ui-page-stack">
         <ErrorMessage error={session.error} />
         <Button onClick={() => session.refetch()}>Повторить</Button>
       </main>
@@ -32,7 +32,7 @@ export function App() {
   return (
     <AppShell key={user.userId + ':' + user.role} user={user} appearance={appearance}>
       {session.isError && (
-        <div className="base-page-stack">
+        <div className="ui-page-stack">
           <ErrorMessage error={session.error} />
           <Button onClick={() => session.refetch()} disabled={session.isFetching}>
             Повторить проверку сессии

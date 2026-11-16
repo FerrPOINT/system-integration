@@ -69,7 +69,7 @@ Lombok применяется для простого DI; отдельный и�
 
 | Замечание | Что сделано |
 | --- | --- |
-| Структура и Spring-слои | Выделены controller/service/repository/mapper, отдельные Gradle-модули и Docker targets backend/эмулятора; закреплены зависимости слоёв и архитектурные тесты. [План Spring-слоёв](docs/spring-boot-refactoring-plan.md). |
+| Структура и Spring-слои | Выделены controller/service/repository/mapper, отдельные Gradle-модули и Docker targets backend/эмулятора; закреплены зависимости слоёв и архитектурные тесты. [План Spring-слоёв](https://github.com/FerrPOINT/system-integration/blob/500461d1737b98524ba618bac717d09fc34f7127/docs/spring-boot-refactoring-plan.md). |
 | Атомарность и восстановление | Команды и их квитанции фиксируются совместно. Сохранены leases/fencing, ограниченные попытки, порядок блокировок и атомарность результата с курсором. |
 | A01: повторный обход пауз | V10 выводит существующие NEEDS_REVIEW из due-диапазона через `due_at=infinity`. Resume назначает GET и текущее время; попытки и история сохраняются. |
 | A02: Unicode | Границы 160/500 считаются в code points в OpenAPI, Java и UI. NUL и malformed UTF-16 отклоняются до fingerprint/replay; ранее допустимый BOM сохраняется, старые записи читаются и переименовываются. |
@@ -79,7 +79,7 @@ Lombok применяется для простого DI; отдельный и�
 | Технологический проход | Простой DI в FaultController переведён на Lombok; границы controller/service/repository эмулятора закреплены ArchUnit с отрицательными fixtures. Устранён собственный deprecated-синтаксис Gradle. |
 
 Предыдущие структурные этапы — в [декомпозиции](docs/decomposition.md#структура-проекта-r01r09),
-последние исправления — в [плане аудита](docs/backend-audit-followup-plan.md).
+последние исправления — в [плане аудита](https://github.com/FerrPOINT/system-integration/blob/500461d1737b98524ba618bac717d09fc34f7127/docs/backend-audit-followup-plan.md).
 
 ## Выполненные оптимизации
 
@@ -121,7 +121,7 @@ Lombok применяется для простого DI; отдельный и�
 
 60×4 — по 60 созданий, переименований, списков и карточек в секунду.
 Лимит четырёх контейнеров суммарно 2 CPU / 4 ГиБ, включая frontend.
-Генератор работает на Firebat1 вне их cgroup через localhost API;
+Генератор работает на сервере приложений вне их cgroup через localhost API;
 публичная сеть и браузер в задержки не входят. Критерии устойчивости относятся
 к отчёту теста и не ограничивают SQL или запросы рабочего приложения.
 
@@ -178,7 +178,7 @@ PostgreSQL хранит данные в томе `system-integration_postgres`. 
 Публичная демонстрация — [demo.azhukov-dev.ru](https://demo.azhukov-dev.ru/).
 Её версия и граница публикации указаны в [текущей стадии](docs/current-stage.md).
 Проверки используют отдельный `system-integration-load` с тестовыми БД.
-Выбор workspace, toolchains и правила Firebat1 — в [AGENTS.md](AGENTS.md).
+Выбор workspace, toolchains и правила рабочей среды — в [AGENTS.md](AGENTS.md).
 
 ### Разработка с Docker и Vite
 
@@ -206,7 +206,7 @@ Vite использует `127.0.0.1:19673` и проксирует `/api` на 
 менеджер транзакций; Hibernate/JPA не подключены. API не отдаёт persistence
 records или Spring Page. Причины и владельцы — в
 [архитектуре](docs/architecture.md#чтение-кэш-и-повтор-команд),
-план проверки — [SD-00–SD-06](docs/spring-data-read-plan.md).
+план проверки — [SD-00–SD-06](https://github.com/FerrPOINT/system-integration/blob/500461d1737b98524ba618bac717d09fc34f7127/docs/spring-data-read-plan.md).
 
 ## Интерфейс
 
@@ -234,9 +234,10 @@ records или Spring Page. Причины и владельцы — в
 API, [внешняя](contracts/external-exchange.openapi.yaml) — обмен с эмулятором.
 
 - Backend main получает Spring MVC интерфейсы и DTO внутренней схемы.
-  Внешние модели нужны его тестам и генерируются в test source set.
+  Отдельные внешние модели нужны его тестам и генерируются в test source set.
+  Вложенный снимок сверки имеет конкретный DTO через именованную ссылку на внешнюю схему.
 - Эмулятор независимо генерирует Spring MVC интерфейсы и DTO внешней схемы.
-- Orval генерирует frontend Fetch-клиент, DTO и ограничения текстовых полей.
+- Orval генерирует frontend Fetch-клиент, DTO и ограничения полей форм.
   `pnpm dev` / `pnpm build` запускают генерацию автоматически.
 - MapStruct и Lombok выполняются Java annotation processors при компиляции.
 
@@ -422,8 +423,7 @@ canonical reason/content для дедупликации и сохранённы
 timeout нет: активный SQL может ждать внешнюю блокировку до освобождения.
 Hikari connection-timeout 2s ограничивает только получение соединения.
 
-Внешний HTTP настраивается через si.exchange.http: base-url (прежний
-SI_EMULATOR_URL сохранён), connect-timeout=1s, response-timeout=2s,
+Внешний HTTP настраивается через si.exchange.http: base-url (SI_EMULATOR_URL), connect-timeout=1s, response-timeout=2s,
 max-response-size=256KB. Последний ограничивает фактические байты ответа,
 включая chunked, а не количество принимаемых заданий. Параметры валидируются
 при старте; ограничения и владельцы — в [архитектуре](docs/architecture.md#потоки-и-ограничение-параллелизма).
@@ -431,44 +431,13 @@ max-response-size=256KB. Последний ограничивает факти�
 ## Публичный стенд
 
 Адрес — [demo.azhukov-dev.ru](https://demo.azhukov-dev.ru).
-Публикация использует существующий TLS gateway Koara и отдельный SSH-туннель
-на Firebat1. Доступны три демоучётки из раздела запуска; пароль хранится
+Публикация использует HTTPS-шлюз и отдельный SSH-туннель
+на сервере приложений. Доступны три демоучётки из раздела запуска; пароль хранится
 в приватном `SI_DEMO_PASSWORD`. Установка не публикует порты БД и эмулятора.
 
-<details>
-<summary>Конфигурация существующей HTTPS-публикации</summary>
+Инструкция установки туннеля, HTTPS и проверки публикации — в
+[deploy/README.md](deploy/README.md).
 
-На Firebat1 полный стенд запускается с HTTPS-настройками:
-
-```sh
-docker compose -f compose.yml -f compose.public.yml --profile app up -d --wait
-systemctl status system-integration-tunnel.service
-node --test tests/e2e/public.test.mjs
-```
-
-`compose.public.yml` включает Secure cookie и автоматическое восстановление
-контейнеров после перезапуска Docker. Для локальных HTTP-проверок используйте
-основной Compose. UI, восстановление и нагрузка запускаются отдельным
-проектом system-integration-load через compose.load.yml; демонстрационный
-стенд и его публичный туннель при этих проверках не отключаются.
-Команды — в tests/load/README.md.
-
-В `deploy/` сохранены конфигурации Nginx, sshd и systemd. На Koara sshd
-разрешает отдельной учётке только обратный порт `127.0.0.1:19573`;
-ключ и проверенный SSH host key хранятся вне Git. Firebat1 использует
-`/etc/systemd/system/system-integration-tunnel.service` от пользователя
-`ferrpoint`. На Koara конфигурации установлены в
-`/etc/nginx/conf.d/system-integration.conf` и
-`/etc/ssh/sshd_config.d/61-system-integration.conf`. После изменения
-проверяйте `nginx -t` и `sshd -t` перед reload соответствующей службы.
-
-Сертификат домена обслуживает существующий Certbot. Его deploy hook
-`/etc/letsencrypt/renewal-hooks/deploy/demo-certificate` обновляет TLS-файлы,
-которые читает общий Xray. TLS-каталог общего gateway сохраняется при обновлении приложения.
-Обновление приложения не требует перезапуска общего Xray. Публичный вход ограничивает частоту попыток входа:
-10 в минуту на адрес с кратковременным запасом 10 запросов, ответ 429.
-
-</details>
 
 ## Документация
 
@@ -479,4 +448,5 @@ node --test tests/e2e/public.test.mjs
 | Контракты REST | [Приложение](contracts/internal-api.openapi.yaml), [эмулятор](contracts/external-exchange.openapi.yaml). |
 | План и состояние работы | [Роадмап](docs/roadmap.md), [задачи](docs/decomposition.md), [текущая стадия](docs/current-stage.md). |
 | Проверки и сдача | [Сценарии приёмки](docs/test-cases.md), [план эксплуатации и комплект сдачи](docs/roadmap.md#эксплуатация-и-сдача). |
+| История решений | [Завершённые планы и аудиты](docs/history.md). |
 | Вклад и безопасность | [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md), [AGENTS](AGENTS.md). |

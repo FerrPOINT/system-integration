@@ -38,7 +38,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
 ) {
   const ui = useUiLabels();
   const state = useChoiceState(value, defaultValue);
-  const presentationForm = `base-choice-presentation-${useId()}`;
+  const presentationForm = `ui-choice-presentation-${useId()}`;
   const [trigger, setTrigger] = useState<HTMLButtonElement | null>(null);
   const composedRef = useComposedRefs(ref, setTrigger);
   const fieldDisabled = useChoiceDisabled(trigger, disabled);
@@ -73,7 +73,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
           {...props}
           id={props.id ?? `${presentationForm}-trigger`}
           ref={composedRef}
-          className={cn('base-control base-choice-trigger', className)}
+          className={cn('ui-control ui-choice-trigger', className)}
           aria-required={required || undefined}
           aria-invalid={validation.invalid || props['aria-invalid'] || undefined}
           aria-describedby={
@@ -83,7 +83,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
           }
           title={props.title ?? label}
         >
-          <Primitive.Value className="base-choice-summary" placeholder={label}>
+          <Primitive.Value className="ui-choice-summary" placeholder={label}>
             {label}
           </Primitive.Value>
           <Primitive.Icon asChild>
@@ -95,32 +95,32 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
             aria-labelledby={trigger?.id}
             onKeyDown={tab.onKeyDown}
             onCloseAutoFocus={tab.onCloseAutoFocus}
-            className="base-choice-panel"
+            className="ui-choice-panel"
             position="popper"
             sideOffset={4}
             collisionPadding={8}
           >
-            <Primitive.ScrollUpButton className="base-choice-scroll">
+            <Primitive.ScrollUpButton className="ui-choice-scroll">
               <ChevronUp size={16} />
             </Primitive.ScrollUpButton>
-            <Primitive.Viewport className="base-choice-viewport">
+            <Primitive.Viewport className="ui-choice-viewport">
               {options.map((option) => (
                 <Primitive.Item
                   key={option.value}
                   value={option.value}
                   data-value={option.value}
                   disabled={option.disabled}
-                  className="base-choice-option"
+                  className="ui-choice-option"
                 >
-                  <Primitive.ItemIndicator className="base-choice-indicator">
+                  <Primitive.ItemIndicator className="ui-choice-indicator">
                     <Check size={16} />
                   </Primitive.ItemIndicator>
                   <Primitive.ItemText>{option.label}</Primitive.ItemText>
                 </Primitive.Item>
               ))}
-              {!options.length && <div className="base-choice-empty">{ui.noOptions}</div>}
+              {!options.length && <div className="ui-choice-empty">{ui.noOptions}</div>}
             </Primitive.Viewport>
-            <Primitive.ScrollDownButton className="base-choice-scroll">
+            <Primitive.ScrollDownButton className="ui-choice-scroll">
               <ChevronDown size={16} />
             </Primitive.ScrollDownButton>
           </Primitive.Content>

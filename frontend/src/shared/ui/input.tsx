@@ -12,7 +12,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         type={type}
         data-variant={variant}
         data-appearance={appearance}
-        className={cn('base-control base-input', className)}
+        className={cn('ui-control ui-input', className)}
         ref={ref}
         {...props}
       />

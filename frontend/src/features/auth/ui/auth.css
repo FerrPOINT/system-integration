@@ -1,4 +1,4 @@
-.login-panel .base-button[data-variant='default'] {
+.login-panel .ui-button[data-variant='default'] {
   width: 100%;
 }
 .login-page {
@@ -15,7 +15,7 @@
   display: grid;
   place-items: center;
   min-height: calc(100dvh - 160px);
-  padding-block: var(--base-panel-padding);
+  padding-block: var(--ui-panel-padding);
 }
 .login-panel {
   width: 100%;

@@ -2,7 +2,7 @@ import './operations.css';
 import { ErrorMessage } from '../../../shared/ui/error-message';
 import { Notice } from '../../../shared/ui/notice';
 import { EmptyState } from '../../../shared/ui/empty-state';
-import { Card, CardContent } from '../../../shared/ui/card';
+import { Card, CardContent, CardTitle } from '../../../shared/ui/card';
 import { Table } from '../../../shared/ui/table';
 import { PageHeader } from '../../../shared/ui/page-header';
 import { FormField } from '../../../shared/ui/form-field';
@@ -19,6 +19,7 @@ import { usePagination } from '../../../shared/lib/pagination/use-pagination';
 import { useMediaQuery } from '../../../shared/ui/use-media-query';
 import { issueKindLabels as kinds } from '../model/issue-labels';
 import { useCollection } from '../../../shared/lib/collections/use-collection';
+import { listPositionScope } from '../../../shared/lib/collections/list-position-scope';
 import { FeedFooter, FeedStart } from '../../../shared/ui/feed-footer';
 
 const identifyIssue = (issue: Issue) => issue.issueId;
@@ -33,6 +34,7 @@ export function IssueList() {
   const valid = validPage && ['OPEN', 'RESOLVED'].includes(status);
   const collection = useCollection({
     key: exchangeKeys.issueList(status as IssueStatus),
+    positionScope: listPositionScope(location),
     page,
     size,
     feed: mobile,
@@ -45,7 +47,7 @@ export function IssueList() {
   const { viewportRef: registryRef, restoring, positionNotice, loadNext, loadPrevious, refresh } = collection;
   return (
     <>
-      <div className="list-tools base-page-stack">
+      <div className="list-tools ui-page-stack">
         <PageHeader
           title="Разбор обмена"
           context={
@@ -69,7 +71,7 @@ export function IssueList() {
           </FormField>
         </div>
       </div>
-      <section className="paged-list base-page-stack" aria-busy={issues.isFetching || restoring}>
+      <section className="paged-list ui-page-stack" aria-busy={issues.isFetching || restoring}>
         <div
           className="paged-viewport"
           ref={registryRef}
@@ -119,21 +121,23 @@ export function IssueList() {
                         >
                           <CardContent density="compact" className="mobile-card-content">
                             <div className="mobile-card-heading">
-                              <h2 className="base-card-title base-truncate">{kinds[issue.kind]}</h2>
+                              <CardTitle asChild className="ui-truncate">
+                                <h2>{kinds[issue.kind]}</h2>
+                              </CardTitle>
                               <ChevronRight size={18} aria-hidden="true" />
                             </div>
                             {issue.taskId ? (
-                              <p className="base-truncate" title={issue.taskTitle}>
+                              <p className="ui-truncate" title={issue.taskTitle}>
                                 {issue.requestReference} · {issue.taskTitle}
                               </p>
                             ) : (
                               <p>Общая проблема ленты</p>
                             )}
-                            <p className="base-truncate" title={issue.summary}>
+                            <p className="ui-truncate" title={issue.summary}>
                               {issue.summary}
                             </p>
                             <div className="mobile-card-meta">
-                              <small className="base-truncate" title={issue.assignedTo}>
+                              <small className="ui-truncate" title={issue.assignedTo}>
                                 {issue.assignedTo ? 'Назначен' : 'Не назначен'}
                               </small>
                               <time dateTime={issue.openedAt} title={timestamp(issue.openedAt)}>
@@ -160,16 +164,11 @@ export function IssueList() {
                     </thead>
                     <tbody>
                       {issuesItems.slice(0, size).map((issue) => (
-                        <tr
-                          key={issue.issueId}
-                          className="base-linked-row"
-                          data-page-item
-                          data-record-id={issue.issueId}
-                        >
+                        <tr key={issue.issueId} className="ui-linked-row" data-page-item data-record-id={issue.issueId}>
                           <td>
                             <Link
                               data-issue-link
-                              className="base-truncate"
+                              className="ui-truncate"
                               title={kinds[issue.kind]}
                               to={'/issues/' + issue.issueId}
                               state={returnState}
@@ -177,19 +176,19 @@ export function IssueList() {
                               {kinds[issue.kind]}
                             </Link>
                             {issue.taskId ? (
-                              <small className="base-truncate" title={issue.taskTitle}>
+                              <small className="ui-truncate" title={issue.taskTitle}>
                                 {issue.requestReference} · {issue.taskTitle}
                               </small>
                             ) : (
                               <small>Общая проблема ленты</small>
                             )}
-                            <small className="base-truncate" title={issue.summary}>
+                            <small className="ui-truncate" title={issue.summary}>
                               {issue.summary}
                             </small>
                           </td>
                           <td>
                             <span
-                              className={'base-truncate' + (issue.assignedTo ? ' technical' : ' muted')}
+                              className={'ui-truncate' + (issue.assignedTo ? ' technical' : ' muted')}
                               title={issue.assignedTo}
                             >
                               {issue.assignedTo || 'Не назначен'}
@@ -199,7 +198,7 @@ export function IssueList() {
                             <time dateTime={issue.openedAt}>{timestamp(issue.openedAt, { showZone: false })}</time>
                             {issue.nextAttemptAt && (
                               <small
-                                className="base-truncate"
+                                className="ui-truncate"
                                 title={'Следующая попытка: ' + timestamp(issue.nextAttemptAt)}
                               >
                                 Повтор:{' '}
