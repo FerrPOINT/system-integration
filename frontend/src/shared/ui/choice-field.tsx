@@ -95,10 +95,10 @@ export function ChoiceFormBridge({
   return (
     <select
       ref={ref}
-      data-base-choice-bridge=""
+      data-ui-choice-bridge=""
       aria-hidden="true"
       tabIndex={-1}
-      className="base-choice-bridge"
+      className="ui-choice-bridge"
       name={name}
       form={form}
       required={required}

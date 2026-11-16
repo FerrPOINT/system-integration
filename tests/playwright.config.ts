@@ -4,7 +4,8 @@ export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.ts',
   outputDir: './results/playwright',
-  reporter: [['list'], ['html', { outputFolder: './results/report', open: 'never' }]],
+  // HTML reports retain input values, including credentials from successful login steps.
+  reporter: [['list']],
   workers: 1,
   timeout: 30_000,
   expect: { timeout: 15_000 },

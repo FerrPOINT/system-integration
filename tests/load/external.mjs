@@ -143,7 +143,7 @@ const receipt = {
   remoteHostAlias: host,
   remoteRoot,
   localForwardPort: port,
-  scope: 'Independent generator -> loopback SSH forward -> Firebat API; not public HTTPS',
+  scope: 'Independent generator -> loopback SSH forward -> server API; not public HTTPS',
 };
 await writeFile(output, JSON.stringify(receipt, null, 2));
 let tunnel, controller, lines;
@@ -173,10 +173,12 @@ try {
       remoteText('timeout --kill-after=5s 55s node --input-type=module -e ' + quote(preflight), 'Remote preflight'),
     );
   } catch {
-    throw new Error('Remote preflight failed; verify committed images, isolated data and SSH access on Firebat');
+    throw new Error(
+      'Remote preflight failed; verify committed images, isolated data and SSH access on the application server',
+    );
   }
   if (configuration.nodeVersion !== process.version)
-    throw new Error('Use the same Node version as Firebat: ' + configuration.nodeVersion);
+    throw new Error('Use the same Node version as the application server: ' + configuration.nodeVersion);
   if (configuration.serverHost.toLowerCase() === hostname().toLowerCase())
     throw new Error('The external generator must run on another host');
   for (const name of files) {

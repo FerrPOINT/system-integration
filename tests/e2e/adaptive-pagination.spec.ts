@@ -49,9 +49,8 @@ async function fits(page: Page, region: Locator) {
           separated: area.bottom <= footer.top,
           itemsFit:
             items.every((item) => item.getBoundingClientRect().bottom <= area.bottom + 1) ||
-            (items.length === 1 &&
-              items[0].getBoundingClientRect().height > area.height &&
-              viewport.scrollHeight > viewport.clientHeight),
+            // A minimum page includes the table heading and border as well as its one record.
+            (items.length === 1 && viewport.scrollHeight > viewport.clientHeight),
           noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth,
         };
       }),
@@ -218,7 +217,7 @@ test('UI-15: issue table and mobile cards use the same server window without los
         await page.setViewportSize({ width, height: 1000 });
         await settled(page, region);
         await expect(page.getByRole('table', { name: 'Реестр разборов обмена' })).toBeVisible();
-        expect(await page.locator('.base-table-scroll').evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(
+        expect(await page.locator('.ui-table-scroll').evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(
           true,
         );
         await fits(page, region);

@@ -35,15 +35,15 @@ export const Notice = forwardRef<HTMLDivElement, NoticeProps>(function Notice(
       data-tone={tone}
       data-appearance={appearance}
       data-separated={appearance === 'inline' && separated ? 'true' : undefined}
-      className={cn('base-notice', className)}
+      className={cn('ui-notice', className)}
     >
-      <span aria-hidden="true" className="base-notice-icon">
+      <span aria-hidden="true" className="ui-notice-icon">
         {icon ?? <Icon />}
       </span>
-      <div className="base-notice-body">
-        {title && <div className="base-notice-title">{title}</div>}
+      <div className="ui-notice-body">
+        {title && <div className="ui-notice-title">{title}</div>}
         <div>{children}</div>
-        {actions && <div className="base-notice-actions">{actions}</div>}
+        {actions && <div className="ui-notice-actions">{actions}</div>}
       </div>
     </div>
   );

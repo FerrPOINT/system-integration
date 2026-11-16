@@ -4,7 +4,7 @@ import { Notice } from '../../../shared/ui/notice';
 import { Timeline, TimelineItem, TimelineMarker, TimelineContent } from '../../../shared/ui/timeline';
 import { Card, CardContent, CardTitle } from '../../../shared/ui/card';
 import { Button } from '../../../shared/ui/button';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import type { HistoryEvent } from '../../../../build/generated/openapi/client';
 import { taskKeys } from '../api/task-keys';
 import { Loading, Pagination } from '../../../shared/ui/feedback';
@@ -26,10 +26,12 @@ export function History({
   canReview: boolean;
   refreshInterval: number | false;
 }) {
+  const location = useLocation();
   const mobile = useMediaQuery('(max-width: 760px)');
   const { page, size, valid, viewportRef, changePage } = usePagination(mobile ? 'feed' : 'pages');
   const collection = useCollection({
     key: taskKeys.history(id),
+    positionScope: location.key,
     page,
     size,
     feed: mobile,
@@ -45,7 +47,7 @@ export function History({
     <div className="task-history-viewport" data-feed-viewport={mobile || undefined}>
       <Card asChild>
         <section className="history-panel" aria-labelledby="task-history-title">
-          <CardContent className="paged-list base-page-stack" aria-busy={history.isFetching || restoring}>
+          <CardContent className="paged-list ui-page-stack" aria-busy={history.isFetching || restoring}>
             <CardTitle asChild>
               <h2 id="task-history-title">История</h2>
             </CardTitle>

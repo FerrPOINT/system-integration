@@ -256,6 +256,46 @@ class ApiMapperTest {
     }
 
     @Test
+    void externalSnapshotsAreTypedAndKeepTheWireJson() {
+        var builder = tools.jackson.databind.json.JsonMapper.builder();
+        new com.azhukov.integration.config.DocumentJsonConfiguration().documents().customize(builder);
+        var json = builder.build();
+        var protocol = new com.azhukov.integration.client.http.ExchangeProtocol();
+        var identity =
+                "\"operationId\":\"" + operation + "\",\"request\":{\"reference\":\"REQ-000001\",\"quantity\":25}";
+        try (var context = context()) {
+            var mapper = context.getBean(ReviewApiMapper.class);
+            for (var result :
+                    new String[] {
+                        "null",
+                        "{" + identity + ",\"version\":1,\"status\":\"RUNNING\"}",
+                        "{"
+                                + identity
+                                + ",\"version\":2,\"status\":\"SUCCEEDED\",\"completedAt\":\"2026-01-02T03:04:06.123456789Z\"}",
+                        "{"
+                                + identity
+                                + ",\"version\":2,\"status\":\"REJECTED\",\"completedAt\":\"2026-01-02T03:04:06Z\",\"rejectionCode\":\"QUANTITY_LIMIT_EXCEEDED\"}"
+                    }) {
+                int executions = result.contains("\"version\":2") ? 1 : 0;
+                var expected =
+                        json.readTree(
+                                "{"
+                                        + identity
+                                        + ",\"acceptedAt\":\"2026-01-02T03:04:05Z\",\"executions\":"
+                                        + executions
+                                        + ",\"result\":"
+                                        + result
+                                        + "}");
+                var snapshot = protocol.state(expected);
+                var mapped = mapper.externalSnapshot(snapshot);
+                assertEquals(snapshot.operationId(), mapped.getOperationId());
+                assertEquals(expected, json.readTree(json.writeValueAsString(mapped)));
+            }
+            assertNull(mapper.externalSnapshot(null));
+        }
+    }
+
+    @Test
     void reconciliationRetainsTheValidatedExternalSnapshotAndRequestCommands() {
         try (var context = context()) {
             var mapper = context.getBean(ReviewApiMapper.class);
@@ -278,7 +318,8 @@ class ApiMapperTest {
                             external,
                             id);
             var value = mapper.reconciliation(source);
-            assertSame(external, value.getExternal());
+            assertEquals(external.operationId(), value.getExternal().getOperationId());
+            assertNull(value.getExternal().getResult());
             assertEquals("PRESENT", value.getExternalAvailability().name());
             assertEquals(id, value.getReconciliationId());
             assertEquals(id, value.getTaskId());

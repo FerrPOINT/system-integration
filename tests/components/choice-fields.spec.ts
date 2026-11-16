@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('R08: required, FormData and controlled/uncontrolled reset preserve one native owner', async ({ page }) => {
-  await expect(page.locator('[data-base-choice-bridge]')).toHaveCount(2);
+  await expect(page.locator('[data-ui-choice-bridge]')).toHaveCount(2);
   await page.getByRole('button', { name: 'Submit', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText('Выберите значение');
   await expect(page.getByRole('combobox', { name: 'Controlled', exact: true })).toBeFocused();

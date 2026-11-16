@@ -75,9 +75,9 @@ export default [
     },
   },
   {
-    files: ['src/shared/lib/text-rules.ts'],
+    files: ['src/shared/lib/form-rules.ts'],
     rules: {
-      'no-restricted-imports': ['error', { patterns: [{ ...generatedClient, allowImportNames: ['textRules'] }] }],
+      'no-restricted-imports': ['error', { patterns: [{ ...generatedClient, allowImportNames: ['formRules'] }] }],
     },
   },
   {

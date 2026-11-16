@@ -37,7 +37,7 @@ export function AppShell({
             appearance={appearance}
             account={{ user, pending: logout.isPending || Boolean(exitGuard?.pending), onLogout: requestLogout }}
           />
-          <main {...mainScroll} id="main" className="base-page-stack" tabIndex={-1}>
+          <main {...mainScroll} id="main" className="ui-page-stack" tabIndex={-1}>
             <ErrorMessage error={logout.error} />
             {children}
           </main>

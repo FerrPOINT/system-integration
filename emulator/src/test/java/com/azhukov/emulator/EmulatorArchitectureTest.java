@@ -3,6 +3,8 @@ package com.azhukov.emulator;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.azhukov.emulator.controller.ControllerBoundaryFixture;
+import com.azhukov.emulator.repository.jdbc.RepositoryBoundaryFixture;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
@@ -22,6 +24,54 @@ class EmulatorArchitectureTest {
                     .should()
                     .dependOnClassesThat()
                     .resideInAPackage("org.springframework.jdbc..");
+
+    private static final ArchRule CONTROLLER =
+            noClasses()
+                    .that()
+                    .resideInAPackage("com.azhukov.emulator.controller..")
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAnyPackage("com.azhukov.emulator.repository..", "org.springframework.jdbc..");
+    private static final ArchRule REPOSITORY =
+            noClasses()
+                    .that()
+                    .resideInAPackage("com.azhukov.emulator.repository.jdbc..")
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAnyPackage(
+                            "com.azhukov.emulator.service..",
+                            "com.azhukov.emulator.controller..",
+                            "com.azhukov.integration.contract..");
+
+    @Test
+    void controllersUseServicesInsteadOfRepositories() {
+        assertFalse(production.isEmpty());
+        CONTROLLER.check(production);
+        for (var fixture :
+                new Class<?>[] {
+                    ControllerBoundaryFixture.RepositoryAccess.class, ControllerBoundaryFixture.SqlAccess.class
+                }) {
+            var imported = new ClassFileImporter().importClasses(fixture);
+            var violation = assertThrows(AssertionError.class, () -> CONTROLLER.check(imported));
+            assertTrue(violation.getMessage().contains(fixture.getName()), violation::getMessage);
+        }
+    }
+
+    @Test
+    void jdbcAdaptersDoNotDependOnServicesControllersOrHttpDtos() {
+        assertFalse(production.isEmpty());
+        REPOSITORY.check(production);
+        for (var fixture :
+                new Class<?>[] {
+                    RepositoryBoundaryFixture.ServiceAccess.class,
+                    RepositoryBoundaryFixture.ControllerAccess.class,
+                    RepositoryBoundaryFixture.HttpDtoAccess.class
+                }) {
+            var imported = new ClassFileImporter().importClasses(fixture);
+            var violation = assertThrows(AssertionError.class, () -> REPOSITORY.check(imported));
+            assertTrue(violation.getMessage().contains(fixture.getName()), violation::getMessage);
+        }
+    }
 
     @Test
     void domainHasOnlyJavaAndOwnModelDependencies() {

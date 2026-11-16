@@ -22,7 +22,7 @@ async function expectGaps(region: Locator) {
 }
 
 async function expectCards(page: Page) {
-  for (const card of await page.locator('.base-card-content').all()) await expectGaps(card);
+  for (const card of await page.locator('.ui-card-content').all()) await expectGaps(card);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 }
 
@@ -53,7 +53,7 @@ test('UI-07: exchange loading, error, empty and ready states keep the filter sep
     else await expect(page.locator('.pagination-footer')).toHaveCount(0);
     await expectGaps(page.locator('main'));
     await expect(pending).toHaveAttribute('aria-busy', 'true');
-    await expect(pending.locator('.base-notice-icon')).toHaveCount(0);
+    await expect(pending.locator('.ui-notice-icon')).toHaveCount(0);
     await page.screenshot({ path: info.outputPath('exchange-loading.png') });
     mode = 'error';
     release();
@@ -140,7 +140,7 @@ test('UI-08: task registry, editor, card and history use consistent section gaps
     await page.unrouteAll({ behavior: 'wait' });
   }
   await waitForRegistry(page);
-  const refresh = page.locator('.base-page-header').getByRole('button', { name: 'Обновить', exact: true });
+  const refresh = page.locator('.ui-page-header').getByRole('button', { name: 'Обновить', exact: true });
   await expect(refresh).toBeVisible();
   await expect(refresh).toHaveAttribute('title', 'Обновить');
   await expect(refresh).toHaveText('');
@@ -154,7 +154,7 @@ test('UI-08: task registry, editor, card and history use consistent section gaps
   await page.getByRole('button', { name: 'Отмена', exact: true }).click();
   await page.locator('.task-card > a, .task-table tbody a').first().click();
   await expect(page.getByRole('heading', { name: 'История', exact: true })).toBeVisible();
-  await expect(page.locator('.base-timeline')).toBeVisible();
+  await expect(page.locator('.ui-timeline')).toBeVisible();
   await expectGaps(page.locator('main'));
   await expectCards(page);
 });

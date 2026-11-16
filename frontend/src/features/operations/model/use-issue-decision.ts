@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { validReason } from '../../../shared/lib/text-rules';
+import { validReason } from '../../../shared/lib/form-rules';
 import type { Issue } from '../../../../build/generated/openapi/client';
 import { useFormNavigationGuard } from '../../../shared/lib/forms/use-form-navigation-guard';
 import { useDecisionCommand } from '../api/exchange-commands';
@@ -29,6 +29,23 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
     guard.protect();
     setBasis((current) => current ?? decisionBasis(issue));
   }
+  const input =
+    !stale &&
+    !busy &&
+    !otherCommand.unresolved &&
+    !command.isSuccess &&
+    validReason(reason) &&
+    action &&
+    actions.includes(action) &&
+    basis &&
+    (action === 'ACKNOWLEDGE_FEED_ISSUE' || basis.latestReconciliationId)
+      ? {
+          expectedIssueRevision: basis.issueRevision,
+          ...(basis.latestReconciliationId ? { reconciliationId: basis.latestReconciliationId } : {}),
+          action,
+          reason,
+        }
+      : null;
   return {
     action,
     reason,
@@ -43,18 +60,7 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
     refresh,
     visible:
       issue.status === 'OPEN' || dirty || busy || otherCommand.unresolved || (command.isSuccess && update.isError),
-    canSubmit:
-      !stale &&
-      !busy &&
-      !otherCommand.unresolved &&
-      !command.isSuccess &&
-      Boolean(
-        validReason(reason) &&
-        action &&
-        actions.includes(action) &&
-        basis &&
-        (action === 'ACKNOWLEDGE_FEED_ISSUE' || basis.latestReconciliationId),
-      ),
+    canSubmit: input !== null,
     changeAction(value: DecisionAction) {
       captureBasis();
       setAction(value);
@@ -70,32 +76,13 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
       if (action && !actions.includes(action)) setAction('');
     },
     submit() {
-      if (
-        stale ||
-        busy ||
-        otherCommand.unresolved ||
-        command.isSuccess ||
-        !validReason(reason) ||
-        !action ||
-        !actions.includes(action) ||
-        !basis ||
-        (action !== 'ACKNOWLEDGE_FEED_ISSUE' && !basis.latestReconciliationId)
-      )
-        return;
-      command.mutate(
-        {
-          expectedIssueRevision: basis.issueRevision,
-          ...(basis.latestReconciliationId ? { reconciliationId: basis.latestReconciliationId } : {}),
-          action,
-          reason,
+      if (!input) return;
+      command.mutate(input, {
+        onSuccess: () => {
+          guard.release();
+          refresh();
         },
-        {
-          onSuccess: () => {
-            guard.release();
-            refresh();
-          },
-        },
-      );
+      });
     },
   };
 }

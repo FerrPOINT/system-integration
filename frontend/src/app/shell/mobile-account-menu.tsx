@@ -10,7 +10,7 @@ export function MobileAccountMenu({ children }: { children: ReactNode }) {
     <>
       <Button
         ref={trigger}
-        className="base-icon-button mobile-account-trigger"
+        className="ui-icon-button mobile-account-trigger"
         aria-label="Меню приложения"
         title="Меню приложения"
         aria-haspopup="dialog"
@@ -26,7 +26,7 @@ export function MobileAccountMenu({ children }: { children: ReactNode }) {
         onClose={() => setOpen(false)}
         returnFocusRef={trigger}
       >
-        <div className="base-dialog-body mobile-account-menu">{children}</div>
+        <div className="ui-dialog-body mobile-account-menu">{children}</div>
       </Dialog>
     </>
   );

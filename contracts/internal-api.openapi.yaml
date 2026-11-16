@@ -45,7 +45,7 @@ paths:
                   type: string
                   minLength: 1
                   maxLength: 64
-                  pattern: '^[A-Za-z0-9._-]+$'
+                  pattern: '^[A-Za-z0-9._\-]+$'
                 password:
                   type: string
                   format: password
@@ -987,6 +987,8 @@ components:
         received:
           $ref: './external-exchange.openapi.yaml#/components/schemas/Result'
           description: Заполнено, если входящий снимок соответствует схеме, но нарушает правила применения.
+    ExternalOperationState:
+      $ref: './external-exchange.openapi.yaml#/components/schemas/OperationState'
     Reconciliation:
       type: object
       required: [reconciliationId, taskId, operationId, checkedAt, checkedBy, outcome, local, externalAvailability]
@@ -1015,7 +1017,7 @@ components:
           type: string
           enum: [PRESENT, NOT_FOUND, UNAVAILABLE]
         external:
-          $ref: './external-exchange.openapi.yaml#/components/schemas/OperationState'
+          $ref: '#/components/schemas/ExternalOperationState'
         issueId:
           type: string
           format: uuid

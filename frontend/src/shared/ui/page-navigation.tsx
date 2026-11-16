@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { ActionGroup } from './action-group';
 import { Button } from './button';
 
-// Base PageNavigation: counted pages, with a bounded number window.
+// Counted pages with a bounded number window.
 export function PageNavigation({
   page,
   pageCount,
@@ -29,19 +29,19 @@ export function PageNavigation({
         .sort((a, b) => a - b);
   if (pageCount <= 1 && page <= 1)
     return (
-      <div className="base-page-summary" role="status">
+      <div className="ui-page-summary" role="status">
         {summary}
       </div>
     );
   return (
     <ActionGroup asChild>
-      <nav className="base-page-navigation" aria-label="Страницы">
-        <span className="base-page-summary" aria-live="polite">
+      <nav className="ui-page-navigation" aria-label="Страницы">
+        <span className="ui-page-summary" aria-live="polite">
           {summary}
         </span>
         <Button
           type="button"
-          className="base-icon-button"
+          className="ui-icon-button"
           disabled={pending || page <= 1}
           aria-label="← Назад"
           title="Предыдущая страница"
@@ -66,7 +66,7 @@ export function PageNavigation({
         ))}
         <Button
           type="button"
-          className="base-icon-button"
+          className="ui-icon-button"
           disabled={pending || page >= pageCount}
           aria-label="Далее →"
           title="Следующая страница"

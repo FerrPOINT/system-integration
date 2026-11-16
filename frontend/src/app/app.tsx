@@ -22,7 +22,7 @@ export function App() {
           {session.isPending ? (
             <Loading />
           ) : session.isError ? (
-            <div className="base-page-stack">
+            <div className="ui-page-stack">
               <ErrorMessage error={session.error} />
               <Button onClick={() => session.refetch()}>Повторить</Button>
             </div>
@@ -36,7 +36,7 @@ export function App() {
   return (
     <AppShell key={user.userId + ':' + user.role} user={user} appearance={appearance}>
       {session.isError && (
-        <div className="base-page-stack">
+        <div className="ui-page-stack">
           <ErrorMessage error={session.error} />
           <Button onClick={() => session.refetch()} disabled={session.isFetching}>
             Повторить проверку сессии

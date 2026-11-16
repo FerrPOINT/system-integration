@@ -1,4 +1,4 @@
-import { titleInputProps } from '../../../shared/lib/text-rules';
+import { titleInputProps, referenceInputProps, quantityInputProps } from '../../../shared/lib/form-rules';
 import './tasks.css';
 import { ErrorMessage } from '../../../shared/ui/error-message';
 import { FormField } from '../../../shared/ui/form-field';
@@ -53,7 +53,7 @@ export function NewTask() {
         returnFocusRef={returnFocusRef}
       >
         <form
-          className="base-dialog-form"
+          className="ui-dialog-form"
           onChange={(event) => {
             const form = new FormData(event.currentTarget);
             setDirty(Boolean(form.get('title') || form.get('reference') || form.get('quantity') !== '25'));
@@ -63,9 +63,9 @@ export function NewTask() {
             submit(new FormData(event.currentTarget));
           }}
         >
-          <div className="base-dialog-body base-page-stack">
+          <div className="ui-dialog-body ui-page-stack">
             <fieldset
-              className="base-form-fieldset base-form"
+              className="ui-form-fieldset ui-form"
               disabled={create.isPending || create.isSuccess || Boolean(unresolvedInput)}
               aria-label="Данные задания"
             >
@@ -79,11 +79,16 @@ export function NewTask() {
                   required
                   hint="REQ- и шесть цифр. После создания изменить нельзя."
                 >
-                  {(attrs) => <Input {...attrs} name="reference" pattern="REQ-[0-9]{6}" placeholder="REQ-000001" />}
+                  {(attrs) => <Input {...attrs} name="reference" {...referenceInputProps} placeholder="REQ-000001" />}
                 </FormField>
-                <FormField id="field-quantity" label="Количество" required hint="От 1 до 1000 единиц.">
+                <FormField
+                  id="field-quantity"
+                  label="Количество"
+                  required
+                  hint={`От ${quantityInputProps.min} до ${quantityInputProps.max} единиц.`}
+                >
                   {(attrs) => (
-                    <Input {...attrs} name="quantity" type="number" min={1} max={1000} step={1} defaultValue={25} />
+                    <Input {...attrs} name="quantity" type="number" {...quantityInputProps} defaultValue={25} />
                   )}
                 </FormField>
               </div>
@@ -103,7 +108,7 @@ export function NewTask() {
               onRetry={() => create.data && refreshCreated(create.data.taskId)}
             />
           </div>
-          <div className="base-dialog-footer">
+          <div className="ui-dialog-footer">
             <Button type="button" onClick={close} disabled={create.isPending}>
               {create.isSuccess ? 'Закрыть' : 'Отмена'}
             </Button>

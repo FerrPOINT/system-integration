@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 import { useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { Button } from './button';
 
-// Consumed Base Dialog parts: Radix owns the portal, modal focus and dismissal.
+// Radix owns the portal, modal focus and dismissal.
 export function Dialog({
   open,
   title,
@@ -30,9 +30,9 @@ export function Dialog({
       }}
     >
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="base-dialog-overlay" />
+        <DialogPrimitive.Overlay className="ui-dialog-overlay" />
         <DialogPrimitive.Content
-          className="base-dialog-content"
+          className="ui-dialog-content"
           aria-busy={pending}
           onCloseAutoFocus={(event) => {
             if (returnFocusRef?.current) {
@@ -41,15 +41,15 @@ export function Dialog({
             }
           }}
         >
-          <div className="base-dialog-header">
-            <DialogPrimitive.Title className="base-dialog-title">{title}</DialogPrimitive.Title>
-            <DialogPrimitive.Description className="base-dialog-description">{description}</DialogPrimitive.Description>
+          <div className="ui-dialog-header">
+            <DialogPrimitive.Title className="ui-dialog-title">{title}</DialogPrimitive.Title>
+            <DialogPrimitive.Description className="ui-dialog-description">{description}</DialogPrimitive.Description>
           </div>
           {children}
           <DialogPrimitive.Close asChild>
             <Button
               type="button"
-              className="base-icon-button base-dialog-close"
+              className="ui-icon-button ui-dialog-close"
               aria-label="Закрыть"
               title="Закрыть"
               disabled={pending}
@@ -95,9 +95,9 @@ export function DiscardDialog({
       }}
     >
       <AlertDialogPrimitive.Portal>
-        <AlertDialogPrimitive.Overlay className="base-dialog-overlay" />
+        <AlertDialogPrimitive.Overlay className="ui-dialog-overlay" />
         <AlertDialogPrimitive.Content
-          className="base-dialog-content"
+          className="ui-dialog-content"
           onCloseAutoFocus={(event) => {
             if (returnTarget.current?.isConnected) {
               event.preventDefault();
@@ -105,13 +105,13 @@ export function DiscardDialog({
             }
           }}
         >
-          <div className="base-dialog-header">
-            <AlertDialogPrimitive.Title className="base-dialog-title">{title}</AlertDialogPrimitive.Title>
-            <AlertDialogPrimitive.Description className="base-dialog-description">
+          <div className="ui-dialog-header">
+            <AlertDialogPrimitive.Title className="ui-dialog-title">{title}</AlertDialogPrimitive.Title>
+            <AlertDialogPrimitive.Description className="ui-dialog-description">
               {description}
             </AlertDialogPrimitive.Description>
           </div>
-          <div className="base-dialog-footer">
+          <div className="ui-dialog-footer">
             <AlertDialogPrimitive.Cancel asChild>
               <Button>{cancelLabel}</Button>
             </AlertDialogPrimitive.Cancel>

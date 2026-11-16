@@ -2,7 +2,7 @@ import * as React from 'react';
 import { cn } from './utils';
 
 const Label = React.forwardRef<HTMLLabelElement, React.LabelHTMLAttributes<HTMLLabelElement>>(
-  ({ className, ...props }, ref) => <label ref={ref} className={cn('base-label', className)} {...props} />,
+  ({ className, ...props }, ref) => <label ref={ref} className={cn('ui-label', className)} {...props} />,
 );
 Label.displayName = 'Label';
 

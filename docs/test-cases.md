@@ -19,7 +19,7 @@
 - конечные runtime-образы: vendor OS updates, повторный Trivy и smoke.
 
 
-[BA-01–BA-09](backend-audit-followup-plan.md): U+0000 и допустимый Unicode
+[BA-01–BA-09](https://github.com/FerrPOINT/system-integration/blob/500461d1737b98524ba618bac717d09fc34f7127/docs/backend-audit-followup-plan.md): U+0000 и допустимый Unicode
 проверяют TaskTitle/IssueCommands, HTTP create/rename — TaskWorkflowTest/
 ThreadingTest, причины допустимых retry/resolve — OperationsWorkflowTest.
 Проверяются 400, отсутствие частичных данных/receipt и request correlation.
@@ -249,7 +249,7 @@ UI-01–UI-06 в tests/e2e/themes.spec.ts проверяют три темы, н
 при светлой ОС, контраст текста не ниже 4.5:1 на ключевых элементах входа,
 сохранение выбора после перезагрузки и выхода, синхронизацию вкладок,
 сохранность незавершённой формы и фильтры на телефоне.
-UI-05 проверяет палитру раскрытого меню Base, отступ стрелки не менее 16 px, клавиатурный выбор и фокус после Escape/Tab. Фильтр «Все результаты» не передаёт UI-значение в API. Неверное сохранённое значение и запрет хранения сообщаются явно.
+UI-05 проверяет палитру раскрытого меню выбора, отступ стрелки не менее 16 px, клавиатурный выбор и фокус после Escape/Tab. Фильтр «Все результаты» не передаёт UI-значение в API. Неверное сохранённое значение и запрет хранения сообщаются явно.
 Визуальную проверку реестра, карточки и операторских экранов проводим отдельно
 через IAB на опубликованном приложении.
 
@@ -443,7 +443,7 @@ tests/results/deadline-regression.json.
 - Основной UI gate проходит 390/1440 px: маршруты, сессии, фильтры, UTC,
   инвалидирование и replay не изменились после разделения страниц.
   components.config.ts отдельно проверяет нативные свойства Select.
-- Production assets не содержат компонентных fixtures. Ни лицензии Base,
+- Production assets не содержат компонентных fixtures. Ни лицензионные уведомления,
   ни используемые варианты, формы/required/reset/disabled/фокус не удаляются.
 - Все активные пути, команды, AGENTS и локальные ссылки/якоря согласованы.
   В архитектуре нет второго описания уже выполненного перехода SI-09.
@@ -502,7 +502,7 @@ tests/results/deadline-regression.json.
 ## Приёмка Spring Data JDBC
 
 Проверки следующей итерации заданы в
-[SD-00–SD-06](spring-data-read-plan.md#7-проверки-риски-и-финальный-аудит).
+[SD-00–SD-06](https://github.com/FerrPOINT/system-integration/blob/500461d1737b98524ba618bac717d09fc34f7127/docs/spring-data-read-plan.md#7-проверки-риски-и-финальный-аудит).
 Ключевые регрессии: ownership и 404, прежние JSON/UTC-поля, согласованный
 COUNT, стабильные страницы, mapping jsonb, отсутствие N+1 и записи через
 read-репозитории; реальные generated SQL входят в EXPLAIN и NF08.
@@ -512,7 +512,7 @@ Read/architecture, полный Java/UI/recovery gate, SQL-планы, demo и N
 
 ## Приёмка Spring-слоёв
 
-[Регрессии SP-08](spring-boot-refactoring-plan.md#9-регрессии-и-итоговый-gate)
+[Регрессии SP-08](https://github.com/FerrPOINT/system-integration/blob/500461d1737b98524ba618bac717d09fc34f7127/docs/spring-boot-refactoring-plan.md#9-регрессии-и-итоговый-gate)
 выполнены на коде 611ca96. Все 185 Java, 68 прикладных UI и 10 компонентных
 проверок проходят без пропусков; 10 recovery-сценариев, 942 SQL-плана,
 чистый запуск/демо и NF08 проходят. Новые тесты проверяют поля HTTP-мапперов,
@@ -523,7 +523,7 @@ Read/architecture, полный Java/UI/recovery gate, SQL-планы, demo и N
 
 ## Архитектурные регрессии frontend
 
-FR-00–FR-12 [плана frontend](frontend-refactoring-plan.md) сохраняют исходные
+FR-00–FR-12 [плана frontend](https://github.com/FerrPOINT/system-integration/blob/500461d1737b98524ba618bac717d09fc34f7127/docs/frontend-refactoring-plan.md) сохраняют исходные
 UI-сценарии и добавляют проверки границ состояния и ошибок:
 
 | Область | Проверка | Ожидаемый результат |
@@ -543,7 +543,7 @@ UI-сценарии и добавляют проверки границ сост
 | Architecture gates | Positive/negative lint fixtures, StrictMode, strict TS | Неверные imports/cycles/generated calls отклоняются; lifecycle исправлен без отключения правил. |
 
 Component fixtures находятся в tests/components и frontend/tests, выполняются
-без БД через перехват API; 76 интеграционных UI-сценариев используют отдельный
+без БД через перехват API; интеграционные UI-сценарии используют отдельный
 локальный Compose. Их результаты и IAB-приёмка фиксируются раздельно в current-stage.
 
 ### Регрессии frontend-аудита 16 ноября

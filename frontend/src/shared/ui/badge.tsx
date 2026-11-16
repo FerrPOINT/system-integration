@@ -8,5 +8,5 @@ export function Badge({
 }: HTMLAttributes<HTMLSpanElement> & {
   tone?: 'neutral' | 'info' | 'success' | 'danger';
 }) {
-  return <span className={cn('base-badge', className)} data-tone={tone} data-appearance="badge" {...props} />;
+  return <span className={cn('ui-badge', className)} data-tone={tone} data-appearance="badge" {...props} />;
 }

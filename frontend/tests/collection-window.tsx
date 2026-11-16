@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { appRoutes } from '../src/app/router';
+import { TaskList } from '../src/features/tasks/ui/task-list-page';
 import { createQueryClient } from '../src/app/providers';
 import type { CollectionPage } from '../src/shared/lib/collections/project-collection';
 import type { InfiniteData } from '@tanstack/react-query';
@@ -30,9 +31,31 @@ Object.assign(window, {
     client.removeQueries({ predicate: (query) => list(query) && query.getObserversCount() === 0 });
   },
 });
-const router = createBrowserRouter(appRoutes);
+const alternate = new URLSearchParams(location.search).has('alternate');
+const routes = alternate
+  ? [
+      {
+        ...appRoutes[0],
+        children: [
+          ...(appRoutes[0].children ?? []),
+          {
+            path: 'work-items',
+            element: (
+              <TaskList
+                user={{ userId: '00000000-0000-4000-8000-000000000003', username: 'fixture', role: 'INITIATOR' }}
+              />
+            ),
+          },
+        ],
+      },
+    ]
+  : appRoutes;
+const router = createBrowserRouter(routes);
+Object.assign(window, { fixtureVisitList: () => router.navigate(alternate ? '/work-items' : '/tasks') });
 // Use the actual browser address so transition/position guards run as in production.
-await router.navigate(history ? '/tasks/10000000-0000-4000-8000-000001000000' : '/tasks', { replace: true });
+await router.navigate(history ? '/tasks/10000000-0000-4000-8000-000001000000' : alternate ? '/work-items' : '/tasks', {
+  replace: true,
+});
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={client}>

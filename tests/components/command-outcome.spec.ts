@@ -907,7 +907,7 @@ test('login shares the full-width brand and theme header and preserves entered c
   await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
   const header = page.getByRole('banner');
   await expect(header.getByRole('link', { name: 'Обмен с внешней системой', exact: true })).toBeVisible();
-  await expect(header.locator('.base-icon-mark')).toBeVisible();
+  await expect(header.locator('.ui-icon-mark')).toBeVisible();
   await expect(header.getByRole('combobox', { name: 'Цветовая тема', exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Основная навигация', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toHaveCount(0);

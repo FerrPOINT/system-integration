@@ -24,13 +24,13 @@ export const Disclosure = forwardRef<HTMLDetailsElement, DisclosureProps>(functi
     <details
       {...props}
       ref={ref}
-      className={cn('base-disclosure', className)}
+      className={cn('ui-disclosure', className)}
       data-appearance="panel"
       data-tone={tone === 'muted' || tone === 'danger' ? tone : undefined}
       data-size={size === 'sm' ? size : undefined}
     >
       {heading}
-      <div className="base-disclosure-content">{children}</div>
+      <div className="ui-disclosure-content">{children}</div>
     </details>
   );
 });
