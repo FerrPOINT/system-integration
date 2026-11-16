@@ -12,6 +12,10 @@ import '../src/app/shell/shell.css';
 
 const taskId = '00000000-0000-4000-8000-000000000001';
 const queryClient = createQueryClient();
+let failedCommands = 0;
+queryClient.getMutationCache().subscribe((event) => {
+  if (event.type === 'updated' && event.action.type === 'error') failedCommands++;
+});
 const screen = new URLSearchParams(location.search).get('screen');
 const initial =
   screen === 'list'
@@ -24,7 +28,7 @@ const initial =
           ? '/missing'
           : '/tasks/' + taskId + '?size=10';
 const router = createMemoryRouter(appRoutes, { initialEntries: [initial] });
-// Security assertion only: expose keys, never credentials or private payloads.
+// Expose only lifecycle/key counts, never credentials or private payloads.
 Object.assign(window, {
   fixturePrivateKeyCount: () =>
     queryClient
@@ -32,6 +36,7 @@ Object.assign(window, {
       .getAll()
       .filter((query) => query.queryKey[0] !== 'session').length,
   fixtureRefetchSession: () => queryClient.invalidateQueries({ queryKey: ['session'] }),
+  fixtureFailedCommands: () => failedCommands,
 });
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

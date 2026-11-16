@@ -6,19 +6,52 @@ import {
   takeExchangeIssue,
 } from '../../../../build/generated/openapi/client';
 import type { ResolveIssueRequest, RetryRequest, TakeIssueRequest } from '../../../../build/generated/openapi/client';
-import { data } from '../../../shared/api/http';
+import { ApiError, data, ProtocolError } from '../../../shared/api/http';
+import { useState } from 'react';
 import { csrf } from '../../../shared/api/csrf';
 import { useCommandKey } from '../../../shared/lib/forms/use-command-key';
 
 export type DecisionCommand = ResolveIssueRequest | (RetryRequest & { action: 'RETRY'; reconciliationId: string });
 
+class UnknownReconciliationOutcome extends Error {
+  constructor(cause: unknown) {
+    super('Результат сверки неизвестен', { cause });
+  }
+}
+
 export function useReconcileTask(taskId: string) {
   const key = useCommandKey();
-  return useMutation({
-    mutationFn: async () =>
-      data(reconcileTask(taskId, { ...(await csrf()), 'Idempotency-Key': key.forInput({ taskId }) })),
-    onSuccess: () => key.reset(),
+  const [unresolved, setUnresolved] = useState(false);
+  const command = useMutation({
+    mutationFn: async () => {
+      const headers = { ...(await csrf()), 'Idempotency-Key': key.forInput({ taskId }) };
+      try {
+        const receipt = await data(reconcileTask(taskId, headers));
+        const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (
+          !receipt ||
+          typeof receipt.reconciliationId !== 'string' ||
+          !uuid.test(receipt.reconciliationId) ||
+          typeof receipt.taskId !== 'string' ||
+          receipt.taskId.toLowerCase() !== taskId.toLowerCase() ||
+          (receipt.issueId !== undefined && (typeof receipt.issueId !== 'string' || !uuid.test(receipt.issueId)))
+        )
+          throw new ProtocolError(200);
+        return receipt;
+      } catch (error) {
+        if (error instanceof ApiError && [400, 401, 403, 409].includes(error.status)) throw error;
+        throw new UnknownReconciliationOutcome(error);
+      }
+    },
+    onError: (error) => {
+      if (error instanceof UnknownReconciliationOutcome) setUnresolved(true);
+    },
+    onSuccess: () => {
+      key.reset();
+      setUnresolved(false);
+    },
   });
+  return { command, unresolved };
 }
 
 export function useTakeIssue(issueId: string) {

@@ -2,10 +2,14 @@ import { expect, test, type Page } from '@playwright/test';
 import { selectChoice } from '../e2e/support';
 
 const taskId = '00000000-0000-4000-8000-000000000001';
+const snapshotId = '00000000-0000-4000-8000-000000000010';
 async function mockApi(page: Page, role = 'INITIATOR') {
   const state = {
     title: 'Original task',
     signedIn: true,
+    accountId: '00000000-0000-4000-8000-000000000003',
+    username: 'fixture',
+    rejectHeldWrite: false,
     failRead: false,
     failSession: false,
     failCsrf: false,
@@ -16,10 +20,11 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     assigned: false,
     resolved: false,
     revision: 1,
-    latestSnapshot: 'snapshot',
+    latestSnapshot: snapshotId,
     role,
     rejectCreate: false,
     badCreateReceipt: undefined as unknown,
+    badSnapshotReceipt: undefined as unknown,
     createKeys: new Set<string>(),
     holdWrite: undefined as Promise<void> | undefined,
     reads: [] as string[],
@@ -34,9 +39,10 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     createdAt: '2026-11-14T00:00:00Z',
     deliveryStatus: 'ACKNOWLEDGED',
     businessStatus: 'SUCCEEDED',
+    result: { status: 'SUCCEEDED', completedAt: '2026-11-14T00:00:00Z' },
   });
   const snapshot = () => ({
-    reconciliationId: 'snapshot',
+    reconciliationId: snapshotId,
     taskId,
     operationId: taskId,
     checkedAt: '2026-11-14T00:00:00Z',
@@ -63,7 +69,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
       ? {
           action: 'ACKNOWLEDGE_DIFFERENCE',
           reason: 'Verified fixture',
-          reconciliationId: 'snapshot',
+          reconciliationId: snapshotId,
           decidedAt: '2026-11-14T00:00:00Z',
           decidedBy: task().ownerId,
         }
@@ -82,7 +88,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
           : route.fulfill({
               status: state.signedIn ? 200 : 401,
               json: state.signedIn
-                ? { userId: task().ownerId, username: 'fixture', role: state.role }
+                ? { userId: state.accountId, username: state.username, role: state.role }
                 : { code: 'SESSION_REQUIRED' },
             });
       if (path === '/api/login') {
@@ -108,6 +114,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
             json: { code: 'INVALID_REQUEST', detail: 'Fixture validation rejection' },
           });
         await state.holdWrite;
+        if (state.rejectHeldWrite) return route.fulfill({ status: 401, json: { code: 'SESSION_REQUIRED' } });
         if (path === '/api/tasks') state.createKeys.add(request.headers()['idempotency-key']);
         if (request.postDataJSON()?.title) state.title = request.postDataJSON().title;
         if (state.loseWrite) {
@@ -116,6 +123,8 @@ async function mockApi(page: Page, role = 'INITIATOR') {
         }
         if (path === '/api/tasks' && state.badCreateReceipt !== undefined)
           return route.fulfill({ status: 201, json: state.badCreateReceipt });
+        if (path.endsWith('/reconciliations') && state.badSnapshotReceipt !== undefined)
+          return route.fulfill({ json: state.badSnapshotReceipt });
         state.failRead = true;
         if (path.endsWith('/take')) {
           state.assigned = true;
@@ -131,7 +140,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
       state.reads.push(path);
       if (state.failRead) return fail();
       if (path === '/api/exchange/issues/' + taskId) return route.fulfill({ json: issue() });
-      if (path.endsWith('/reconciliations/snapshot')) return route.fulfill({ json: snapshot() });
+      if (path.endsWith('/reconciliations/' + snapshotId)) return route.fulfill({ json: snapshot() });
       if (path.endsWith('/history'))
         return route.fulfill({ json: { items: [], page: 0, hasNext: false, totalItems: 0, totalPages: 0 } });
       if (path === '/api/tasks')
@@ -369,6 +378,65 @@ async function openCreate(page: Page, title: string) {
 
 const refetchSession = (page: Page) =>
   page.evaluate(() => (window as unknown as { fixtureRefetchSession: () => Promise<void> }).fixtureRefetchSession());
+
+test('late mutation 401 cannot expire a newly accepted account', async ({ page }) => {
+  const state = await mockApi(page);
+  let release!: () => void;
+  state.holdWrite = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.goto('/tests/command-outcome.html');
+  await page.getByRole('button', { name: 'Изменить название', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Новое название', exact: true }).fill('Pending old account');
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
+  await expect.poll(() => state.commands.length).toBe(1);
+  state.accountId = '00000000-0000-4000-8000-000000000004';
+  state.role = 'OPERATOR';
+  state.username = 'second-account';
+  await refetchSession(page);
+  if (test.info().project.name === 'mobile') await page.getByRole('button', { name: 'Меню приложения' }).click();
+  await expect(page.getByText('second-account', { exact: false })).toBeVisible();
+  if (test.info().project.name === 'mobile') await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  state.rejectHeldWrite = true;
+  release();
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { fixtureFailedCommands: () => number }).fixtureFailedCommands()),
+    )
+    .toBe(1);
+  await expect(page.getByRole('textbox', { name: 'Новое название', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+  state.holdWrite = undefined;
+  state.signedIn = false;
+  await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
+});
+
+for (const receipt of [
+  {},
+  { reconciliationId: 7 },
+  { reconciliationId: snapshotId, taskId: 'other-task' },
+  { reconciliationId: snapshotId, taskId, issueId: 'bad-issue' },
+]) {
+  test('malformed reconciliation preserves the original command ' + JSON.stringify(receipt), async ({ page }) => {
+    const state = await mockApi(page, 'OPERATOR');
+    state.badSnapshotReceipt = receipt;
+    await page.goto('/tests/command-outcome.html');
+    await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('Сверка могла сохраниться');
+    expect(state.reads.some((path) => path.includes('/reconciliations/'))).toBe(false);
+    state.badSnapshotReceipt = undefined;
+    await page.getByRole('button', { name: 'Проверить результат сверки', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Сверка сохранена.' })).toBeVisible();
+    state.failRead = false;
+    await page.getByRole('button', { name: 'Повторить обновление', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Сохранённая сверка', exact: true })).toBeVisible();
+    expect(state.commands).toHaveLength(2);
+    expect(state.commands[0].key).toBeTruthy();
+    expect(state.commands[1]).toEqual(state.commands[0]);
+  });
+}
 
 test('unknown create freezes the submitted input and replays exactly one command', async ({ page }) => {
   const state = await mockApi(page);

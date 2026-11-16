@@ -1,4 +1,4 @@
-import { utcFilterValue } from '../model/task-search';
+import { utcFilterHint, utcFilterValue } from '../model/task-search';
 import { Notice } from '../../../shared/ui/notice';
 import { FormField } from '../../../shared/ui/form-field';
 import { Select } from '../../../shared/ui/select';
@@ -41,7 +41,7 @@ export function TaskFilterFields({
           />
         )}
       </FormField>
-      <FormField id="field-createdFrom" label="Создано с (UTC, включительно)">
+      <FormField id="field-createdFrom" label="Создано с (UTC, включительно)" hint={utcFilterHint(params.createdFrom)}>
         {(attrs) => (
           <Input
             {...attrs}
@@ -54,7 +54,7 @@ export function TaskFilterFields({
           />
         )}
       </FormField>
-      <FormField id="field-createdTo" label="Создано до (UTC, не включая)">
+      <FormField id="field-createdTo" label="Создано до (UTC, не включая)" hint={utcFilterHint(params.createdTo)}>
         {(attrs) => (
           <Input
             {...attrs}

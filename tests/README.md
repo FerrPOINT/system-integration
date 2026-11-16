@@ -24,6 +24,19 @@ SI_BACKEND_URL=http://127.0.0.1:19680 SI_EMULATOR_URL=http://127.0.0.1:19681 nod
 
 Проверьте origin/external и свежие createdAt в `tests/results/demo.json`:
 идемпотентный replay старых заданий не является проверкой нового кандидата.
+## Production frontend без API/БД
+
+После `frontend: pnpm build` из `tests/` выполните
+`corepack pnpm exec playwright test --config production.config.ts`.
+Runner поднимает временный контейнер на 127.0.0.1:19778 из Nginx image,
+закреплённого в frontend/Dockerfile, с настоящим nginx.conf и read-only dist.
+Он использует отдельную временную сеть; API перехватывается тестами, доступа
+к Compose/БД нет. Container/network удаляются в global teardown.
+
+Проверяются nonce CSP и условный HTTP-запрос, Dialog/Select/вложенный discard,
+видимость точных границ периода и desktop scroll cold/warm/POP после Query GC.
+Эта проверка не заменяет сквозные сценарии отдельного test Compose.
+
 ## HTTP smoke
 
 Запустите отдельный тестовый Compose по [инструкции](load/README.md#запуск).

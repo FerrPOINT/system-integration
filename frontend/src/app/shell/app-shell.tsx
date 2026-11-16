@@ -5,6 +5,7 @@ import { ErrorMessage } from '../../shared/ui/error-message';
 import { AppHeader } from './app-header';
 import { ScrollRestoration } from 'react-router-dom';
 import { CollectionOwner } from '../../shared/lib/collections/collection-owner';
+import { useMainScroll } from './use-main-scroll';
 
 export function AppShell({
   user,
@@ -16,6 +17,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   const logout = useLogout();
+  const mainScroll = useMainScroll();
   const owner = user.userId + ':' + user.role;
   return (
     <CollectionOwner value={owner}>
@@ -24,7 +26,7 @@ export function AppShell({
           К содержимому
         </a>
         <AppHeader user={user} appearance={appearance} pending={logout.isPending} onLogout={() => logout.mutate()} />
-        <main id="main" className="base-page-stack" tabIndex={-1}>
+        <main {...mainScroll} id="main" className="base-page-stack" tabIndex={-1}>
           <ErrorMessage error={logout.error} />
           {children}
         </main>
