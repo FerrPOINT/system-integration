@@ -1,5 +1,31 @@
 # Текущая стадия
 
+## Frontend: жизненный цикл сессии и восстановление форм
+
+Ветка fix/frontend-session-recovery основана на main@caa25fb. Кандидат —
+7ec586761a342d829978ae92ae0fd58a0e3bd195. Исправлены три замечания ревью:
+поздний logout не очищает новую сессию; конфликт переименования сохраняет
+guard; закрытие полей решения не сбрасывает принятую команду. Восстановление
+переименования блокирует поля до ответа чтения.
+
+Добавлены регрессии для одинакового/другого аккаунта, смены роли во время
+очистки, Back/logout после ошибки чтения, ожидания GET и решений по заданию
+и общей проблеме ленты. RED воспроизведения подтвердили исходные дефекты.
+Прошли format/codegen/ESLint/strict TypeScript/Vite build, 67 unit, 2 asset,
+169 component (1 неприменимый mobile-тест пропущен), 12 production Nginx,
+2 read-only real-API UI и 4 HTTP smoke. После уточнения кода ошибки fixture
+все 14 новых desktop/mobile регрессий повторно прошли на финальном HEAD.
+Прикладные inputs между массовым прогоном и финальным HEAD совпадают.
+
+Локальный frontend http://127.0.0.1:19673 обновлён из образа 7ec5867;
+backend/emulator остаются на 9d70e1a с неизменными inputs. Проверены размеры
+страниц настоящего API, image revisions, nonce HTML/CSP и SHA-256 отдаваемых
+JS/CSS. Сохранены 706 заданий и 705 внешних операций; контрольные суммы
+бизнес-строк совпадают. Бизнес-fixtures не создавались, PostgreSQL не сбрасывался.
+Доказательства — ignored tests/results/frontend-session-recovery-2026-11-16/:
+RED logs, gate.log, final-stage.log, browser reports, runtime-verification.json
+и protected-verified.json. Публичное окружение не обновлялось.
+
 ## PR #15: квалификация интегрированного frontend
 
 [PR #15](https://github.com/FerrPOINT/system-integration/pull/15) объединяет
