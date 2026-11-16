@@ -19,12 +19,24 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
   const actions = decisionActions(issue);
   const stale = isDecisionStale(basis, issue) || Boolean(action && !actions.includes(action));
   const clearDraft = () => {
-    resetCommand();
     setAction('');
     setReason('');
     setBasis(null);
   };
-  const refresh = () => update.mutate({ issueId: issue.issueId, taskId: issue.taskId }, { onSuccess: clearDraft });
+  const discardDraft = () => {
+    if (!command.isSuccess) resetCommand();
+    clearDraft();
+  };
+  const refresh = () =>
+    update.mutate(
+      { issueId: issue.issueId, taskId: issue.taskId },
+      {
+        onSuccess: () => {
+          resetCommand();
+          clearDraft();
+        },
+      },
+    );
   function captureBasis() {
     guard.protect();
     setBasis((current) => current ?? decisionBasis(issue));
@@ -58,8 +70,7 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
     update,
     guard,
     refresh,
-    visible:
-      issue.status === 'OPEN' || dirty || busy || otherCommand.unresolved || (command.isSuccess && update.isError),
+    visible: issue.status === 'OPEN' || dirty || busy || otherCommand.unresolved || command.isSuccess,
     canSubmit: input !== null,
     changeAction(value: DecisionAction) {
       captureBasis();
@@ -69,7 +80,7 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
       captureBasis();
       setReason(value);
     },
-    close: () => guard.requestClose(clearDraft),
+    close: () => guard.requestClose(discardDraft),
     rebase() {
       if (issue.status !== 'OPEN' || (!issue.latestReconciliationId && issue.taskId)) return;
       setBasis(decisionBasis(issue));

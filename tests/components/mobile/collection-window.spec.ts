@@ -170,6 +170,41 @@ test('new history entry starts at page zero while native Back restores the old a
   await expect.poll(async () => Math.abs((await row.boundingBox())!.y - anchor.top)).toBeLessThan(2);
 });
 
+for (const direction of ['next', 'previous']) {
+  test(`history poll keeps the ${direction} load failure until explicit retry`, async ({ page }) => {
+    const state = await server(page, 1000, true);
+    await page.clock.install();
+    await page.goto('/tests/collection-window.html?history');
+    await ready(page, true);
+    if (direction === 'previous') {
+      while ((await info(page)).pages.at(-1)! < 6) await forward(page, true);
+    }
+    const failed = direction === 'next' ? 1 : (await info(page)).pages[0] - 1;
+    state.fail = failed;
+    await page.evaluate(
+      (previous) => window.scrollTo(0, previous ? 0 : document.documentElement.scrollHeight),
+      direction === 'previous',
+    );
+    const retry = page.getByRole('button', {
+      name: direction === 'next' ? 'Повторить загрузку' : 'Повторить загрузку предыдущих записей',
+      exact: true,
+    });
+    await expect(retry).toBeVisible();
+    const failures = state.reads.filter((number) => number === failed).length;
+    const readsBeforePoll = state.reads.length;
+    state.fail = undefined;
+    await page.clock.fastForward(10_000);
+    await expect.poll(() => state.reads.length).toBeGreaterThan(readsBeforePoll);
+    await ready(page, true);
+    await expect(retry).toBeVisible();
+    expect(state.reads.filter((number) => number === failed)).toHaveLength(failures);
+    await retry.click();
+    await expect.poll(() => state.reads.filter((number) => number === failed).length).toBe(failures + 1);
+    await ready(page, true);
+    await expect(retry).toHaveCount(0);
+  });
+}
+
 for (const total of [20, 100, 1000, 5000]) {
   test(`window budget, refetch and backward access with ${total} records`, async ({ page }) => {
     const state = await server(page, total);

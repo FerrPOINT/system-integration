@@ -9,7 +9,8 @@ test.beforeEach(async ({ page }) => {
       const url = new URL(route.request().url());
       if (url.pathname.endsWith('/history'))
         return route.fulfill({ json: { items: [], page: 0, hasNext: false, totalItems: 0, totalPages: 0 } });
-      if (url.pathname === '/api/csrf') return route.fulfill({ json: { token: 'fixture' } });
+      if (url.pathname === '/api/csrf')
+        return route.fulfill({ json: { token: 'fixture', userId: '00000000-0000-4000-8000-000000000003' } });
       const index = ids.findIndex((id) => url.pathname === '/api/tasks/' + id);
       if (index < 0) throw new Error('Unexpected fixture request: ' + url.pathname);
       if (route.request().method() === 'PATCH') return route.fulfill({ json: { taskId: ids[index] } });

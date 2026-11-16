@@ -42,7 +42,17 @@ export function History({
     refreshInterval,
   });
   const { query: history, items: historyItems, meta: historyPage } = collection;
-  const { viewportRef: registryRef, restoring, positionNotice, loadNext, loadPrevious, refresh } = collection;
+  const {
+    viewportRef: registryRef,
+    restoring,
+    autoLoad,
+    nextError,
+    previousError,
+    positionNotice,
+    loadNext,
+    loadPrevious,
+    refresh,
+  } = collection;
   return (
     <div className="task-history-viewport" data-feed-viewport={mobile || undefined}>
       <Card asChild>
@@ -61,8 +71,8 @@ export function History({
                   hasPrevious={history.hasPreviousPage}
                   pending={history.isFetchingPreviousPage}
                   busy={history.isFetching}
-                  error={history.isFetchPreviousPageError ? history.error : null}
-                  autoLoad={!restoring && !history.isFetchPreviousPageError && !history.isFetchNextPageError}
+                  error={previousError}
+                  autoLoad={autoLoad}
                   onLoad={loadPrevious}
                 />
               )}
@@ -131,8 +141,8 @@ export function History({
                   pending={history.isFetchingNextPage}
                   busy={history.isFetching}
                   notice={positionNotice}
-                  autoLoad={!restoring && !history.isFetchPreviousPageError && !history.isFetchNextPageError}
-                  error={history.isFetchNextPageError ? history.error : null}
+                  autoLoad={autoLoad}
+                  error={nextError}
                   onLoad={loadNext}
                 />
               )

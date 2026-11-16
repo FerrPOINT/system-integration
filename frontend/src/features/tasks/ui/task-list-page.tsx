@@ -29,7 +29,17 @@ export function TaskList({ user }: { user: GetSession200 }) {
   const { page, size, valid: validPage, changePage } = pagination;
   const { status, params, validPeriod, hasFilters } = filters;
   const { query: tasks, items: tasksItems, meta: tasksPage } = collection;
-  const { viewportRef: registryRef, restoring, positionNotice, loadNext, loadPrevious, refresh } = collection;
+  const {
+    viewportRef: registryRef,
+    restoring,
+    autoLoad,
+    nextError,
+    previousError,
+    positionNotice,
+    loadNext,
+    loadPrevious,
+    refresh,
+  } = collection;
   const missingPage = Boolean(tasksPage && page >= tasksPage.totalPages && page > 0);
   const [filtersOpen, setFiltersOpen] = useState(true);
   const filterFields = (
@@ -100,8 +110,8 @@ export function TaskList({ user }: { user: GetSession200 }) {
               hasPrevious={tasks.hasPreviousPage}
               pending={tasks.isFetchingPreviousPage}
               busy={tasks.isFetching}
-              error={tasks.isFetchPreviousPageError ? tasks.error : null}
-              autoLoad={!restoring && !tasks.isFetchPreviousPageError && !tasks.isFetchNextPageError}
+              error={previousError}
+              autoLoad={autoLoad}
               onLoad={loadPrevious}
             />
           )}
@@ -169,8 +179,8 @@ export function TaskList({ user }: { user: GetSession200 }) {
               pending={tasks.isFetchingNextPage}
               busy={tasks.isFetching}
               notice={positionNotice}
-              autoLoad={!restoring && !tasks.isFetchPreviousPageError && !tasks.isFetchNextPageError}
-              error={tasks.isFetchNextPageError ? tasks.error : null}
+              autoLoad={autoLoad}
+              error={nextError}
               onLoad={loadNext}
             />
           )

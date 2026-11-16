@@ -40,7 +40,10 @@ export function RenameForm({ task, onClose }: { task: Task; onClose: () => void 
             );
         }}
       >
-        <fieldset className="ui-form-fieldset ui-form" disabled={rename.isPending || rename.isSuccess}>
+        <fieldset
+          className="ui-form-fieldset ui-form"
+          disabled={rename.isPending || rename.isSuccess || refresh.isPending}
+        >
           <FormField id="field-title" label="Новое название" required>
             {(attrs) => (
               <Input
@@ -57,10 +60,10 @@ export function RenameForm({ task, onClose }: { task: Task; onClose: () => void 
         </fieldset>
         <ErrorMessage error={rename.error} />
         <CommandRefresh
-          message="Название сохранено."
+          message={conflict ? 'Название изменено в другой сессии.' : 'Название сохранено.'}
           error={refresh.error}
           pending={refresh.isPending}
-          onRetry={refreshTask}
+          onRetry={() => guard.requestClose(refreshTask)}
         />
         <ActionGroup align="start">
           {!rename.isSuccess && (
@@ -70,17 +73,8 @@ export function RenameForm({ task, onClose }: { task: Task; onClose: () => void 
           )}
           <Button
             type="button"
-            disabled={rename.isPending}
-            onClick={() =>
-              guard.requestClose(
-                conflict
-                  ? () => {
-                      guard.release();
-                      refreshTask();
-                    }
-                  : onClose,
-              )
-            }
+            disabled={rename.isPending || refresh.isPending}
+            onClick={() => guard.requestClose(conflict ? refreshTask : onClose)}
           >
             {conflict ? 'Обновить карточку' : rename.isSuccess ? 'Закрыть' : 'Отмена'}
           </Button>

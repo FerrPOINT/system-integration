@@ -5,6 +5,7 @@ import { createMemoryRouter, RouterProvider, useNavigate } from 'react-router-do
 import { TaskCard } from '../src/features/tasks/ui/task-details-page';
 import { taskKeys } from '../src/features/tasks/api/task-keys';
 import { CollectionOwner } from '../src/shared/lib/collections/collection-owner';
+import { sessionKey } from '../src/shared/api/session-scope';
 import type { Task } from '../build/generated/openapi/client';
 import '../src/shared/styles/design-tokens.css';
 import '../src/shared/styles/controls.css';
@@ -25,6 +26,7 @@ const tasks: Task[] = ['a', 'b'].map((suffix, index) => ({
   businessStatus: 'SUCCEEDED',
 }));
 const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+client.setQueryData(sessionKey, { userId: tasks[0].ownerId, username: 'fixture', role: 'INITIATOR' });
 client.setQueryData(taskKeys.task(tasks[0].taskId), tasks[0]);
 if (!params.has('cold')) client.setQueryData(taskKeys.task(tasks[1].taskId), tasks[1]);
 

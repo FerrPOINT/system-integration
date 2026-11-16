@@ -15,6 +15,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     issueReads: [] as string[],
     failSession: false,
     failCsrf: false,
+    rejectLogin: false,
     loseWrite: false,
     commands: [] as { method: string; key: string | undefined; body: unknown }[],
     logins: 0,
@@ -32,6 +33,13 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     reconciliationStatus: 200,
     createKeys: new Set<string>(),
     holdWrite: undefined as Promise<void> | undefined,
+    holdCsrf: undefined as Promise<void> | undefined,
+    holdCsrfAt: undefined as number | undefined,
+    csrfReads: 0,
+    holdLogout: undefined as Promise<void> | undefined,
+    sessionCookie: false,
+    holdRead: undefined as Promise<void> | undefined,
+    rejectRename: false,
     reads: [] as string[],
   };
   const task = () => ({
@@ -96,7 +104,13 @@ async function mockApi(page: Page, role = 'INITIATOR') {
       const request = route.request();
       const path = new URL(request.url()).pathname;
       const fail = () => route.fulfill({ status: 502, contentType: 'text/html', body: '<html>Gateway failure</html>' });
-      if (path === '/api/csrf') return state.failCsrf ? fail() : route.fulfill({ json: { token: 'fixture' } });
+      if (path === '/api/csrf') {
+        state.csrfReads++;
+        if (state.holdCsrfAt === undefined || state.holdCsrfAt === state.csrfReads) await state.holdCsrf;
+        return state.failCsrf
+          ? fail()
+          : route.fulfill({ json: { token: 'fixture', userId: state.signedIn ? state.accountId : null } });
+      }
       if (path === '/api/session')
         return state.failSession
           ? fail()
@@ -107,15 +121,23 @@ async function mockApi(page: Page, role = 'INITIATOR') {
                 : { code: 'SESSION_REQUIRED' },
             });
       if (path === '/api/login') {
-        state.signedIn = true;
         state.logins++;
-        return route.fulfill({ status: 204 });
+        if (state.rejectLogin) return route.fulfill({ status: 401, json: { code: 'INVALID_CREDENTIALS' } });
+        state.signedIn = true;
+        return route.fulfill({
+          status: 204,
+          headers: state.sessionCookie ? { 'set-cookie': 'JSESSIONID=fixture-renewed; Path=/; SameSite=Lax' } : {},
+        });
       }
       if (path === '/api/logout') {
         state.signedIn = false;
         state.logouts++;
         state.failCsrf = true;
-        return route.fulfill({ status: 204 });
+        await state.holdLogout;
+        return route.fulfill({
+          status: 204,
+          headers: state.sessionCookie ? { 'set-cookie': 'JSESSIONID=; Max-Age=0; Path=/' } : {},
+        });
       }
       if (['POST', 'PATCH'].includes(request.method())) {
         state.commands.push({
@@ -123,6 +145,11 @@ async function mockApi(page: Page, role = 'INITIATOR') {
           key: request.headers()['idempotency-key'],
           body: request.postDataJSON(),
         });
+        if (request.method() === 'PATCH' && state.rejectRename)
+          return route.fulfill({
+            status: 409,
+            json: { code: 'TITLE_REVISION_CONFLICT', detail: 'Fixture title conflict' },
+          });
         if (path === '/api/tasks' && state.rejectCreate)
           return route.fulfill({
             status: 400,
@@ -163,6 +190,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
         return route.fulfill({ status: request.method() === 'POST' ? 201 : 200, json: { taskId } });
       }
       state.reads.push(path);
+      await state.holdRead;
       if (state.failRead) return fail();
       if (path === '/api/exchange/issues') {
         const search = new URL(request.url()).searchParams;
@@ -191,6 +219,353 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     },
   );
   return state;
+}
+
+const settledCommands = (page: Page) =>
+  page.evaluate(() => {
+    const fixture = window as unknown as {
+      fixtureFailedCommands: () => number;
+      fixtureSuccessfulCommands: () => number;
+    };
+    return fixture.fixtureFailedCommands() + fixture.fixtureSuccessfulCommands();
+  });
+
+for (const action of ['Создать', 'Переименовать', 'Сверить', 'Взять', 'Решить', 'Повторить обмен']) {
+  for (const changed of [false, true]) {
+    test(`session preflight ${action} ${changed ? 'rejects a changed identity' : 'allows a same-identity refetch'}`, async ({
+      page,
+    }) => {
+      const state = await mockApi(page, ['Создать', 'Переименовать'].includes(action) ? 'INITIATOR' : 'OPERATOR');
+      let release!: () => void;
+      state.holdCsrf = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await page.goto('/tests/command-outcome.html?screen=probe');
+      await page.getByRole('button', { name: action, exact: true }).click();
+      await expect.poll(() => state.csrfReads).toBe(1);
+      if (changed) state.accountId = '00000000-0000-4000-8000-000000000099';
+      state.username = 'renewed';
+      await refetchSession(page);
+      await expect(page.getByText('Текущий пользователь: renewed', { exact: true })).toBeVisible();
+      release();
+      await expect.poll(() => settledCommands(page)).toBe(1);
+      expect(state.commands).toHaveLength(changed ? 0 : 1);
+      if (changed) {
+        state.holdCsrf = undefined;
+        await page.getByRole('button', { name: action, exact: true }).click();
+        await expect.poll(() => state.commands.length).toBe(1);
+        await expect.poll(() => settledCommands(page)).toBe(2);
+      }
+    });
+  }
+}
+
+async function holdSessionLock(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((entered) => {
+        void navigator.locks.request(
+          'system-integration-session-cookie',
+          () =>
+            new Promise<void>((release) => {
+              Object.assign(window, { fixtureReleaseSessionLock: release });
+              entered();
+            }),
+        );
+      }),
+  );
+  return () =>
+    page.evaluate(() => (window as unknown as { fixtureReleaseSessionLock: () => void }).fixtureReleaseSessionLock());
+}
+
+test('a changed cookie owner cannot submit a stale form before session refetch', async ({ page }) => {
+  const state = await mockApi(page);
+  await page.goto('/tests/command-outcome.html?screen=probe');
+  await expect(page.getByText('Текущий пользователь: fixture', { exact: true })).toBeVisible();
+  state.accountId = '00000000-0000-4000-8000-000000000099';
+  state.username = 'renewed';
+  await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  await expect.poll(() => settledCommands(page)).toBe(1);
+  expect(state.commands).toHaveLength(0);
+  await expect(page.getByText('Текущий пользователь: renewed', { exact: true })).toBeVisible();
+});
+
+for (const action of ['login', 'logout']) {
+  test(`queued session ${action} cannot write after identity changes`, async ({ page }) => {
+    const state = await mockApi(page);
+    state.signedIn = action === 'logout';
+    await page.goto('/tests/command-outcome.html?screen=probe');
+    await expect(
+      page.getByRole('heading', { name: action === 'login' ? 'Вход в систему' : 'Проверка команд', exact: true }),
+    ).toBeVisible();
+    const release = await holdSessionLock(page);
+    try {
+      if (action === 'login') {
+        await page.getByRole('textbox', { name: 'Логин', exact: true }).fill('fixture');
+        await page.getByLabel('Пароль *', { exact: true }).fill('fixture');
+        await page.getByRole('button', { name: 'Войти', exact: true }).click();
+      } else {
+        await openAccountMenu(page);
+        await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+      }
+      await expect.poll(() => page.evaluate(async () => (await navigator.locks.query()).pending?.length ?? 0)).toBe(1);
+      state.accountId = '00000000-0000-4000-8000-000000000099';
+      state.username = 'renewed';
+      state.signedIn = true;
+      await refetchSession(page);
+      await expect(page.getByText('Текущий пользователь: renewed', { exact: true })).toBeVisible();
+      await release();
+      await expect.poll(() => settledCommands(page)).toBe(1);
+      expect(state.logins).toBe(0);
+      expect(state.logouts).toBe(0);
+      await expect(page.getByText('Текущий пользователь: renewed', { exact: true })).toBeVisible();
+    } finally {
+      await release();
+    }
+  });
+}
+
+test('login remains usable after a rejected credential attempt changes the session generation', async ({ page }) => {
+  const state = await mockApi(page);
+  state.signedIn = false;
+  state.rejectLogin = true;
+  await page.goto('/tests/command-outcome.html?screen=probe');
+  await page.getByRole('textbox', { name: 'Логин', exact: true }).fill('fixture');
+  await page.getByLabel('Пароль *', { exact: true }).fill('fixture');
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText('Неверный логин или пароль');
+  state.rejectLogin = false;
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Проверка команд', exact: true })).toBeVisible();
+  expect(state.logins).toBe(2);
+});
+
+test('overlapping identical creates keep one key while the second CSRF waits', async ({ page }) => {
+  const state = await mockApi(page);
+  let release!: () => void;
+  state.holdCsrfAt = 2;
+  state.holdCsrf = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.goto('/tests/command-outcome.html?screen=probe');
+  await page.getByRole('button', { name: 'Дважды создать', exact: true }).click();
+  await expect.poll(() => state.csrfReads).toBe(2);
+  await expect.poll(() => settledCommands(page)).toBe(1);
+  release();
+  await expect.poll(() => settledCommands(page)).toBe(2);
+  expect(state.commands).toHaveLength(2);
+  expect(state.createKeys.size).toBe(1);
+});
+
+for (const identity of ['same account', 'other account']) {
+  test('late logout success preserves a new session for ' + identity, async ({ page }) => {
+    const state = await mockApi(page);
+    let release!: () => void;
+    state.holdLogout = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const successes = () =>
+      page.evaluate(() =>
+        (window as unknown as { fixtureSuccessfulCommands: () => number }).fixtureSuccessfulCommands(),
+      );
+    await page.goto('/tests/command-outcome.html');
+    await openAccountMenu(page);
+    await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+    await expect.poll(() => state.logouts).toBe(1);
+    await refetchSession(page);
+    await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
+    state.failCsrf = false;
+    if (identity === 'other account') {
+      state.accountId = '00000000-0000-4000-8000-000000000099';
+      state.role = 'OPERATOR';
+    }
+    state.username = 'renewed';
+    // A session established elsewhere is observed before this tab receives its old logout response.
+    state.signedIn = true;
+    await refetchSession(page);
+    await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+    await expect.poll(successes).toBe(0);
+    if (identity === 'same account') {
+      await page.getByRole('button', { name: 'Изменить название', exact: true }).click();
+      await page.getByRole('textbox', { name: 'Новое название', exact: true }).fill('New session draft');
+    }
+    release();
+    await expect.poll(successes).toBe(1);
+    await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+    if (identity === 'same account')
+      await expect(page.getByRole('textbox', { name: 'Новое название', exact: true })).toHaveValue('New session draft');
+    expect(
+      await page.evaluate(() =>
+        (window as unknown as { fixturePrivateKeyCount: () => number }).fixturePrivateKeyCount(),
+      ),
+    ).toBeGreaterThan(0);
+    expect(state.commands).toHaveLength(0);
+  });
+}
+
+test('a delayed logout cannot erase the login cookie of another tab', async ({ page, context }) => {
+  const old = await mockApi(page);
+  old.sessionCookie = true;
+  let release!: () => void;
+  old.holdLogout = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.goto('/tests/command-outcome.html');
+  await openAccountMenu(page);
+  const logout = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/logout');
+  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+  await expect.poll(() => old.logouts).toBe(1);
+
+  const other = await context.newPage();
+  const renewed = await mockApi(other);
+  renewed.signedIn = false;
+  renewed.sessionCookie = true;
+  await other.goto('/tests/command-outcome.html');
+  await other.getByRole('textbox', { name: 'Логин', exact: true }).fill('renewed');
+  await other.getByLabel('Пароль *', { exact: true }).fill('fixture');
+  const login = other.waitForResponse((response) => new URL(response.url()).pathname === '/api/login');
+  await other.getByRole('button', { name: 'Войти', exact: true }).click();
+  // With serialization the login is queued; without it the server has already set the new cookie.
+  await Promise.any([
+    login,
+    other.waitForFunction(async () =>
+      (await navigator.locks.query()).pending?.some((lock) => lock.name === 'system-integration-session-cookie'),
+    ),
+  ]);
+  release();
+  await Promise.all([logout, login]);
+  await expect(other.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+  await expect
+    .poll(async () => (await context.cookies()).find((cookie) => cookie.name === 'JSESSIONID')?.value)
+    .toBe('fixture-renewed');
+  expect(old.logouts).toBe(1);
+  expect(renewed.logins).toBe(1);
+  await other.close();
+});
+
+for (const command of ['login', 'logout']) {
+  test('unsupported cookie coordination reports an error without sending ' + command, async ({ page }) => {
+    const state = await mockApi(page);
+    state.signedIn = command === 'logout';
+    await page.addInitScript(() => Object.defineProperty(navigator, 'locks', { value: undefined }));
+    await page.goto('/tests/command-outcome.html');
+    if (command === 'login') {
+      await page.getByRole('textbox', { name: 'Логин', exact: true }).fill('fixture');
+      await page.getByLabel('Пароль *', { exact: true }).fill('fixture');
+      await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    } else {
+      await openAccountMenu(page);
+      await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+    }
+    await expect(page.getByRole('alert').filter({ hasText: 'Для безопасной смены сессии' })).toBeVisible();
+    expect(state.logins).toBe(0);
+    expect(state.logouts).toBe(0);
+  });
+}
+
+test('logout read failure remains visible in the active account controls', async ({ page }) => {
+  const state = await mockApi(page);
+  await page.goto('/tests/command-outcome.html');
+  state.failCsrf = true;
+  await openAccountMenu(page);
+  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Не удалось выполнить запрос' })).toBeVisible();
+  expect(state.logouts).toBe(0);
+  if (test.info().project.name === 'mobile') {
+    await expect(page.getByRole('dialog', { name: 'Меню приложения' }).getByRole('alert')).toBeVisible();
+    await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Не удалось выполнить запрос' })).toBeVisible();
+  }
+  await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+});
+
+for (const exit of ['route', 'logout']) {
+  test('failed conflict refresh keeps the rename departure guard for ' + exit, async ({ page }) => {
+    const state = await mockApi(page);
+    state.rejectRename = true;
+    await page.goto('/tests/command-outcome.html');
+    await page.getByRole('button', { name: 'Изменить название', exact: true }).click();
+    const title = page.getByRole('textbox', { name: 'Новое название', exact: true });
+    await title.fill('Conflicting title');
+    await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Fixture title conflict' })).toBeVisible();
+    state.failRead = true;
+    await page.getByRole('button', { name: 'Обновить карточку', exact: true }).click();
+    await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Повторить обновление', exact: true })).toBeVisible();
+    await title.fill('Draft after failed refresh');
+    await expect(page.getByRole('alert').filter({ hasText: 'Название сохранено.' })).toHaveCount(0);
+    if (exit === 'route') await page.evaluate(() => (window as unknown as { fixtureBack: () => void }).fixtureBack());
+    else {
+      await openAccountMenu(page);
+      await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+    }
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await page.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
+    if (exit === 'logout' && test.info().project.name === 'mobile')
+      await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+    await expect(title).toHaveValue('Draft after failed refresh');
+    expect(state.logouts).toBe(0);
+    state.failRead = false;
+    await page.getByRole('button', { name: 'Повторить обновление', exact: true }).click();
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await page.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
+    await expect(title).toHaveValue('Draft after failed refresh');
+    await page.getByRole('button', { name: 'Повторить обновление', exact: true }).click();
+    await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
+    await expect(title).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+    expect(state.commands).toHaveLength(1);
+  });
+}
+
+test('conflict recovery freezes the rename fields until the read closes the form', async ({ page }) => {
+  const state = await mockApi(page);
+  state.rejectRename = true;
+  await page.goto('/tests/command-outcome.html');
+  await page.getByRole('button', { name: 'Изменить название', exact: true }).click();
+  const title = page.getByRole('textbox', { name: 'Новое название', exact: true });
+  await title.fill('Conflicting title');
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
+  const update = page.getByRole('button', { name: 'Обновить карточку', exact: true });
+  await expect(update).toBeVisible();
+  let release!: () => void;
+  state.holdRead = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await update.click();
+  await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
+  await expect(title).toBeDisabled();
+  await expect(update).toBeDisabled();
+  release();
+  await expect(title).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+  expect(state.commands).toHaveLength(1);
+});
+
+for (const general of [false, true]) {
+  test('closing an accepted decision preserves read recovery for ' + (general ? 'feed' : 'task'), async ({ page }) => {
+    const state = await mockApi(page, 'OPERATOR');
+    state.generalIssue = general;
+    state.assigned = true;
+    await page.goto('/tests/command-outcome.html?screen=issue');
+    const label = general ? 'Закрыть общую проблему' : 'Завершить разбор';
+    await selectChoice(page, 'Действие', label);
+    const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
+    await reason.fill('Accepted decision');
+    await page.getByRole('button', { name: label, exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Решение сохранено.' })).toBeVisible();
+    await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+    await expect(reason).toHaveValue('');
+    await expect(reason).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Применить решение', exact: true })).toBeDisabled();
+    expect(state.commands).toHaveLength(1);
+    state.failRead = false;
+    await page.getByRole('button', { name: 'Повторить обновление', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
+    await expect(reason).toHaveCount(0);
+    expect(state.commands).toHaveLength(1);
+  });
 }
 
 test('accepted rename and repeated read failures never resubmit PATCH', async ({ page }) => {

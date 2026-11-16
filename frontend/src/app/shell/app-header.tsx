@@ -11,7 +11,7 @@ export function AppHeader({
   account,
 }: {
   appearance: ReactNode;
-  account?: { user: Readonly<GetSession200>; pending: boolean; onLogout: () => void };
+  account?: { user: Readonly<GetSession200>; pending: boolean; onLogout: () => void; error: Error | null };
 }) {
   const mobile = useMediaQuery('(max-width: 760px)');
   const controls = (
@@ -42,7 +42,7 @@ export function AppHeader({
         </nav>
       )}
       {mobile && account ? (
-        <MobileAccountMenu>{controls}</MobileAccountMenu>
+        <MobileAccountMenu error={account.error}>{controls}</MobileAccountMenu>
       ) : (
         <div className="header-controls">{controls}</div>
       )}

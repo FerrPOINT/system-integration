@@ -21,6 +21,7 @@ type Restoration = {
   phase: 'restore' | 'ready' | 'reset-start' | 'reset-restore';
   notice?: string;
 };
+type LoadFailure = { direction: 'next' | 'previous'; error: Error };
 const changed = 'Список изменился. Позиция восстановлена по доступным записям.';
 const unavailable = 'Браузер не сохраняет позицию списка.';
 
@@ -89,7 +90,27 @@ export function useCollection<T>({
     refetchInterval: refreshInterval,
   });
   const pages = query.data?.pages;
-  const { isError, isFetching, hasNextPage, fetchNextPage } = query;
+  const { isError, isFetching, hasNextPage, fetchNextPage, fetchPreviousPage } = query;
+  // A background refetch may clear Query's error, but cannot acknowledge a failed page load.
+  const [loadState, setLoadState] = useState<{ key: string; failure: LoadFailure | null }>({
+    key: queryHash,
+    failure: null,
+  });
+  if (loadState.key !== queryHash) setLoadState({ key: queryHash, failure: null });
+  const failure = loadState.key === queryHash ? loadState.failure : null;
+  const loadPage = useCallback(
+    async (direction: 'next' | 'previous') => {
+      const result = await (direction === 'next' ? fetchNextPage : fetchPreviousPage)({ cancelRefetch: false });
+      const failed = direction === 'next' ? result.isFetchNextPageError : result.isFetchPreviousPageError;
+      setLoadState((current) => {
+        if (current.key !== queryHash) return current;
+        if (failed && result.error) return { key: queryHash, failure: { direction, error: result.error } };
+        return result.isSuccess && current.failure ? { key: queryHash, failure: null } : current;
+      });
+      return result;
+    },
+    [queryHash, fetchNextPage, fetchPreviousPage],
+  );
   const projection = useMemo(() => projectCollection(pages, feed, identify), [pages, feed, identify]);
   const restoring = feed && current.phase !== 'ready';
   const capture = useCallback(() => {
@@ -171,7 +192,7 @@ export function useCollection<T>({
           pages.length < FEED_PAGE_LIMIT &&
           (result === 'insufficient' || last.page < wanted.page + 1)
         ) {
-          if (!isFetching) fetchNextPage({ cancelRefetch: false });
+          if (!isFetching) loadPage('next');
           return;
         }
         if (result !== 'restored') alignPosition(viewport.current, nearestPosition(wanted, pages, identify));
@@ -205,7 +226,7 @@ export function useCollection<T>({
     isError,
     isFetching,
     hasNextPage,
-    fetchNextPage,
+    loadPage,
     capture,
   ]);
 
@@ -233,18 +254,27 @@ export function useCollection<T>({
     ...projection,
     viewportRef: composedRef,
     restoring,
+    autoLoad: !restoring && !failure && !isError,
+    nextError: failure?.direction === 'next' ? failure.error : query.isFetchNextPageError ? query.error : null,
+    previousError:
+      failure?.direction === 'previous' ? failure.error : query.isFetchPreviousPageError ? query.error : null,
     positionNotice: restoring ? 'Восстанавливаем позицию…' : current.notice,
     loadNext: () => {
       capture();
-      return query.fetchNextPage({ cancelRefetch: false });
+      return loadPage('next');
     },
     loadPrevious: () => {
       capture();
-      return query.fetchPreviousPage({ cancelRefetch: false });
+      return loadPage('previous');
     },
-    refresh: () => {
+    refresh: async () => {
       capture();
-      return query.refetch();
+      const result = await query.refetch();
+      if (result.isSuccess)
+        setLoadState((current) =>
+          current.key === queryHash && current.failure ? { key: queryHash, failure: null } : current,
+        );
+      return result;
     },
   };
 }

@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { expireSession, startSessionCommand } from '../features/auth/model/session-policy';
+import { expireSession } from '../features/auth/model/session-policy';
+import { startSessionCommand } from '../shared/api/session-scope';
 
 export function createQueryClient() {
   const client = new QueryClient({
