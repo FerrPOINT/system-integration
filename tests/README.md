@@ -11,6 +11,15 @@
 Сценарии и ожидаемые результаты связаны с требованиями в
 [плане приёмки](../docs/test-cases.md).
 
+## Проверка TypeScript
+
+Из корня: corepack pnpm --dir tests typecheck. Проверяются конфигурации, support
+и все TypeScript-сценарии runner с Node/DOM types. Команды test:e2e,
+test:components и test:production выполняют эту проверку перед Playwright.
+Для test:components дополнительно выполняется frontend typecheck: браузерные
+fixtures входят в frontend/tsconfig.json, но не в production bundle.
+JavaScript load/recovery scripts остаются вне строгой проверки TypeScript.
+
 ## Демосценарии на QA
 
 `tests/demo.mjs` по умолчанию обращается к обычному стенду на19580/19581.
@@ -27,7 +36,7 @@ SI_BACKEND_URL=http://127.0.0.1:19680 SI_EMULATOR_URL=http://127.0.0.1:19681 nod
 ## Production frontend без API/БД
 
 После `frontend: pnpm build` из `tests/` выполните
-`corepack pnpm exec playwright test --config production.config.ts`.
+`corepack pnpm test:production`.
 Runner поднимает временный контейнер на 127.0.0.1:19778 из Nginx image,
 закреплённого в frontend/Dockerfile, с настоящим nginx.conf и read-only dist.
 Он использует отдельную временную сеть; API перехватывается тестами, доступа
@@ -228,12 +237,12 @@ UP-TO-DATE и инвалидацию потребителей внешнего �
 Из tests с проектным Node/Corepack и установленными браузерами:
 
 ~~~sh
-corepack pnpm exec playwright test --config components.config.ts
+corepack pnpm test:components
 ~~~
 
 Тестовая страница frontend/tests/choice-form.html доступна только через Vite
 на собственном loopback-порту 19774, который runner запускает и останавливает.
-Она не входит в production build и не обращается к API/БД.
+Она проверяется TypeScript, не входит в production bundle и не обращается к API/БД.
 Шесть desktop/mobile-проверок покрывают required, controlled/uncontrolled reset,
 однократный FormData, disabled/fieldset, клавиатуру и недоступное значение.
 Основной playwright.config.ts эту fixture не запускает.
@@ -245,7 +254,7 @@ API перехватывается тестами, доступ к БД не т�
 
 ## Измерение пагинации и навигация
 
-Из tests/: corepack pnpm exec playwright test -c components.config.ts.
+Из tests/: corepack pnpm test:components.
 Десять проверок: шесть Select и четыре route/filter-сценария на 390/1440 px.
 Отдельный fixture использует настоящий usePagination и такой же RouterProvider, как приложение,
 контролируя только доставку ResizeObserver/requestAnimationFrame. Измерение,

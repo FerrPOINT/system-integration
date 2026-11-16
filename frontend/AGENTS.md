@@ -51,7 +51,8 @@ auth владеет сменой сессии и очисткой private cache,
 серверные записи в локальный state и не разворачивайте query result целиком.
 
 Обычный build включает ESLint и строгий TypeScript с проверкой неиспользуемого
-кода. Перед коммитом используйте lint/typecheck и затронутые tests; полный
+кода в src и браузерных fixtures tests. Fixtures проверяются, но не попадают
+в production bundle. Перед коммитом используйте lint/typecheck и затронутые tests; полный
 build/test gate выполняется на интегрированном этапе. Negative lint fixtures
 находятся в architecture-fixtures и выполняются только через test:api;
 в production и общий lint src/tests они не входят. Type-only DTO imports

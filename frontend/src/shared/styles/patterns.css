@@ -12,32 +12,11 @@
 .ui-action-group[data-align='start'] {
   justify-content: flex-start;
 }
-.ui-action-group[data-orientation='vertical'] {
-  flex-direction: column;
-  flex-wrap: nowrap;
-  align-items: stretch;
-}
 .ui-action-group[data-align='end'] {
   justify-content: flex-end;
 }
-.ui-action-group[data-align='between'] {
-  justify-content: space-between;
-}
-.ui-action-group[data-separated='true'] {
-  border-block-start: 1px solid var(--color-border);
-  padding-block-start: var(--ui-control-padding-block);
-}
 .ui-action-group[hidden] {
   display: none;
-}
-@media (max-width: 767px) {
-  .ui-action-group[data-mobile-stack='true'] {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .ui-action-group[data-mobile-stack='true'] > :is(button, a, .ui-action-group) {
-    width: 100%;
-  }
 }
 .ui-page-header {
   display: flex;
@@ -57,14 +36,6 @@
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: 0;
-}
-.ui-page-title[data-appearance='compact'] {
-  flex: 1;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: var(--ui-font-body);
-  line-height: var(--ui-line-body);
 }
 .ui-page-title:focus-visible {
   outline: 2px solid var(--color-focus);
@@ -167,10 +138,6 @@
   border-radius: var(--ui-radius-card);
   padding: var(--ui-panel-padding);
   background: var(--color-surface);
-}
-.ui-notice[data-appearance='inline'][data-separated='true'] {
-  border-block-start: 1px solid var(--color-border);
-  padding-block-start: var(--ui-control-padding-block);
 }
 .ui-notice:focus-visible {
   outline: 2px solid var(--color-focus);
@@ -404,10 +371,6 @@ button.ui-card {
   padding: 0;
   list-style: none;
 }
-.ui-timeline[data-appearance='steps'] {
-  --ui-timeline-rail-width: 2.5rem;
-  --ui-timeline-gap: calc(var(--ui-control-padding-inline) * 0.875);
-}
 .ui-timeline-item {
   display: grid;
   grid-template-columns: var(--ui-timeline-rail-width) minmax(0, 1fr);
@@ -444,54 +407,12 @@ button.ui-card {
   background: var(--color-text-muted);
   box-shadow: 0 0 0 4px var(--color-background);
 }
-.ui-timeline-marker[data-size='large'] > span {
-  width: 1.5rem;
-  height: 1.5rem;
-}
-.ui-timeline-marker[data-tone='success'] > span {
-  background: var(--color-success);
-}
-.ui-timeline-marker[data-tone='warning'] > span {
-  background: var(--color-warning);
-}
-.ui-timeline-marker[data-tone='danger'] > span {
-  background: var(--color-danger);
-}
-.ui-timeline-marker[data-tone='info'] > span {
-  background: var(--color-accent);
-}
-.ui-timeline-marker[data-current='true'] > span {
-  background: var(--color-accent);
-  box-shadow: 0 0 0 4px var(--color-selection);
-  outline: 1px solid var(--color-focus);
-}
 .ui-timeline-content {
   grid-column: 2;
   min-width: 0;
   padding-block-end: var(--ui-control-padding-inline);
   overflow-wrap: anywhere;
 }
-.ui-timeline[data-appearance='steps'] > .ui-timeline-item > .ui-timeline-marker {
-  align-items: center;
-  padding-block-start: 0;
-}
-.ui-timeline[data-appearance='steps'] > .ui-timeline-item > .ui-timeline-marker::before,
-.ui-timeline[data-appearance='steps'] > .ui-timeline-item > .ui-timeline-marker::after {
-  content: '';
-  position: absolute;
-  inset-inline-start: 50%;
-  width: 2px;
-  background: var(--color-border-strong);
-}
-.ui-timeline[data-appearance='steps'] > .ui-timeline-item > .ui-timeline-marker::before {
-  inset-block-start: 0;
-  inset-block-end: 50%;
-}
-.ui-timeline[data-appearance='steps'] > .ui-timeline-item > .ui-timeline-marker::after {
-  inset-block-start: 50%;
-  inset-block-end: 0;
-}
-.ui-timeline-item:first-child > .ui-timeline-marker::before,
 .ui-timeline-item:last-child > .ui-timeline-marker::after {
   display: none;
 }
@@ -500,17 +421,10 @@ button.ui-card {
     --ui-timeline-rail-width: 1.25rem;
     --ui-timeline-gap: calc(var(--ui-control-padding-block) * 0.875);
   }
-  .ui-timeline[data-appearance='steps'] {
-    --ui-timeline-rail-width: 1.875rem;
-    --ui-timeline-gap: var(--ui-control-padding-block);
-  }
 }
 @media (forced-colors: active) {
   .ui-timeline-marker > span {
     border: 1px solid CanvasText;
-  }
-  .ui-timeline-marker[data-current='true'] > span {
-    outline: 2px solid Highlight;
   }
 }
 

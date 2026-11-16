@@ -21,5 +21,8 @@ loopback Vite 19774 без API/БД: Select, отложенные измерен
 идентичность/guard форм, исходы команд, render/chunk recovery и bounded feeds.
 Fixtures используют StrictMode и реальные production components/Query; API
 перехватывается. Mobile window profiles лежат в components/mobile и запускаются
-только мобильным project. Fixtures не входят в production build.
+только мобильным project. Fixtures не входят в production bundle, но входят в frontend typecheck.
+В tests отдельный tsconfig проверяет Playwright-конфигурации, support и сценарии
+с Node/DOM types. Команды test:e2e и test:production сначала выполняют эту
+проверку; test:components дополнительно проверяет браузерные fixtures frontend.
 Приложение, recovery и нагрузка по-прежнему используют только тестовый Compose.
