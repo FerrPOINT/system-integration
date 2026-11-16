@@ -64,6 +64,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
         : [...(state.assigned ? [] : ['TAKE_OWNERSHIP']), 'RECONCILE', 'ACKNOWLEDGE_DIFFERENCE'],
     resolution: state.resolved
       ? {
+          issueId: taskId,
           action: state.generalIssue ? 'ACKNOWLEDGE_FEED_ISSUE' : 'ACKNOWLEDGE_DIFFERENCE',
           reason: 'Verified fixture',
           reconciliationId: state.generalIssue ? undefined : 'snapshot',
@@ -126,7 +127,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
         }
         if (path.endsWith('/resolve')) {
           state.resolved = true;
-          return route.fulfill({ json: issue() });
+          return route.fulfill({ json: issue().resolution });
         }
         if (path.endsWith('/reconciliations')) return route.fulfill({ json: snapshot() });
         return route.fulfill({ status: request.method() === 'POST' ? 201 : 200, json: { taskId } });
@@ -606,8 +607,10 @@ test('general feed decision validates Unicode and submits no fabricated reconcil
   await expect(reason).toHaveValue('😀'.repeat(500));
   await reason.fill('😀'.repeat(500));
   await expect(submit).toBeEnabled();
-  state.failRead = false;
   await submit.click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Решение сохранено.' })).toBeVisible();
+  state.failRead = false;
+  await page.getByRole('button', { name: 'Повторить обновление' }).click();
   await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
   expect(state.commands).toHaveLength(1);
   expect(state.commands[0].body).toEqual({
