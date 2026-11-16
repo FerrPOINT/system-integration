@@ -38,7 +38,11 @@ class DeliveryClaimConcurrencyTest extends PostgresTest {
                             DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
                 });
         try (var worker = new ExchangeCoordinator(exchange, client, slots)) {
-            for (int pass = 0; count("delivery_queue") > 0 && pass < 16; pass++) worker.deliver();
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+            while (count("delivery_queue") > 0 && System.nanoTime() < deadline) {
+                worker.deliver();
+                Thread.sleep(10); // Dispatch is asynchronous; await the queue, not a fixed number of busy-slot calls.
+            }
         }
         assertEquals(32, delivered.size());
         assertEquals(0, count("delivery_queue"));
@@ -49,6 +53,29 @@ class DeliveryClaimConcurrencyTest extends PostgresTest {
                 jdbc.queryForObject(
                         "SELECT count(*) FROM delivery_attempts WHERE outcome <> 'ACKNOWLEDGED' OR outcome IS NULL",
                         Integer.class));
+    }
+
+    @Test
+    void parkedDeliveryIsOutsideDueRangeAndResumePreservesLifetimeAttempts() throws Exception {
+        var id = created(login("initiator.one"), UUID.randomUUID());
+        var operation = jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?", UUID.class, id);
+        jdbc.update("UPDATE delivery_queue SET attempts=5,automatic_attempts=5 WHERE operation_id=?", operation);
+        assertNull(exchange.claim().attempt());
+        assertEquals(
+                true,
+                jdbc.queryForObject(
+                        "SELECT due_at = 'infinity'::timestamptz FROM delivery_queue WHERE operation_id=?",
+                        Boolean.class,
+                        operation));
+        assertNull(rows.lockDueExchange());
+        created(login("initiator.one"), UUID.randomUUID());
+        assertNotEquals(operation, rows.lockDueExchange().task().operationId());
+        rows.resumeDelivery(operation);
+        var queue = rows.lockQueue(operation);
+        assertTrue(queue.eligible());
+        assertEquals(5, queue.attempts());
+        assertEquals(0, queue.automaticAttempts());
+        assertEquals("GET", queue.step());
     }
 
     @Test

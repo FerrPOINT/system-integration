@@ -7,12 +7,16 @@ export const actionLabels: Record<DecisionAction, string> = {
   RETRY: 'Повторить обмен',
   APPLY_EXTERNAL_RESULT: 'Принять внешний результат',
   ACKNOWLEDGE_DIFFERENCE: 'Завершить разбор',
+  ACKNOWLEDGE_FEED_ISSUE: 'Закрыть общую проблему',
 };
 
 export const decisionActions = (issue: Issue) =>
   issue.allowedActions.filter(
     (action): action is DecisionAction =>
-      action === 'RETRY' || action === 'APPLY_EXTERNAL_RESULT' || action === 'ACKNOWLEDGE_DIFFERENCE',
+      action === 'RETRY' ||
+      action === 'APPLY_EXTERNAL_RESULT' ||
+      action === 'ACKNOWLEDGE_DIFFERENCE' ||
+      action === 'ACKNOWLEDGE_FEED_ISSUE',
   );
 export const decisionBasis = (issue: Issue): DecisionBasis => ({
   issueRevision: issue.issueRevision,

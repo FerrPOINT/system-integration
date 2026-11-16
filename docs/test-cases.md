@@ -573,3 +573,16 @@ production cases — в production/frontend.spec.ts с production.config.ts.
 Guard-сценарии проверяются component runner на desktop/mobile. Измерения,
 ошибки чтения и недоступная страница проверяются production runner с настоящими
 Nginx, dist и BrowserRouter; API подменяется только на границе HTTP.
+## Регрессии системного аудита 16 ноября
+
+| Связь | Проверка | Критерий |
+| --- | --- | --- |
+| TC-06 | DeliveryClaimConcurrencyTest, ParkedDeliveryMigrationTest | Пауза вне due, V10 сохраняет попытки/активные leases; resume начинает GET |
+| TC-02/15 | TaskTitleTest, IssueCommandsTest, UnicodeCommandTest | 160/500 emoji допустимы, 161/501 нет; NEL-only/NUL/surrogates запрещены, BOM и X+BOM сохранены; старая запись читается и переименовывается; replay однократен |
+| TC-07/08/11 | OperationsWorkflowTest general/competing | Оператор закрывает общую проблему с автором и revision; инициатор не может; конкуренция не перезаписывает решение; task-сверку нельзя обойти |
+| TC-09 | Component command-outcome | Unicode title и general decision в реальных формах обоих размеров; нет вымышленного reconciliationId |
+| TC-11 | DatabaseSessionTest, ExchangeDiagnosticsTest | Idle-holder откатывается и освобождает writer; активный SQL дольше idle-порога проходит; диагностика закрыта и не пишет бизнес-данные |
+| TC-13 | SQL EXPLAIN, NF08/recovery | Итоговый кандидат проверяется отдельно от SQL micro-measurement и публичной версии |
+
+Fixtures используют только si_test/si_emulator_test; изменяющие SQL откатываются,
+миграционные тесты удаляют собственную schema. Свежие результаты — current-stage.md.

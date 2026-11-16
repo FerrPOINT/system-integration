@@ -1,14 +1,11 @@
 package com.azhukov.integration.dto.review;
 
 import com.azhukov.integration.domain.RuleViolation;
+import com.azhukov.integration.domain.TextRule;
 import com.azhukov.integration.domain.review.IssueResolution;
-import java.nio.charset.StandardCharsets;
-import java.util.Objects;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 public final class IssueCommands {
-    private static final Pattern NON_BLANK = Pattern.compile("\\S", Pattern.UNICODE_CHARACTER_CLASS);
 
     private IssueCommands() {}
 
@@ -30,8 +27,11 @@ public final class IssueCommands {
         public Resolve {
             revision(expectedIssueRevision);
             IssueCommands.reason(reason);
-            Objects.requireNonNull(reconciliationId);
-            Objects.requireNonNull(action);
+            if (action == null) throw RuleViolation.invalid("Укажите действие");
+            boolean feed = action == IssueResolution.Action.ACKNOWLEDGE_FEED_ISSUE;
+            if (feed == (reconciliationId != null))
+                throw RuleViolation.invalid(
+                        feed ? "Общая проблема ленты не имеет сверки задания" : "Укажите сверку задания");
         }
     }
 
@@ -40,11 +40,7 @@ public final class IssueCommands {
     }
 
     private static void reason(String value) {
-        if (value == null
-                || value.length() > 500
-                || value.indexOf(0) >= 0
-                || !StandardCharsets.UTF_8.newEncoder().canEncode(value)
-                || !NON_BLANK.matcher(value).find())
+        if (!TextRule.valid(value, 500))
             throw RuleViolation.invalid(
                     "Укажите непустую причину до 500 символов: корректный Unicode без нулевого символа");
     }

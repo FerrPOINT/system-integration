@@ -30,7 +30,9 @@ public record ReviewContext(
     }
 
     public List<Issue.Action> actions(UUID operator) {
-        if (issue.status() != Issue.Status.OPEN || state == null) return List.of();
+        if (issue.status() != Issue.Status.OPEN) return List.of();
+        if (issue.taskId() == null) return List.of(ACKNOWLEDGE_FEED_ISSUE);
+        if (state == null) return List.of();
         var actions = new ArrayList<Issue.Action>();
         if (!operator.equals(issue.assignedTo())) actions.add(TAKE_OWNERSHIP);
         actions.add(RECONCILE);

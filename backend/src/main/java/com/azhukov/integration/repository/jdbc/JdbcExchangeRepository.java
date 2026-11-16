@@ -4,6 +4,7 @@ import com.azhukov.integration.domain.RuleViolation;
 import com.azhukov.integration.domain.exchange.ExchangeState;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.DeliveryStatus;
+import com.azhukov.integration.dto.exchange.DatabaseActivity;
 import com.azhukov.integration.dto.exchange.DeliveryBacklog;
 import com.azhukov.integration.repository.ExchangeRepository;
 import java.time.OffsetDateTime;
@@ -169,7 +170,9 @@ public class JdbcExchangeRepository implements ExchangeRepository {
     }
 
     public void pauseQueue(UUID operation) {
-        jdbc.update("UPDATE delivery_queue SET claim_id = NULL,claimed_until = NULL WHERE operation_id = ?", operation);
+        jdbc.update(
+                "UPDATE delivery_queue SET due_at = 'infinity',claim_id = NULL,claimed_until = NULL WHERE operation_id = ?",
+                operation);
     }
 
     public void removeQueue(UUID operation) {
@@ -203,6 +206,23 @@ public class JdbcExchangeRepository implements ExchangeRepository {
                 (rs, n) ->
                         new DeliveryBacklog(
                                 rs.getLong("operations"), rs.getObject("oldest_created_at", OffsetDateTime.class)));
+    }
+
+    public DatabaseActivity databaseActivity() {
+        return jdbc.queryForObject(
+                """
+                SELECT count(*) FILTER (WHERE wait_event_type = 'Lock') AS blocked_sessions,
+                    count(*) FILTER (WHERE state IN ('idle in transaction','idle in transaction (aborted)')) AS idle_transactions,
+                    coalesce(max(extract(epoch FROM clock_timestamp()-xact_start)),0)::bigint AS oldest_transaction_seconds
+                FROM pg_stat_activity
+                WHERE datname = current_database() AND usename = current_user
+                    AND backend_type = 'client backend' AND pid <> pg_backend_pid()
+                """,
+                (rs, n) ->
+                        new DatabaseActivity(
+                                rs.getLong("blocked_sessions"),
+                                rs.getLong("idle_transactions"),
+                                rs.getLong("oldest_transaction_seconds")));
     }
 
     public long cursor(boolean lock) {

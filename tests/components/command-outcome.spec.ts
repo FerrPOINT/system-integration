@@ -22,6 +22,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     assigned: false,
     decisionAvailable: true,
     resolved: false,
+    generalIssue: false,
     revision: 1,
     latestSnapshot: snapshotId,
     role,
@@ -58,7 +59,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
   });
   const issue = () => ({
     issueId: taskId,
-    taskId,
+    taskId: state.generalIssue ? undefined : taskId,
     operationId: taskId,
     issueRevision: state.revision,
     kind: 'RECONCILIATION_DIFFERENCE',
@@ -67,20 +68,23 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     taskTitle: state.title,
     requestReference: 'REQ-000001',
     openedAt: '2026-11-14T00:00:00Z',
-    latestReconciliationId: state.latestSnapshot,
+    latestReconciliationId: state.generalIssue ? undefined : state.latestSnapshot,
     assignedTo: state.assigned ? task().ownerId : undefined,
     allowedActions: state.resolved
       ? []
-      : [
-          ...(state.assigned ? [] : ['TAKE_OWNERSHIP']),
-          'RECONCILE',
-          ...(state.decisionAvailable ? ['ACKNOWLEDGE_DIFFERENCE'] : []),
-        ],
+      : state.generalIssue
+        ? ['ACKNOWLEDGE_FEED_ISSUE']
+        : [
+            ...(state.assigned ? [] : ['TAKE_OWNERSHIP']),
+            'RECONCILE',
+            ...(state.decisionAvailable ? ['ACKNOWLEDGE_DIFFERENCE'] : []),
+          ],
     resolution: state.resolved
       ? {
-          action: 'ACKNOWLEDGE_DIFFERENCE',
+          issueId: taskId,
+          action: state.generalIssue ? 'ACKNOWLEDGE_FEED_ISSUE' : 'ACKNOWLEDGE_DIFFERENCE',
           reason: 'Verified fixture',
-          reconciliationId: snapshotId,
+          reconciliationId: state.generalIssue ? undefined : snapshotId,
           decidedAt: '2026-11-14T00:00:00Z',
           decidedBy: task().ownerId,
         }
@@ -153,7 +157,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
         }
         if (path.endsWith('/resolve')) {
           state.resolved = true;
-          return route.fulfill({ json: issue() });
+          return route.fulfill({ json: issue().resolution });
         }
         if (path.endsWith('/reconciliations')) return route.fulfill({ json: snapshot() });
         return route.fulfill({ status: request.method() === 'POST' ? 201 : 200, json: { taskId } });
@@ -277,7 +281,7 @@ test('refetch preserves a decision draft and requires explicit adoption of the n
     'Preserved explanation',
   );
   await expect(page.getByRole('button', { name: 'Завершить разбор', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Использовать актуальную сверку' }).click();
+  await page.getByRole('button', { name: 'Использовать актуальные данные' }).click();
   await page.getByRole('button', { name: 'Завершить разбор', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Решение сохранено.' })).toBeVisible();
   expect(state.commands).toHaveLength(1);
@@ -941,4 +945,74 @@ test('login acknowledgement followed by session failure recovers with GET only',
   await page.getByRole('button', { name: 'Повторить', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
   expect(state.logins).toBe(1);
+});
+
+test('general feed decision validates Unicode and submits no fabricated reconciliation', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  state.generalIssue = true;
+  await page.goto('/tests/command-outcome.html?screen=issue');
+  await selectChoice(page, 'Действие', 'Закрыть общую проблему');
+  const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
+  const submit = page.getByRole('button', { name: 'Закрыть общую проблему', exact: true });
+  await reason.fill('\u0085');
+  await expect(submit).toBeDisabled();
+  await reason.fill('x'.repeat(501));
+  await expect(submit).toBeDisabled();
+  await reason.fill('😀'.repeat(501));
+  await expect(reason).toHaveValue('😀'.repeat(500));
+  await reason.fill('😀'.repeat(500));
+  await expect(submit).toBeEnabled();
+  await submit.click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Решение сохранено.' })).toBeVisible();
+  state.failRead = false;
+  await page.getByRole('button', { name: 'Повторить обновление' }).click();
+  await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
+  expect(state.commands).toHaveLength(1);
+  expect(state.commands[0].body).toEqual({
+    expectedIssueRevision: 1,
+    action: 'ACKNOWLEDGE_FEED_ISSUE',
+    reason: '😀'.repeat(500),
+  });
+  await expect(page.getByRole('link', { name: 'Сверка, на которой основано решение' })).toHaveCount(0);
+});
+
+test('general issue draft survives cancelled logout and retains its command contract', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  state.generalIssue = true;
+  await page.goto('/tests/command-outcome.html?screen=issue');
+  await selectChoice(page, 'Действие', 'Закрыть общую проблему');
+  const reason = 'Проверена общая проблема ленты 🧪';
+  await page.getByRole('textbox', { name: 'Причина решения', exact: true }).fill(reason);
+  await openAccountMenu(page);
+  const logout = page.getByRole('button', { name: 'Выйти', exact: true });
+  await logout.click();
+  await expect(page.getByRole('alertdialog')).toBeVisible();
+  await page.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
+  await expect(logout).toBeFocused();
+  expect(state.logouts).toBe(0);
+  if (test.info().project.name === 'mobile') await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Причина решения', exact: true })).toHaveValue(reason);
+  await page.getByRole('button', { name: 'Закрыть общую проблему', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Решение сохранено.' })).toBeVisible();
+  expect(state.commands).toHaveLength(1);
+  expect(state.commands[0].body).toEqual({ action: 'ACKNOWLEDGE_FEED_ISSUE', expectedIssueRevision: 1, reason });
+  await openAccountMenu(page);
+  await logout.click();
+  await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
+  expect(state.logouts).toBe(1);
+});
+
+test('title field accepts the full Unicode boundary and rejects a neighboring excess', async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/tests/command-outcome.html');
+  await page.getByRole('button', { name: 'Изменить название', exact: true }).click();
+  const input = page.getByRole('textbox', { name: 'Новое название', exact: true });
+  for (const value of ['😀'.repeat(160), '\uFEFF', 'X\uFEFF']) {
+    await input.fill(value);
+    expect(await input.evaluate((element: HTMLInputElement) => element.checkValidity())).toBe(true);
+  }
+  for (const value of ['x'.repeat(161), '\u0085']) {
+    await input.fill(value);
+    expect(await input.evaluate((element: HTMLInputElement) => element.checkValidity())).toBe(false);
+  }
 });

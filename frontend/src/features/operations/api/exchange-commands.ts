@@ -11,7 +11,7 @@ import { useState } from 'react';
 import { csrf } from '../../../shared/api/csrf';
 import { useCommandKey } from '../../../shared/lib/forms/use-command-key';
 
-export type DecisionCommand = ResolveIssueRequest | (RetryRequest & { action: 'RETRY'; reconciliationId: string });
+export type DecisionCommand = ResolveIssueRequest | (RetryRequest & { action: 'RETRY' });
 
 class UnknownReconciliationOutcome extends Error {
   constructor(cause: unknown) {

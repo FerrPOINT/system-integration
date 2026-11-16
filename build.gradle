@@ -49,6 +49,8 @@ ext.configureContract = { GenerateTask task, String contract, String boundary ->
     task.outputDir.set(task.project.layout.buildDirectory.dir("generated/openapi/${boundary}"))
     task.generatorName.set('spring')
     task.library.set('spring-boot')
+    task.templateDir.set(rootProject.layout.projectDirectory.dir('contracts/templates/java').asFile.path)
+    task.inputs.dir(rootProject.layout.projectDirectory.dir('contracts/templates/java'))
     task.apiPackage.set("${namespace}.api")
     task.modelPackage.set("${namespace}.model")
     task.validateSpec.set(true)

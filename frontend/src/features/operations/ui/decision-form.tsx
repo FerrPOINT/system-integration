@@ -1,4 +1,5 @@
 import type { RefObject } from 'react';
+import { reasonMaxLength } from '../../../shared/lib/text-rules';
 import type { Issue } from '../../../../build/generated/openapi/client';
 import { Button } from '../../../shared/ui/button';
 import { Notice } from '../../../shared/ui/notice';
@@ -34,9 +35,9 @@ export function DecisionForm({
         {model.stale && !command.isSuccess && (
           <Notice tone="warning" role="alert">
             <p>Разбор или доступные действия изменились. Черновик сохранён.</p>
-            {issue.status === 'OPEN' && issue.latestReconciliationId && (
-              <Button type="button" disabled={command.isPending} onClick={model.rebase}>
-                Использовать актуальную сверку
+            {issue.status === 'OPEN' && (issue.latestReconciliationId || !issue.taskId) && (
+              <Button type="button" disabled={model.busy} onClick={model.rebase}>
+                Использовать актуальные данные
               </Button>
             )}
           </Notice>
@@ -64,6 +65,12 @@ export function DecisionForm({
               Локальный результат сохранится. Если доставка приостановлена, она будет окончательно остановлена.
             </Notice>
           )}
+          {action === 'ACKNOWLEDGE_FEED_ISSUE' && (
+            <Notice>
+              Закрытие фиксирует ваше решение. Оно не исправляет внешний источник и не возобновляет приостановленную
+              ленту.
+            </Notice>
+          )}
           <FormField
             id="decision-reason"
             label="Причина решения"
@@ -75,7 +82,7 @@ export function DecisionForm({
                 {...attrs}
                 ref={reasonInput}
                 value={reason}
-                maxLength={500}
+                maxLength={reasonMaxLength}
                 rows={3}
                 onChange={(event) => model.changeReason(event.target.value)}
               />

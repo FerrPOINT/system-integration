@@ -63,3 +63,10 @@ StrictMode остаётся включённым; исправляйте cleanup
 innerWidth включает классический scrollbar. Не задавайте body жёсткий минимум,
 который превышает доступную ширину. UI-19 покрывает 305 px содержимого для
 320 px viewport с полосой; ручная IAB-приёмка проверяет настоящий scrollbar.
+
+## Строки команд
+
+Title/ActionReason constraints генерируются Orval из OpenAPI в build.
+shared/lib/text-rules адаптирует HTML UTF-16 maxlength к Unicode code points.
+Не дублируйте pattern/границы на экранах и не нормализуйте сохраняемый ввод.
+ACKNOWLEDGE_FEED_ISSUE использует ту же форму и issue revision без сверки.
