@@ -13,8 +13,10 @@ import '../src/app/shell/shell.css';
 const taskId = '00000000-0000-4000-8000-000000000001';
 const queryClient = createQueryClient();
 let failedCommands = 0;
+let successfulCommands = 0;
 queryClient.getMutationCache().subscribe((event) => {
   if (event.type === 'updated' && event.action.type === 'error') failedCommands++;
+  if (event.type === 'updated' && event.action.type === 'success') successfulCommands++;
 });
 const screen = new URLSearchParams(location.search).get('screen');
 const initial =
@@ -44,6 +46,7 @@ Object.assign(window, {
       .filter((query) => query.queryKey[0] !== 'session').length,
   fixtureRefetchSession: () => queryClient.invalidateQueries({ queryKey: ['session'] }),
   fixtureFailedCommands: () => failedCommands,
+  fixtureSuccessfulCommands: () => successfulCommands,
 });
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

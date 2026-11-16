@@ -32,6 +32,8 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     reconciliationStatus: 200,
     createKeys: new Set<string>(),
     holdWrite: undefined as Promise<void> | undefined,
+    holdLogout: undefined as Promise<void> | undefined,
+    rejectRename: false,
     reads: [] as string[],
   };
   const task = () => ({
@@ -115,6 +117,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
         state.signedIn = false;
         state.logouts++;
         state.failCsrf = true;
+        await state.holdLogout;
         return route.fulfill({ status: 204 });
       }
       if (['POST', 'PATCH'].includes(request.method())) {
@@ -123,6 +126,8 @@ async function mockApi(page: Page, role = 'INITIATOR') {
           key: request.headers()['idempotency-key'],
           body: request.postDataJSON(),
         });
+        if (request.method() === 'PATCH' && state.rejectRename)
+          return route.fulfill({ status: 409, json: { code: 'CONCURRENT_CHANGE', detail: 'Fixture title conflict' } });
         if (path === '/api/tasks' && state.rejectCreate)
           return route.fulfill({
             status: 400,
@@ -191,6 +196,111 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     },
   );
   return state;
+}
+
+for (const identity of ['same account', 'other account']) {
+  test('late logout success preserves a new session for ' + identity, async ({ page }) => {
+    const state = await mockApi(page);
+    let release!: () => void;
+    state.holdLogout = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const successes = () =>
+      page.evaluate(() =>
+        (window as unknown as { fixtureSuccessfulCommands: () => number }).fixtureSuccessfulCommands(),
+      );
+    await page.goto('/tests/command-outcome.html');
+    await openAccountMenu(page);
+    await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+    await expect.poll(() => state.logouts).toBe(1);
+    await refetchSession(page);
+    await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
+    state.failCsrf = false;
+    if (identity === 'other account') {
+      state.accountId = '00000000-0000-4000-8000-000000000099';
+      state.role = 'OPERATOR';
+    }
+    state.username = 'renewed';
+    await page.getByRole('textbox', { name: 'Логин', exact: true }).fill('renewed');
+    await page.getByRole('textbox', { name: 'Пароль', exact: true }).fill('fixture');
+    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+    await expect.poll(successes).toBe(1);
+    if (identity === 'same account') {
+      await page.getByRole('button', { name: 'Изменить название', exact: true }).click();
+      await page.getByRole('textbox', { name: 'Новое название', exact: true }).fill('New session draft');
+    }
+    release();
+    await expect.poll(successes).toBe(2);
+    await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+    if (identity === 'same account')
+      await expect(page.getByRole('textbox', { name: 'Новое название', exact: true })).toHaveValue('New session draft');
+    expect(
+      await page.evaluate(() =>
+        (window as unknown as { fixturePrivateKeyCount: () => number }).fixturePrivateKeyCount(),
+      ),
+    ).toBeGreaterThan(0);
+    expect(state.commands).toHaveLength(0);
+  });
+}
+
+for (const exit of ['route', 'logout']) {
+  test('failed conflict refresh keeps the rename departure guard for ' + exit, async ({ page }) => {
+    const state = await mockApi(page);
+    state.rejectRename = true;
+    await page.goto('/tests/command-outcome.html');
+    await page.getByRole('button', { name: 'Изменить название', exact: true }).click();
+    const title = page.getByRole('textbox', { name: 'Новое название', exact: true });
+    await title.fill('Conflicting title');
+    await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Fixture title conflict' })).toBeVisible();
+    state.failRead = true;
+    await page.getByRole('button', { name: 'Обновить карточку', exact: true }).click();
+    await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Повторить обновление', exact: true })).toBeVisible();
+    await title.fill('Draft after failed refresh');
+    if (exit === 'route') await page.evaluate(() => (window as unknown as { fixtureBack: () => void }).fixtureBack());
+    else {
+      await openAccountMenu(page);
+      await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+    }
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await page.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
+    if (exit === 'logout' && test.info().project.name === 'mobile')
+      await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+    await expect(title).toHaveValue('Draft after failed refresh');
+    expect(state.logouts).toBe(0);
+    state.failRead = false;
+    await page.getByRole('button', { name: 'Повторить обновление', exact: true }).click();
+    await expect(title).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+    expect(state.commands).toHaveLength(1);
+  });
+}
+
+for (const general of [false, true]) {
+  test('closing an accepted decision preserves read recovery for ' + (general ? 'feed' : 'task'), async ({ page }) => {
+    const state = await mockApi(page, 'OPERATOR');
+    state.generalIssue = general;
+    state.assigned = true;
+    await page.goto('/tests/command-outcome.html?screen=issue');
+    const label = general ? 'Закрыть общую проблему' : 'Завершить разбор';
+    await selectChoice(page, 'Действие', label);
+    const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
+    await reason.fill('Accepted decision');
+    await page.getByRole('button', { name: label, exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Решение сохранено.' })).toBeVisible();
+    await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+    await expect(reason).toHaveValue('');
+    await expect(reason).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Применить решение', exact: true })).toBeDisabled();
+    expect(state.commands).toHaveLength(1);
+    state.failRead = false;
+    await page.getByRole('button', { name: 'Повторить обновление', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
+    await expect(reason).toHaveCount(0);
+    expect(state.commands).toHaveLength(1);
+  });
 }
 
 test('accepted rename and repeated read failures never resubmit PATCH', async ({ page }) => {

@@ -65,3 +65,26 @@ test('same identity refetch keeps a current failure valid; logout then re-login 
     client.clear();
   }
 });
+
+for (const next of [
+  { ...a, userId: 'account-b' },
+  { ...a, role: 'OPERATOR' },
+]) {
+  test(
+    'session cleanup cannot clear identity accepted while cancellation settles ' + JSON.stringify(next),
+    async () => {
+      const client = new QueryClient();
+      try {
+        await accept(client, a);
+        const clearing = clearSession(client);
+        await accept(client, next);
+        client.setQueryData(['private-new'], 'visible');
+        await clearing;
+        assert.deepEqual(client.getQueryData(sessionKey), next);
+        assert.equal(client.getQueryData(['private-new']), 'visible');
+      } finally {
+        client.clear();
+      }
+    },
+  );
+}
