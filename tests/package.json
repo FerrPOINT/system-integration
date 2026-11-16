@@ -11,6 +11,7 @@
     "test:smoke": "node --test e2e/smoke.test.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.65.0"
+    "@playwright/test": "^1.65.0",
+    "pg": "8.23.1"
   }
 }

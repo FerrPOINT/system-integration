@@ -188,7 +188,7 @@ const report = {
   drain,
   finalIntegrity,
   pipeline,
-  observation: { samples: observation.samples, errors: observation.errors },
+  observation: { samples: observation.samples, errors: observation.errors, queue: observation.queue },
   operations: measurements.map((stat) => ({
     operation: stat.operation,
     count: stat.latencies.length,

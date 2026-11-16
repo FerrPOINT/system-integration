@@ -76,7 +76,7 @@ const phases = arrival.phases.map((phase, index) => {
     operations,
     passed,
   };
-  if (index) result.sustainability = assessSteadyPhase(result, observation.samples);
+  if (index) result.sustainability = assessSteadyPhase(result, observation.queue.samples);
   return result;
 });
 const drain = await drainLoad(resources, 300000);
@@ -142,7 +142,7 @@ const report = {
   resourcesAfter,
   finalIntegrity: integrity,
   drain,
-  observation: { samples: observation.samples, errors: observation.errors },
+  observation: { samples: observation.samples, errors: observation.errors, queue: observation.queue },
   pipeline: await pipelineSummary(resources, arrival.startedAt),
   generator: {
     cpuMicros: process.cpuUsage(cpuBefore),

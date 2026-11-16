@@ -155,7 +155,7 @@ try {
 } catch (error) {
   finalIntegrity.error = error instanceof ApiFailure ? error.code : error.name;
 }
-for (const phase of phases) phase.sustainability = assessSteadyPhase(phase, observation.samples);
+for (const phase of phases) phase.sustainability = assessSteadyPhase(phase, observation.queue.samples);
 const report = {
   profile: 'steady',
   sourceCommit,
@@ -183,7 +183,7 @@ const report = {
     scope:
       'Firebat Node process outside container budget, including observation and verification; excludes child processes',
   },
-  observation: { samples: observation.samples, errors: observation.errors },
+  observation: { samples: observation.samples, errors: observation.errors, queue: observation.queue },
   sourceUnchanged: git('rev-parse', 'HEAD') === sourceCommit && !git('status', '--porcelain'),
 };
 report.passed =

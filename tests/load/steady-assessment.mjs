@@ -17,8 +17,11 @@ export function assessSteadyPhase(phase, samples) {
   const first = selected.filter((sample) => Date.parse(sample.at) < start + 60000);
   const last = selected.filter((sample) => Date.parse(sample.at) >= end - 60000);
   const warm = selected.filter((sample) => Date.parse(sample.at) >= start + 30000);
-  if (first.length < 10 || last.length < 10 || !warm.length)
+  if (first.length < 500 || last.length < 500 || !warm.length)
     return { passed: false, reason: 'insufficient-window-observations' };
+  const timestamps = [start, ...selected.map((sample) => Date.parse(sample.at)), end];
+  const maximumObservationGapMs = Math.max(...timestamps.slice(1).map((at, index) => at - timestamps[index]));
+  if (maximumObservationGapMs > 1000) return { passed: false, reason: 'observation-gap', maximumObservationGapMs };
   const firstPendingMean = mean(first.map((sample) => sample.app.pending));
   const lastPendingMean = mean(last.map((sample) => sample.app.pending));
   const firstAgeP95Seconds = p95(first.map((sample) => sample.app.oldestPendingSeconds));
@@ -33,6 +36,7 @@ export function assessSteadyPhase(phase, samples) {
     firstPendingMean,
     lastPendingMean,
     pendingGrowthLimit,
+    maximumObservationGapMs,
     firstAgeP95Seconds,
     lastAgeP95Seconds,
     maximumWarmAgeSeconds,

@@ -247,7 +247,7 @@ async function stage(mode, count) {
       latencies: undefined,
     })),
     warmupErrors,
-    observation: { samples: observation.samples, errors: observation.errors },
+    observation: { samples: observation.samples, errors: observation.errors, queue: observation.queue },
     drain,
     external,
     renamed,

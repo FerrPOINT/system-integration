@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { hostname, freemem, totalmem, loadavg } from 'node:os';
+import { observeQueue } from './queue-observer.mjs';
 
 const execute = promisify(execFile);
 const root = fileURLToPath(new URL('../..', import.meta.url));
@@ -130,12 +131,13 @@ export async function loadSnapshot(resources) {
 }
 
 export async function observeLoad(resources) {
-  const samples = [],
-    errors = [];
+  const samples = [];
   const collect = async () => {
     samples.push(await loadSnapshot(resources));
   };
   await collect();
+  const queue = await observeQueue();
+  const errors = queue.errors;
   let pending;
   const timer = setInterval(() => {
     if (pending) return;
@@ -148,6 +150,7 @@ export async function observeLoad(resources) {
   return {
     samples,
     errors,
+    queue: { samples: queue.samples, cadence: queue.cadence },
     async stop() {
       clearInterval(timer);
       await pending;
@@ -155,6 +158,8 @@ export async function observeLoad(resources) {
         await collect();
       } catch (error) {
         errors.push(error.code || error.name);
+      } finally {
+        await queue.stop();
       }
     },
   };
