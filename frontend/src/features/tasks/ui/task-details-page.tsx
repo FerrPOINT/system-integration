@@ -66,7 +66,7 @@ function TaskDetails({ id, user }: { id: string; user: GetSession200 }) {
       <div className="task-workspace">
         <Card asChild>
           <section className="task-summary" aria-labelledby="task-state-title">
-            <CardContent className="base-page-stack">
+            <CardContent className="ui-page-stack">
               <CardTitle asChild>
                 <h2 id="task-state-title">Состояние задания</h2>
               </CardTitle>

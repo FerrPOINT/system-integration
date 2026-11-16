@@ -64,7 +64,7 @@ test('UI-16: direct creation URL opens the same modal and short screens keep act
     .poll(() =>
       dialog.evaluate((el) => {
         const box = el.getBoundingClientRect();
-        const footer = el.querySelector('.base-dialog-footer')!.getBoundingClientRect();
+        const footer = el.querySelector('.ui-dialog-footer')!.getBoundingClientRect();
         return {
           withinViewport: box.top >= 0 && box.bottom <= innerHeight,
           footerVisible: footer.bottom <= innerHeight,

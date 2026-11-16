@@ -72,7 +72,7 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
     } else {
       await expect(page.getByRole('table')).toBeVisible();
       expect(
-        await page.locator('.base-table-scroll').evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
+        await page.locator('.ui-table-scroll').evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
         'The task table must fit at width ' + width,
       ).toBe(true);
     }

@@ -32,10 +32,10 @@ test('UI-01: dark default, all palettes and readable controls', async ({ page })
         return color !== 'transparent' && !color.endsWith(', 0)') ? color : background(el.parentElement!);
       };
       return [
-        '.login-panel .base-page-title',
-        '.login-panel .base-page-context',
-        '.login-panel .base-button[data-variant="default"]',
-        '.theme-control .base-choice-trigger',
+        '.login-panel .ui-page-title',
+        '.login-panel .ui-page-context',
+        '.login-panel .ui-button[data-variant="default"]',
+        '.theme-control .ui-choice-trigger',
         '.login-panel input',
       ].map((selector) => {
         const el = document.querySelector(selector)!;
@@ -125,7 +125,7 @@ test('UI-04: blocked storage keeps the chosen theme usable and explains persiste
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
 });
 
-test('UI-05: Base popup uses the selected palette, safe arrow spacing and keyboard focus', async ({ page }) => {
+test('UI-05: select popup uses the selected palette, safe arrow spacing and keyboard focus', async ({ page }) => {
   await page.goto('/');
   const picker = page.getByRole('combobox', { name: 'Цветовая тема', exact: true });
   for (const theme of ['dark', 'light', 'gray']) {
@@ -166,17 +166,17 @@ test('UI-05: Base popup uses the selected palette, safe arrow spacing and keyboa
 test('UI-06: shared brand, surfaces and form fields across the application', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
-  await expect(page.locator('.app-brand .base-icon-mark svg')).toHaveCount(1);
+  await expect(page.locator('.app-brand .ui-icon-mark svg')).toHaveCount(1);
   const logo = await page.locator('.app-brand').innerHTML();
   const dialogRadius = await page.evaluate(() =>
-    getComputedStyle(document.documentElement).getPropertyValue('--base-radius-dialog').trim(),
+    getComputedStyle(document.documentElement).getPropertyValue('--ui-radius-dialog').trim(),
   );
   await expect(page.getByLabel('Логин *', { exact: true })).toHaveAttribute('required', '');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await login(page);
   expect(await page.locator('.app-brand').innerHTML()).toBe(logo);
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toHaveClass('base-dialog-title');
+  await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toHaveClass('ui-dialog-title');
   const editor = page.getByRole('dialog', { name: 'Новое задание', exact: true });
   expect(await editor.evaluate((el) => getComputedStyle(el).borderRadius)).toBe(dialogRadius);
   const reference = page.getByLabel('Номер заявки');
@@ -186,8 +186,7 @@ test('UI-06: shared brand, surfaces and form fields across the application', asy
   expect(
     await page.evaluate(
       () =>
-        document.querySelectorAll('button:not(.base-control), input:not(.base-control), textarea:not(.base-control)')
-          .length,
+        document.querySelectorAll('button:not(.ui-control), input:not(.ui-control), textarea:not(.ui-control)').length,
     ),
   ).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

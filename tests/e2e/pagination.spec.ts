@@ -28,7 +28,7 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
           total <= size
             ? 'Всего: ' + total
             : (current - 1) * size + 1 + '–' + Math.min(current * size, total) + ' из ' + total;
-        return (await page.locator('.base-page-summary').innerText()) === summary;
+        return (await page.locator('.ui-page-summary').innerText()) === summary;
       })
       .toBe(true);
   }

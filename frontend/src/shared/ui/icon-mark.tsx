@@ -16,7 +16,7 @@ export const IconMark = forwardRef<HTMLSpanElement, IconMarkProps>(function Icon
     <span
       {...props}
       ref={ref}
-      className={cn('base-icon-mark', className)}
+      className={cn('ui-icon-mark', className)}
       data-size={size === 'sm' ? 'sm' : 'md'}
       role={label ? 'img' : undefined}
       aria-label={label || undefined}
@@ -24,7 +24,7 @@ export const IconMark = forwardRef<HTMLSpanElement, IconMarkProps>(function Icon
       style={
         {
           ...style,
-          '--base-icon-mark-color': 'var(--color-accent)',
+          '--ui-icon-mark-color': 'var(--color-accent)',
         } as CSSProperties
       }
     >

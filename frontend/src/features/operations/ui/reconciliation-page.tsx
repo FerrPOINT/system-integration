@@ -49,7 +49,7 @@ function SavedReconciliation({ taskId, reconciliationId }: { taskId: string; rec
       <ErrorMessage error={snapshot.error} />
       <Card asChild>
         <section className="reconciliation-panel" data-outcome={item.outcome}>
-          <CardContent className="base-page-stack">
+          <CardContent className="ui-page-stack">
             <Notice
               tone={item.outcome === 'MATCH' ? 'success' : 'danger'}
               title={
@@ -68,7 +68,7 @@ function SavedReconciliation({ taskId, reconciliationId }: { taskId: string; rec
               ) : (
                 <Card asChild>
                   <section>
-                    <CardContent className="base-page-stack">
+                    <CardContent className="ui-page-stack">
                       <CardTitle asChild>
                         <h3>У исполнителя</h3>
                       </CardTitle>

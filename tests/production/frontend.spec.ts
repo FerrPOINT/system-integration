@@ -216,7 +216,7 @@ test('task history exposes descriptions and adapts the left pane to viewport hei
     await expect
       .poll(() =>
         history.evaluate((panel) => {
-          const content = panel.querySelector('.base-card-content')!,
+          const content = panel.querySelector('.ui-card-content')!,
             viewport = panel.querySelector('.paged-viewport')!;
           const footer = panel.querySelector('.pagination-footer')!.getBoundingClientRect();
           const area = viewport.getBoundingClientRect(),
@@ -356,7 +356,7 @@ test('login header remains usable with production CSP at narrow and wide widths'
     const header = page.getByRole('banner');
     const theme = header.getByRole('combobox', { name: 'Цветовая тема', exact: true });
     await expect(header.getByRole('link', { name: 'Обмен с внешней системой', exact: true })).toBeVisible();
-    await expect(header.locator('.base-icon-mark')).toBeVisible();
+    await expect(header.locator('.ui-icon-mark')).toBeVisible();
     await expect(theme).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),

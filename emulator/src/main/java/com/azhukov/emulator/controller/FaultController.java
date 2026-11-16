@@ -4,18 +4,16 @@ import com.azhukov.emulator.domain.FaultMode;
 import com.azhukov.emulator.service.OperationService;
 import com.azhukov.integration.contract.external.api.TestFaultsApi;
 import com.azhukov.integration.contract.external.model.FaultConfiguration;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @Profile("test-faults")
+@RequiredArgsConstructor
 class FaultController implements TestFaultsApi {
     private final OperationService operations;
-
-    FaultController(OperationService operations) {
-        this.operations = operations;
-    }
 
     @Override
     public ResponseEntity<Void> configureFault(String reference, FaultConfiguration input) {

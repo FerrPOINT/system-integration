@@ -19,10 +19,10 @@ function ChoiceForm() {
     setEntries([...new FormData(form)]);
   }
   return (
-    <main className="base-page-stack">
+    <main className="ui-page-stack">
       <h1>Choice field fixture</h1>
       <form
-        className="base-form"
+        className="ui-form"
         onSubmit={(event) => {
           event.preventDefault();
           inspect(event.currentTarget);

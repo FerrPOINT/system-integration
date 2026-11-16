@@ -147,7 +147,7 @@ const report = {
   generator: {
     cpuMicros: process.cpuUsage(cpuBefore),
     rssBytes: process.memoryUsage().rss,
-    scope: 'Firebat process outside container limit; includes verification',
+    scope: 'Server-side process outside container limit; includes verification',
   },
   sourceUnchanged: generatorCommit === git('rev-parse', 'HEAD') && !git('status', '--porcelain'),
 };

@@ -44,7 +44,7 @@ export function TaskList({ user }: { user: GetSession200 }) {
   );
   return (
     <>
-      <div className="list-tools base-page-stack">
+      <div className="list-tools ui-page-stack">
         <PageHeader
           title={user.role === 'OPERATOR' ? 'Все задания' : 'Мои задания'}
           context={
@@ -58,7 +58,7 @@ export function TaskList({ user }: { user: GetSession200 }) {
                 <Button asChild variant="default">
                   <Link
                     ref={createTrigger}
-                    className={mobile ? 'base-icon-button' : undefined}
+                    className={mobile ? 'ui-icon-button' : undefined}
                     aria-label="Создать задание"
                     title="Создать задание"
                     to={{ pathname: '/tasks/new', search: search.toString() }}
@@ -88,7 +88,7 @@ export function TaskList({ user }: { user: GetSession200 }) {
           </Disclosure>
         )}
       </div>
-      <section className="paged-list base-page-stack" aria-busy={tasks.isFetching || restoring}>
+      <section className="paged-list ui-page-stack" aria-busy={tasks.isFetching || restoring}>
         <div
           className="paged-viewport"
           ref={registryRef}

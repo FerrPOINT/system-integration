@@ -22,9 +22,23 @@ public interface ReviewApiMapper {
 
     IssueResolution resolution(com.azhukov.integration.domain.review.IssueResolution value);
 
-    // Preserve the validated snapshot and its existing JSON contract.
-    @Mapping(target = "external", expression = "java(value.external())")
     Reconciliation reconciliation(com.azhukov.integration.domain.review.Reconciliation value);
+
+    ExternalOperationState externalSnapshot(com.azhukov.integration.domain.exchange.OperationSnapshot value);
+
+    ExternalOperationStateResultOneOf externalResult(OperationResult value);
+
+    @ValueMapping(source = "PENDING", target = MappingConstants.THROW_EXCEPTION)
+    ExternalOperationStateResultOneOf.StatusEnum externalStatus(
+            com.azhukov.integration.domain.task.BusinessStatus value);
+
+    default ExternalOperationState.ExecutionsEnum executions(int value) {
+        return ExternalOperationState.ExecutionsEnum.fromValue(value);
+    }
+
+    default ExternalOperationStateResultOneOf.VersionEnum externalVersion(int value) {
+        return ExternalOperationStateResultOneOf.VersionEnum.fromValue(value);
+    }
 
     ExchangeEvidence evidence(Evidence value);
 

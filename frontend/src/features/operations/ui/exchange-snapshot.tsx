@@ -9,7 +9,7 @@ export function Snapshot({ title, value }: { title: string; value: LocalSnapshot
   return (
     <Card asChild>
       <section className="snapshot">
-        <CardContent className="base-page-stack">
+        <CardContent className="ui-page-stack">
           <CardTitle asChild>
             <h3>{title}</h3>
           </CardTitle>
@@ -57,7 +57,7 @@ export function ReceivedResult({ value }: { value: Result }) {
   return (
     <Card asChild>
       <section className="snapshot">
-        <CardContent className="base-page-stack">
+        <CardContent className="ui-page-stack">
           <CardTitle asChild>
             <h3>Входящий снимок</h3>
           </CardTitle>

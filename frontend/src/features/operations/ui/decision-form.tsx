@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { reasonMaxLength } from '../../../shared/lib/text-rules';
+import { reasonMaxLength } from '../../../shared/lib/form-rules';
 import type { Issue } from '../../../../build/generated/openapi/client';
 import { Button } from '../../../shared/ui/button';
 import { Notice } from '../../../shared/ui/notice';
@@ -42,7 +42,7 @@ export function DecisionForm({
             )}
           </Notice>
         )}
-        <fieldset className="base-form-fieldset base-form" disabled={model.busy || command.isSuccess}>
+        <fieldset className="ui-form-fieldset ui-form" disabled={model.busy || command.isSuccess}>
           <FormField id="decision-action" label="Действие" required>
             {(attrs) => (
               <Select

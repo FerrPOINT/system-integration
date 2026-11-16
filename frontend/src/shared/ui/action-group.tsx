@@ -32,7 +32,7 @@ export const ActionGroup = forwardRef<HTMLDivElement, ActionGroupProps>(function
     <Component
       {...props}
       ref={ref}
-      className={cn('base-action-group', className)}
+      className={cn('ui-action-group', className)}
       data-align={placement}
       data-orientation={orientation === 'vertical' ? 'vertical' : undefined}
       data-separated={separated || undefined}

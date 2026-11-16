@@ -1,5 +1,5 @@
 :root {
-  font-family: var(--base-font-sans);
+  font-family: var(--ui-font-sans);
   color: var(--color-text-primary);
   background: var(--color-background);
   font-synthesis: none;
@@ -9,8 +9,8 @@
 }
 body {
   margin: 0;
-  font-size: var(--base-font-body);
-  line-height: var(--base-line-body);
+  font-size: var(--ui-font-body);
+  line-height: var(--ui-line-body);
 }
 a {
   color: var(--color-accent);
@@ -29,7 +29,7 @@ a {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
 }
-.detail-page-header > .base-page-actions {
+.detail-page-header > .ui-page-actions {
   width: auto;
 }
 .sr-only {
@@ -72,43 +72,43 @@ a {
   .list-tools {
     gap: 12px;
   }
-  .list-tools .base-page-header {
+  .list-tools .ui-page-header {
     flex-direction: row;
     flex-wrap: nowrap;
     align-items: center;
     gap: 8px;
   }
-  .list-tools .base-page-heading {
+  .list-tools .ui-page-heading {
     flex: 1;
   }
-  .list-tools .base-page-actions {
+  .list-tools .ui-page-actions {
     width: auto;
     flex: none;
     gap: 6px;
   }
-  .base-page-title {
+  .ui-page-title {
     font-size: 20px;
   }
-  .base-page-context {
+  .ui-page-context {
     font-size: 12px;
   }
   .detail-page-header {
     gap: 8px;
   }
-  .detail-page-header > .base-page-heading {
+  .detail-page-header > .ui-page-heading {
     display: contents;
   }
-  .detail-page-header .base-back-link {
+  .detail-page-header .ui-back-link {
     grid-column: 1;
     grid-row: 1;
     justify-self: start;
   }
-  .detail-page-header > .base-page-actions {
+  .detail-page-header > .ui-page-actions {
     grid-column: 2;
     grid-row: 1;
     justify-self: end;
   }
-  .detail-page-header .base-page-copy {
+  .detail-page-header .ui-page-copy {
     grid-column: 1 / -1;
     grid-row: 2;
   }

@@ -30,7 +30,7 @@
   padding: 0;
   margin: 0;
   display: grid;
-  gap: var(--base-control-padding-inline);
+  gap: var(--ui-control-padding-inline);
 }
 .task-card-status {
   display: flex;
@@ -138,8 +138,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .task-summary > .base-card-content,
-  .history-panel > .base-card-content {
+  .task-summary > .ui-card-content,
+  .history-panel > .ui-card-content {
     padding: 14px;
     gap: 16px;
   }

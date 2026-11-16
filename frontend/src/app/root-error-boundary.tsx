@@ -6,7 +6,7 @@ import { ActionGroup } from '../shared/ui/action-group';
 /** Render failures are distinct from expected HTTP/validation errors in the screen. */
 export function RouteErrorBoundary() {
   return (
-    <section className="base-page-stack" aria-labelledby="page-error-title">
+    <section className="ui-page-stack" aria-labelledby="page-error-title">
       <h1 id="page-error-title">Не удалось открыть страницу</h1>
       <Notice tone="danger" role="alert">
         Произошла ошибка. Обновите страницу или вернитесь к заданиям.
@@ -23,7 +23,7 @@ export function RouteErrorBoundary() {
 
 export function RootErrorBoundary() {
   return (
-    <main className="base-page-stack">
+    <main className="ui-page-stack">
       <RouteErrorBoundary />
     </main>
   );

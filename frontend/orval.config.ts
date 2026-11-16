@@ -1,7 +1,16 @@
 import { defineConfig } from 'orval';
 import { writeFile } from 'node:fs/promises';
 
-let textRules: Record<string, { maxLength: number; pattern: string }> | undefined;
+type TextRule = { maxLength: number; pattern: string };
+let formRules:
+  | {
+      Title: TextRule;
+      ActionReason: TextRule;
+      Reference: { pattern: string };
+      Quantity: { minimum: number; maximum: number };
+      Username: TextRule;
+    }
+  | undefined;
 
 export default defineConfig({
   internalApi: {
@@ -9,7 +18,7 @@ export default defineConfig({
       target: '../contracts/internal-api.openapi.yaml',
       override: {
         transformer(spec) {
-          textRules = {};
+          const textRules: Record<string, TextRule> = {};
           for (const name of ['Title', 'ActionReason']) {
             const schema = spec.components?.schemas?.[name];
             if (
@@ -19,9 +28,43 @@ export default defineConfig({
               !('pattern' in schema) ||
               typeof schema.pattern !== 'string'
             )
-              throw new Error('Missing text constraints: ' + name);
+              throw new Error('Missing form constraints: ' + name);
             textRules[name] = { maxLength: schema.maxLength, pattern: schema.pattern };
           }
+          const input = spec.components?.schemas?.OperationInput;
+          if (!input || !('properties' in input)) throw new Error('Missing OperationInput constraints');
+          const reference = input.properties?.reference;
+          const quantity = input.properties?.quantity;
+          if (!reference || !('pattern' in reference) || typeof reference.pattern !== 'string')
+            throw new Error('Missing request reference pattern');
+          if (
+            !quantity ||
+            !('minimum' in quantity) ||
+            !('maximum' in quantity) ||
+            typeof quantity.minimum !== 'number' ||
+            typeof quantity.maximum !== 'number'
+          )
+            throw new Error('Missing request quantity bounds');
+          const body = spec.paths?.['/api/login']?.post?.requestBody;
+          if (!body || !('content' in body)) throw new Error('Missing login request');
+          const login = body.content['application/x-www-form-urlencoded']?.schema;
+          if (!login || !('properties' in login)) throw new Error('Missing login schema');
+          const username = login.properties?.username;
+          if (
+            !username ||
+            !('maxLength' in username) ||
+            !('pattern' in username) ||
+            typeof username.maxLength !== 'number' ||
+            typeof username.pattern !== 'string'
+          )
+            throw new Error('Missing username constraints');
+          formRules = {
+            Title: textRules.Title,
+            ActionReason: textRules.ActionReason,
+            Reference: { pattern: reference.pattern },
+            Quantity: { minimum: quantity.minimum, maximum: quantity.maximum },
+            Username: { maxLength: username.maxLength, pattern: username.pattern },
+          };
           return spec;
         },
       },
@@ -33,11 +76,11 @@ export default defineConfig({
     },
     hooks: {
       afterAllFilesWrite: async () => {
-        if (!textRules) throw new Error('Text constraints were not read from OpenAPI');
+        if (!formRules) throw new Error('Form constraints were not read from OpenAPI');
         await writeFile(
-          'build/generated/openapi/text-rules.ts',
-          '// Generated from internal-api.openapi.yaml. Do not edit.\nexport const textRules = ' +
-            JSON.stringify(textRules, null, 2) +
+          'build/generated/openapi/form-rules.ts',
+          '// Generated from internal-api.openapi.yaml. Do not edit.\nexport const formRules = ' +
+            JSON.stringify(formRules, null, 2) +
             ' as const;\n',
         );
       },

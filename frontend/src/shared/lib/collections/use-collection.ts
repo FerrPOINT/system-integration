@@ -27,6 +27,7 @@ const unavailable = 'Браузер не сохраняет позицию сп�
 /** React Query owns both the desktop window and the mobile page sequence. */
 export function useCollection<T>({
   key,
+  positionScope,
   page,
   size,
   feed,
@@ -37,6 +38,7 @@ export function useCollection<T>({
   viewportRef,
 }: {
   key: QueryKey;
+  positionScope: string;
   page: number;
   size: number;
   feed: boolean;
@@ -54,13 +56,7 @@ export function useCollection<T>({
   const queryKey = [...key, feed ? 'feed' : 'page', feed ? 0 : page, size];
   const queryHash = hashKey(queryKey);
   const cachedFirstPage = client.getQueryData<InfiniteData<CollectionPage<T>>>(queryKey)?.pages[0]?.page ?? 0;
-  const search = new URLSearchParams(location.search);
-  search.delete('page');
-  search.delete('size');
-  const route = ['/tasks', '/issues'].includes(location.pathname)
-    ? location.pathname + (search.size ? '?' + search.toString() : '')
-    : location.key;
-  const storageKey = positionKey(owner || '', route, queryHash);
+  const storageKey = positionKey(owner || '', positionScope, queryHash);
   const saved = useMemo(() => (feed ? readPosition(storageKey, size) : {}), [feed, storageKey, size]);
   const initial = useMemo<Restoration>(
     () => ({

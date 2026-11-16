@@ -1,4 +1,4 @@
-import { titleInputProps } from '../../../shared/lib/text-rules';
+import { titleInputProps } from '../../../shared/lib/form-rules';
 import { ErrorMessage } from '../../../shared/ui/error-message';
 import { ActionGroup } from '../../../shared/ui/action-group';
 import { FormField } from '../../../shared/ui/form-field';
@@ -25,7 +25,7 @@ export function RenameForm({ task, onClose }: { task: Task; onClose: () => void 
   return (
     <>
       <form
-        className="base-form edit-form"
+        className="ui-form edit-form"
         onSubmit={(event) => {
           event.preventDefault();
           if (!rename.isPending && !rename.isSuccess)
@@ -41,7 +41,7 @@ export function RenameForm({ task, onClose }: { task: Task; onClose: () => void 
         }}
       >
         <fieldset
-          className="base-form-fieldset base-form"
+          className="ui-form-fieldset ui-form"
           disabled={rename.isPending || rename.isSuccess || refresh.isPending}
         >
           <FormField id="field-title" label="Новое название" required>
