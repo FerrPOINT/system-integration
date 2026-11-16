@@ -75,6 +75,12 @@ export default [
     },
   },
   {
+    files: ['src/shared/lib/text-rules.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [{ ...generatedClient, allowImportNames: ['textRules'] }] }],
+    },
+  },
+  {
     // The URL parser reads the canonical enum; it still cannot call generated APIs.
     files: ['src/features/tasks/model/task-search.ts'],
     rules: {

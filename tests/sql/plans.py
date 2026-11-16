@@ -40,6 +40,7 @@ def static(key,params=(),variant='default'):
 result=json.dumps({'operationId':O,'request':{'reference':'REQ-100001','quantity':25},'version':2,'status':'SUCCEEDED','completedAt':'2026-01-02T00:00:00Z'})
 params={
 'JdbcExchangeRepository.backlog/0:1':[],
+'JdbcExchangeRepository.databaseActivity/0:1':[],
 'JdbcCommandReceiptRepository.lock/3:1':['actor:command:key'],'JdbcCommandReceiptRepository.find/3:1':[U,'CREATE_TASK',K],'JdbcCommandReceiptRepository.insert/6:1':[U,'NEW_COMMAND',K,'probe',201,'{}'],
 'DemoUsers.run/1:1':[uid(900004),'sql.probe','not-a-login-secret','INITIATOR'],'JdbcUserDetailsService.loadUserByUsername/1:1':['sql.owner.one'],
 'JdbcTaskRepository.insert/2:1':[NT,U,NO,'probe','REQ-110001',25],'JdbcExchangeRepository.enqueue/1:1':[uid(105001)],'JdbcTaskRepository.rename/3:1':[ 'changed',2,T],
@@ -233,9 +234,23 @@ CASE WHEN i%2=0 THEN '00000000-0000-0000-0000-000000900001'::uuid ELSE '00000000
 '2026-01-02'::timestamptz+i*interval '1 second' FROM generate_series(30001,40000)i;
 ANALYZE tasks;
 """
+parked_fixture = """
+UPDATE tasks SET delivery_status='NEEDS_REVIEW' WHERE operation_id IN (SELECT operation_id FROM delivery_queue);
+UPDATE delivery_queue SET due_at='infinity',claim_id=NULL,claimed_until=NULL;
+ANALYZE tasks; ANALYZE delivery_queue;
+"""
+claim_key='JdbcExchangeRepository.lockDueExchange/0:1'
+for scenario in ['parked-empty','parked-one-ready']:
+ add(claim_key,inventory[claim_key]['strings'][0],variant='5000 retained paused deliveries',fixture=scenario)
 scenario_sql={
  'base':'',
- 'recent-backlog':hot_backlog_fixture
+ 'recent-backlog':hot_backlog_fixture,
+ 'parked-empty':parked_fixture,
+ 'parked-one-ready':parked_fixture+f"""
+UPDATE tasks SET delivery_status='QUEUED' WHERE operation_id='{O}';
+UPDATE delivery_queue SET due_at=clock_timestamp()-interval '1 second' WHERE operation_id='{O}';
+ANALYZE tasks; ANALYZE delivery_queue;
+"""
 }
 def psql(db,sql):
  return subprocess.check_output(['docker','exec','-i',CONTAINER,'psql','-XqAt','-v','ON_ERROR_STOP=1','-U','si_admin','-d',db],
@@ -276,6 +291,11 @@ for db,fixture in [('si_test',app_fixture),('si_emulator_test',emu_fixture)]:
   plan,_=json.JSONDecoder().raw_decode(body.lstrip())
   plans.append({**meta,'database':db,'explain':plan[0]})
  assert psql(db,'SELECT count(*) FROM '+('tasks' if db=='si_test' else 'operations')+';').strip()=='0'
+def task_probes(node):
+ return (node.get('Actual Loops',0) if node.get('Relation Name')=='tasks' else 0)+sum(task_probes(child) for child in node.get('Plans',[]))
+for plan in plans:
+ if plan['fixture'] in ('parked-empty','parked-one-ready'):
+  assert task_probes(plan['explain']['Plan']) <= 1, ('Paused prefix entered task lookups',plan)
 summary={'recordedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),
  'sourceCommit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
 

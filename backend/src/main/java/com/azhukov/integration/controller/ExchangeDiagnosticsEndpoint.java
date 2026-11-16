@@ -1,5 +1,6 @@
 package com.azhukov.integration.controller;
 
+import com.azhukov.integration.dto.exchange.DatabaseActivity;
 import com.azhukov.integration.dto.exchange.DeliveryBacklog;
 import com.azhukov.integration.service.ExchangeCoordinator;
 import com.azhukov.integration.service.ExchangeService;
@@ -37,11 +38,12 @@ public class ExchangeDiagnosticsEndpoint {
             Instant observedAt,
             boolean workerEnabled,
             ExchangeCoordinator.FeedDiagnostics feed,
-            DeliveryBacklog deliveryQueue) {}
+            DeliveryBacklog deliveryQueue,
+            DatabaseActivity database) {}
 
     @ReadOperation
     public Diagnostics read() {
         var backlog = exchange.backlog();
-        return new Diagnostics(Instant.now(), enabled, coordinator.diagnostics(), backlog);
+        return new Diagnostics(Instant.now(), enabled, coordinator.diagnostics(), backlog, exchange.databaseActivity());
     }
 }

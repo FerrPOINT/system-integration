@@ -80,7 +80,7 @@ themes.spec.ts проверяет три палитры, тёмную по ум�
 spacing.spec.ts дополнительно измеряет интервалы при удержанном HTTP-ответе, ошибке, пустом и заполненном реестре, в карточках, форме, истории и сверке.
 Основной прогон содержит 76 проверок в двух профилях экрана. Component specs
 находятся в `components/`, прикладные — в `e2e/`: runner разделены каталогами.
-Component discovery содержит 112 проверок: Select, отложенное измерение,
+Component discovery содержит 116 проверок: Select, отложенное измерение,
 идентичность/guard форм, исходы команд и follow-up GET, operator draft basis,
 route/chunk recovery и mobile window. Они используют production components/Query
 под StrictMode и перехватывают все API-запросы. Проверяются тёплый/холодный кэш,
@@ -248,3 +248,10 @@ system-integration-load с теми же2CPU/4ГиБ. Пять обычных з
 через SI_TAIL_APP_COMMIT; все три образа должны ему соответствовать.
 Старая версия должна дать passed=false при dataCorrect=true: это сохранённый
 RED, а не успешная приёмка. Обычный запуск требует текущий HEAD и passed=true.
+
+## Системный аудит 16 ноября
+
+Добавлены Unicode title/reason, general feed decision, конкурирующие операторы,
+V10 backfill и idle-transaction regressions. Component command-outcome проверяет
+общую проблему без reconciliationId и настоящую HTML-валидацию Unicode.
+Числа сценариев обновляются по итоговому discovery/receipt, не по старому отчёту.

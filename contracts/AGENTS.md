@@ -11,3 +11,12 @@
   восстанавливаются из YAML.
 - После правки прогоните обе сборки и контрактные проверки по
   [инструкции](../README.md#сборка-и-проверки).
+
+## Длина и условные поля
+
+Строковые minLength/maxLength означают Unicode code points. Partial
+templates/java/beanValidationCore.mustache заменяет только string Size,
+arrays/numbers остаются upstream. При upgrade сравнивайте partial с upstream.
+Orval генерирует также текстовые ограничения UI. reconciliationId обязателен
+для решений задания и запрещён для ACKNOWLEDGE_FEED_ISSUE; IssueCommands
+проверяет это условие на сервере.

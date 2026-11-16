@@ -1,3 +1,4 @@
+import { titleInputProps } from '../../../shared/lib/text-rules';
 import { ErrorMessage } from '../../../shared/ui/error-message';
 import { ActionGroup } from '../../../shared/ui/action-group';
 import { FormField } from '../../../shared/ui/form-field';
@@ -46,8 +47,8 @@ export function RenameForm({ task, onClose }: { task: Task; onClose: () => void 
                 {...attrs}
                 ref={titleInput}
                 name="title"
-                maxLength={160}
-                pattern=".*\S.*"
+                {...titleInputProps}
+
                 defaultValue={initialTitle}
                 autoFocus
                 onChange={(event) => setDirty(event.target.value !== initialTitle)}

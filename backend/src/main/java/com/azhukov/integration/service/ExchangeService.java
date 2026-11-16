@@ -9,6 +9,7 @@ import com.azhukov.integration.domain.review.Issue;
 import com.azhukov.integration.domain.task.DeliveryStatus;
 import com.azhukov.integration.domain.task.HistoryType;
 import com.azhukov.integration.dto.exchange.ClaimResult;
+import com.azhukov.integration.dto.exchange.DatabaseActivity;
 import com.azhukov.integration.dto.exchange.DeliveryBacklog;
 import com.azhukov.integration.repository.ExchangeRepository;
 import com.azhukov.integration.repository.TaskRepository;
@@ -124,6 +125,11 @@ public class ExchangeService {
     @Transactional(readOnly = true)
     public DeliveryBacklog backlog() {
         return exchanges.backlog();
+    }
+
+    @Transactional(readOnly = true)
+    public DatabaseActivity databaseActivity() {
+        return exchanges.databaseActivity();
     }
 
     @Transactional(readOnly = true)

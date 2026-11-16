@@ -19,6 +19,7 @@ test('Java apps own their task graphs and regenerate only consumers of a changed
       mkdirSync(dirname(join(fixture, name)), { recursive: true });
       copyFileSync(join(root, name), join(fixture, name));
     }
+    cpSync(join(root, 'contracts/templates'), join(fixture, 'contracts/templates'), { recursive: true });
     cpSync(join(root, 'gradle/wrapper'), join(fixture, 'gradle/wrapper'), { recursive: true });
     const backendJar=run(':backend:bootJar','--dry-run');
     assert.ok(!backendJar.includes(':emulator:'));

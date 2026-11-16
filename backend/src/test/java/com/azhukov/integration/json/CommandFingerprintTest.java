@@ -49,7 +49,8 @@ class CommandFingerprintTest {
                 "resolve",
                 new Target(
                         id,
-                        new ResolveIssueRequest(2L, snapshot, ResolutionAction.ACKNOWLEDGE_DIFFERENCE, "Проверено")));
+                        new ResolveIssueRequest(2L, ResolutionAction.ACKNOWLEDGE_DIFFERENCE, "Проверено")
+                                .reconciliationId(snapshot)));
         inputs.put("reconcile", id);
         inputs.put("create-application", new CreateTask("Проверка заявки", new TaskInput("REQ-000001", 25)));
         inputs.put("rename-application", new RenameCommand(id, new RenameTask("Новое имя", 9007199254740990L)));
