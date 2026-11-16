@@ -248,3 +248,10 @@ system-integration-load с теми же2CPU/4ГиБ. Пять обычных з
 через SI_TAIL_APP_COMMIT; все три образа должны ему соответствовать.
 Старая версия должна дать passed=false при dataCorrect=true: это сохранённый
 RED, а не успешная приёмка. Обычный запуск требует текущий HEAD и passed=true.
+
+## Системный аудит 16 ноября
+
+Добавлены Unicode title/reason, general feed decision, конкурирующие операторы,
+V10 backfill и idle-transaction regressions. Component command-outcome проверяет
+общую проблему без reconciliationId и настоящую HTML-валидацию Unicode.
+Числа сценариев обновляются по итоговому discovery/receipt, не по старому отчёту.

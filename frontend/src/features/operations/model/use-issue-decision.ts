@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { validReason } from '../../../shared/lib/text-rules';
 import type { Issue } from '../../../../build/generated/openapi/client';
 import { useFormNavigationGuard } from '../../../shared/lib/forms/use-form-navigation-guard';
 import { useDecisionCommand } from '../api/exchange-commands';
@@ -43,7 +44,13 @@ export function useIssueDecision(issue: Issue) {
       !stale &&
       !command.isPending &&
       !command.isSuccess &&
-      Boolean(reason.trim() && action && actions.includes(action) && basis?.latestReconciliationId),
+      Boolean(
+        validReason(reason) &&
+        action &&
+        actions.includes(action) &&
+        basis &&
+        (action === 'ACKNOWLEDGE_FEED_ISSUE' || basis.latestReconciliationId),
+      ),
     changeAction(value: DecisionAction) {
       captureBasis();
       setAction(value);
@@ -54,7 +61,7 @@ export function useIssueDecision(issue: Issue) {
     },
     close: () => guard.requestClose(clearDraft),
     rebase() {
-      if (issue.status !== 'OPEN' || !issue.latestReconciliationId) return;
+      if (issue.status !== 'OPEN' || (!issue.latestReconciliationId && issue.taskId)) return;
       setBasis(decisionBasis(issue));
       if (action && !actions.includes(action)) setAction('');
     },
@@ -63,14 +70,20 @@ export function useIssueDecision(issue: Issue) {
         stale ||
         command.isPending ||
         command.isSuccess ||
-        !reason.trim() ||
+        !validReason(reason) ||
         !action ||
         !actions.includes(action) ||
-        !basis?.latestReconciliationId
+        !basis ||
+        (action !== 'ACKNOWLEDGE_FEED_ISSUE' && !basis.latestReconciliationId)
       )
         return;
       command.mutate(
-        { expectedIssueRevision: basis.issueRevision, reconciliationId: basis.latestReconciliationId, action, reason },
+        {
+          expectedIssueRevision: basis.issueRevision,
+          ...(basis.latestReconciliationId ? { reconciliationId: basis.latestReconciliationId } : {}),
+          action,
+          reason,
+        },
         {
           onSuccess: () => {
             guard.release();

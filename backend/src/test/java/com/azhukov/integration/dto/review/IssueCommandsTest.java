@@ -53,6 +53,16 @@ class IssueCommandsTest {
     }
 
     @Test
+    void reasonsUseUnicodeCodePointsAndPortableWhitespace() {
+        var id = UUID.randomUUID();
+        assertEquals("😀".repeat(500), new IssueCommands.Retry(1, "😀".repeat(500), id).reason());
+        assertThrows(RuleViolation.class, () -> new IssueCommands.Retry(1, "😀".repeat(501), id));
+        for (String blank : new String[] {"\u0085", "\uFEFF"})
+            assertThrows(RuleViolation.class, () -> new IssueCommands.Retry(1, blank, id));
+        assertEquals("X\uFEFF", new IssueCommands.Retry(1, "X\uFEFF", id).reason());
+    }
+
+    @Test
     void malformedUtf16CannotEnterEitherOperatorCommand() {
         var reconciliation = UUID.randomUUID();
         for (String reason : new String[] {"before\uD800after", "before\uDC00after", "\uDC00\uD800"}) {

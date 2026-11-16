@@ -400,3 +400,21 @@ node --test tests/e2e/public.test.mjs
 | План и состояние работы | [Роадмап](docs/roadmap.md), [задачи](docs/decomposition.md), [текущая стадия](docs/current-stage.md). |
 | Проверки и сдача | [Сценарии приёмки](docs/test-cases.md), [план эксплуатации и комплект сдачи](docs/roadmap.md#эксплуатация-и-сдача). |
 | Вклад и безопасность | [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md), [AGENTS](AGENTS.md). |
+
+## Уточнения системного аудита 16 ноября
+
+V10 выводит сохранённые NEEDS_REVIEW из due-поиска без сброса попыток.
+Общую проблему ленты можно закрыть с причиной и автором без задания/сверки.
+Закрытие не чинит источник: после исправления invalid page нужен перезапуск
+backend worker с сохранённым курсором.
+
+Границы title/reason — 160/500 Unicode code points. White_Space/BOM, NUL
+и malformed UTF-16 согласованы в OpenAPI, Java и UI; outputs только в build.
+DataSource: TCP keepalive и idle transaction timeout 60s. Прямой запуск допускает
+SI_DB_IDLE_TRANSACTION_TIMEOUT / SI_EMULATOR_DB_IDLE_TRANSACTION_TIMEOUT
+(PostgreSQL duration). Compose требует передать overrides в environment сервиса:
+.env не экспортирует произвольные переменные автоматически.
+Общего активного SQL timeout нет. Закрытый Actuator exchange показывает
+ожидания/idle-транзакции своего DB user без SQL-текста по явному запросу.
+Кандидат, проверки и публичная версия различаются в
+[текущей стадии](docs/current-stage.md).

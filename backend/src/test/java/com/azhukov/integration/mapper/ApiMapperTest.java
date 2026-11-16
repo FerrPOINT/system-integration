@@ -295,7 +295,8 @@ class ApiMapperTest {
             assertEquals(id, retry.reconciliationId());
             var resolve =
                     mapper.resolve(
-                            new ResolveIssueRequest(4L, id, ResolutionAction.APPLY_EXTERNAL_RESULT, "Применить"));
+                            new ResolveIssueRequest(4L, ResolutionAction.APPLY_EXTERNAL_RESULT, "Применить")
+                                    .reconciliationId(id));
             assertEquals(
                     com.azhukov.integration.domain.review.IssueResolution.Action.APPLY_EXTERNAL_RESULT,
                     resolve.action());

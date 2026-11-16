@@ -15,6 +15,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     logouts: 0,
     assigned: false,
     resolved: false,
+    generalIssue: false,
     revision: 1,
     latestSnapshot: 'snapshot',
     role,
@@ -47,23 +48,25 @@ async function mockApi(page: Page, role = 'INITIATOR') {
   });
   const issue = () => ({
     issueId: taskId,
-    taskId,
+    taskId: state.generalIssue ? undefined : taskId,
     operationId: taskId,
     issueRevision: state.revision,
     kind: 'RECONCILIATION_DIFFERENCE',
     status: state.resolved ? 'RESOLVED' : 'OPEN',
     summary: 'Fixture discrepancy',
     openedAt: '2026-11-14T00:00:00Z',
-    latestReconciliationId: state.latestSnapshot,
+    latestReconciliationId: state.generalIssue ? undefined : state.latestSnapshot,
     assignedTo: state.assigned ? task().ownerId : undefined,
     allowedActions: state.resolved
       ? []
-      : [...(state.assigned ? [] : ['TAKE_OWNERSHIP']), 'RECONCILE', 'ACKNOWLEDGE_DIFFERENCE'],
+      : state.generalIssue
+        ? ['ACKNOWLEDGE_FEED_ISSUE']
+        : [...(state.assigned ? [] : ['TAKE_OWNERSHIP']), 'RECONCILE', 'ACKNOWLEDGE_DIFFERENCE'],
     resolution: state.resolved
       ? {
-          action: 'ACKNOWLEDGE_DIFFERENCE',
+          action: state.generalIssue ? 'ACKNOWLEDGE_FEED_ISSUE' : 'ACKNOWLEDGE_DIFFERENCE',
           reason: 'Verified fixture',
-          reconciliationId: 'snapshot',
+          reconciliationId: state.generalIssue ? undefined : 'snapshot',
           decidedAt: '2026-11-14T00:00:00Z',
           decidedBy: task().ownerId,
         }
@@ -231,7 +234,7 @@ test('refetch preserves a decision draft and requires explicit adoption of the n
     'Preserved explanation',
   );
   await expect(page.getByRole('button', { name: 'Завершить разбор', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Использовать актуальную сверку' }).click();
+  await page.getByRole('button', { name: 'Использовать актуальные данные' }).click();
   await page.getByRole('button', { name: 'Завершить разбор', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Решение сохранено.' })).toBeVisible();
   expect(state.commands).toHaveLength(1);
@@ -586,4 +589,44 @@ test('login acknowledgement followed by session failure recovers with GET only',
   await page.getByRole('button', { name: 'Повторить', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
   expect(state.logins).toBe(1);
+});
+
+test('general feed decision validates Unicode and submits no fabricated reconciliation', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  state.generalIssue = true;
+  await page.goto('/tests/command-outcome.html?screen=issue');
+  await selectChoice(page, 'Действие', 'Закрыть общую проблему');
+  const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
+  const submit = page.getByRole('button', { name: 'Закрыть общую проблему', exact: true });
+  await reason.fill('\uFEFF');
+  await expect(submit).toBeDisabled();
+  await reason.fill('😀'.repeat(501));
+  await expect(submit).toBeDisabled();
+  await reason.fill('😀'.repeat(500));
+  await expect(submit).toBeEnabled();
+  state.failRead = false;
+  await submit.click();
+  await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
+  expect(state.commands).toHaveLength(1);
+  expect(state.commands[0].body).toEqual({
+    expectedIssueRevision: 1,
+    action: 'ACKNOWLEDGE_FEED_ISSUE',
+    reason: '😀'.repeat(500),
+  });
+  await expect(page.getByRole('link', { name: 'Сверка, на которой основано решение' })).toHaveCount(0);
+});
+
+test('title field accepts the full Unicode boundary and rejects a neighboring excess', async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/tests/command-outcome.html');
+  await page.getByRole('button', { name: 'Изменить название', exact: true }).click();
+  const input = page.getByRole('textbox', { name: 'Новое название', exact: true });
+  for (const value of ['😀'.repeat(160), 'X\uFEFF']) {
+    await input.fill(value);
+    expect(await input.evaluate((element: HTMLInputElement) => element.checkValidity())).toBe(true);
+  }
+  for (const value of ['x'.repeat(161), '\uFEFF', '\u0085']) {
+    await input.fill(value);
+    expect(await input.evaluate((element: HTMLInputElement) => element.checkValidity())).toBe(false);
+  }
 });

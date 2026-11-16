@@ -452,7 +452,8 @@ ID задания и операции создаёт приложение, ID в
 - SI-04 добавляет сверки, ответственного за проблему и решения. Запись проблемы
   хранит ID ответственного оператора и собственную версию для защиты команд.
   Сверка хранит автора, оба снимка и версию обмена на момент сравнения. У решения
-  есть ссылка на сверку и автора. Событие передачи хранит прежнего и нового
+  есть автор; решение по заданию ссылается на сверку, общая проблема ленты — без неё.
+  Событие передачи хранит прежнего и нового
   ответственных по [правилам аналитики](analysis.md#задание-и-роли).
 
 ## Совместимость и атомарность
@@ -966,3 +967,40 @@ ExchangeService фиксирует расход лимита и захват д�
 квитанции команд и ID операции сохраняются. При откате схема V7 остаётся;
 старый backend запускается только с SI_EXCHANGE_ENABLED=false, иначе его
 неограниченная политика повторов нарушит новый контракт.
+
+## Уточнения системного аудита 16 ноября
+
+Очередь владеет расписанием: pause задаёт due_at=infinity, resume назначает
+текущее время и GET. V10 переводит существующие NEEDS_REVIEW, сохраняя попытки,
+историю и остальные очереди. Нового eligibility-флага нет.
+
+Title/ActionReason измеряются в Unicode code points без нормализации.
+Пробелы — явный набор Unicode White_Space плюс BOM; NUL и malformed UTF-16
+запрещены до fingerprint/replay. Domain TextRule и generated CodePointLength
+соблюдают это правило. Единственный upstream partial находится в
+contracts/templates; arrays/numbers не изменены. Orval генерирует ограничения
+из той же схемы; shared/lib/text-rules адаптирует HTML maxlength (UTF-16)
+и проверяет реальную длину. Outputs остаются в build.
+
+ACKNOWLEDGE_FEED_ISSUE доступен только OPEN-проблеме без taskId. Reason и
+issue revision обязательны, reconciliationId запрещён. ReviewService блокирует
+строку и сохраняет resolution с автором/временем атомарно с квитанцией.
+Для задачи остаются свежая сверка, task→issue lock order и история.
+Закрытие общей проблемы не исправляет источник и не снимает invalid-page pause:
+после исправления источника оператор перезапускает backend worker; курсор сохранён.
+
+Оба DataSource включают TCP keepalive и idle_in_transaction_session_timeout=60s
+для своих соединений. SI_DB_IDLE_TRANSACTION_TIMEOUT и
+SI_EMULATOR_DB_IDLE_TRANSACTION_TIMEOUT принимают PostgreSQL duration.
+Это предел бездействия в транзакции, не активного SQL. Общие statement_timeout,
+lock_timeout и socketTimeout не вводятся: активный запрос может ждать внешнюю
+блокировку до её освобождения.
+
+Закрытый Actuator exchange читает pg_stat_activity только по явному запросу:
+blockedSessions, idleTransactions и oldestTransactionSeconds других client sessions
+того же DB/user. Без SQL-текста, параметров и session IDs. Обычный API не получает
+дополнительных запросов. Чужой DBA-holder требует администраторской диагностики.
+
+Основания: [PostgreSQL](https://www.postgresql.org/docs/18/runtime-config-client.html#GUC-IDLE-IN-TRANSACTION-SESSION-TIMEOUT),
+[OpenAPI templates](https://openapi-generator.tech/docs/customization/),
+[Orval hook](https://orval.dev/docs/reference/configuration/hooks/).

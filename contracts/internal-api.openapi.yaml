@@ -642,11 +642,11 @@ components:
             $ref: '#/components/schemas/Problem'
   schemas:
     Title:
-      description: Корректный Unicode без одиночных UTF-16 surrogate-кодов и нулевого символа.
+      description: Длина в Unicode code points; корректный Unicode без NUL и одиночных surrogate-кодов. Строка не состоит только из Unicode White_Space и BOM.
       type: string
       minLength: 1
       maxLength: 160
-      pattern: '^(?![\s\S]*\u0000)[\s\S]*\S[\s\S]*$'
+      pattern: '^(?![\s\S]*\u0000)[\s\S]*[^\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF][\s\S]*$'
     Request:
       $ref: './external-exchange.openapi.yaml#/components/schemas/OperationInput'
     Problem:
@@ -958,7 +958,7 @@ components:
           maxItems: 5
           items:
             type: string
-            enum: [TAKE_OWNERSHIP, RETRY, RECONCILE, APPLY_EXTERNAL_RESULT, ACKNOWLEDGE_DIFFERENCE]
+            enum: [TAKE_OWNERSHIP, RETRY, RECONCILE, APPLY_EXTERNAL_RESULT, ACKNOWLEDGE_DIFFERENCE, ACKNOWLEDGE_FEED_ISSUE]
         nextAttemptAt:
           type: string
           format: date-time
@@ -1066,16 +1066,18 @@ components:
           description: Обязателен для любой новой команды повтора. Отсутствие допускается только при replay ранее сохранённой команды с тем же исходным телом и ключом.
     ResolutionAction:
       type: string
-      enum: [APPLY_EXTERNAL_RESULT, ACKNOWLEDGE_DIFFERENCE]
+      enum: [APPLY_EXTERNAL_RESULT, ACKNOWLEDGE_DIFFERENCE, ACKNOWLEDGE_FEED_ISSUE]
     ActionReason:
+      description: Длина в Unicode code points; корректный Unicode без NUL и одиночных surrogate-кодов. Не только Unicode White_Space и BOM.
       type: string
       minLength: 1
       maxLength: 500
-      pattern: '^(?![\s\S]*\u0000)[\s\S]*\S[\s\S]*$'
+      pattern: '^(?![\s\S]*\u0000)[\s\S]*[^\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF][\s\S]*$'
     ResolveIssueRequest:
       type: object
       additionalProperties: false
-      required: [expectedIssueRevision, reconciliationId, action, reason]
+      required: [expectedIssueRevision, action, reason]
+      description: Для решений по заданию reconciliationId обязателен. ACKNOWLEDGE_FEED_ISSUE доступен только общей проблеме без задания и запрещает reconciliationId; фиксирует решение, не снимает защитную паузу ленты.
       properties:
         expectedIssueRevision:
           $ref: '#/components/schemas/IssueRevision'
@@ -1088,7 +1090,8 @@ components:
           $ref: '#/components/schemas/ActionReason'
     IssueResolution:
       type: object
-      required: [issueId, reconciliationId, action, reason, decidedBy, decidedAt]
+      required: [issueId, action, reason, decidedBy, decidedAt]
+      description: reconciliationId присутствует для решений по заданию; у ACKNOWLEDGE_FEED_ISSUE отсутствует.
       properties:
         issueId:
           type: string

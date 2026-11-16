@@ -10,7 +10,7 @@ import { data } from '../../../shared/api/http';
 import { csrf } from '../../../shared/api/csrf';
 import { useCommandKey } from '../../../shared/lib/forms/use-command-key';
 
-export type DecisionCommand = ResolveIssueRequest | (RetryRequest & { action: 'RETRY'; reconciliationId: string });
+export type DecisionCommand = ResolveIssueRequest | (RetryRequest & { action: 'RETRY' });
 
 export function useReconcileTask(taskId: string) {
   const key = useCommandKey();

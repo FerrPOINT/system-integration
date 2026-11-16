@@ -58,6 +58,15 @@ class TaskTitleTest {
     }
 
     @Test
+    void unicodeCodePointsAndWhitespaceFollowTheWireContract() {
+        assertEquals("😀".repeat(160), new TaskTitle("😀".repeat(160), 1).value());
+        assertThrows(RuleViolation.class, () -> new TaskTitle("😀".repeat(161), 1));
+        for (String blank : new String[] {"\u0085", "\uFEFF", " \u0085\uFEFF"})
+            assertThrows(RuleViolation.class, () -> new TaskTitle(blank, 1));
+        assertEquals("X\uFEFF", new TaskTitle("X\uFEFF", 1).value());
+    }
+
+    @Test
     void persistedRevisionMustBeWithinTheContractRange() {
         assertThrows(RuleViolation.class, () -> new TaskTitle("Имя", 0));
         assertThrows(RuleViolation.class, () -> new TaskTitle("Имя", TaskTitle.MAX_REVISION + 1));

@@ -88,7 +88,7 @@ class ReviewContextTest {
     }
 
     @Test
-    void closedAndFeedIssuesHaveNoActionsEvenWithCachedAllowedActions() {
+    void closedIssuesHaveNoActionsAndFeedIssuesAllowOnlyAnExplicitAcknowledgement() {
         var state = state(DeliveryStatus.UNKNOWN, null, 10);
         var closed =
                 issue(Issue.Kind.DELIVERY_DELAYED, Issue.Status.RESOLVED, null, taskId).withActions(List.of(RETRY));
@@ -99,7 +99,8 @@ class ReviewContextTest {
         var feed =
                 issue(Issue.Kind.RESULT_CONFLICT, Issue.Status.OPEN, null, null)
                         .withActions(List.of(APPLY_EXTERNAL_RESULT));
-        assertTrue(new ReviewContext(feed, false, null, null, null).actions(operator).isEmpty());
+        assertEquals(
+                List.of(ACKNOWLEDGE_FEED_ISSUE), new ReviewContext(feed, false, null, null, null).actions(operator));
     }
 
     @Test

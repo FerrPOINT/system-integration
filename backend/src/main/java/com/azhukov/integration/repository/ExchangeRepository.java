@@ -3,6 +3,7 @@ package com.azhukov.integration.repository;
 import com.azhukov.integration.domain.exchange.ExchangeState;
 import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.task.DeliveryStatus;
+import com.azhukov.integration.dto.exchange.DatabaseActivity;
 import com.azhukov.integration.dto.exchange.DeliveryBacklog;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -43,6 +44,7 @@ public interface ExchangeRepository {
 
     void resumeDelivery(UUID operation);
 
+    /** Parks the retained delivery outside the finite due range; only explicit resume schedules it again. */
     void pauseQueue(UUID operation);
 
     void removeQueue(UUID operation);
@@ -54,6 +56,9 @@ public interface ExchangeRepository {
 
     /** Includes parked deliveries awaiting an operator; read only on an explicit diagnostic request. */
     DeliveryBacklog backlog();
+
+    /** Explicit operator diagnostics of this database/user; never includes query text. */
+    DatabaseActivity databaseActivity();
 
     long cursor(boolean lock);
 

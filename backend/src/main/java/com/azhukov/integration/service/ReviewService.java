@@ -235,7 +235,8 @@ public class ReviewService {
                 () -> {
                     var context = loadContext(id, user, true);
                     context.requireRevision(input.expectedIssueRevision());
-                    context.requireFresh(input.reconciliationId());
+                    if (input.action() != IssueResolution.Action.ACKNOWLEDGE_FEED_ISSUE)
+                        context.requireFresh(input.reconciliationId());
                     context.requireAction(user.id(), Issue.Action.valueOf(input.action().name()));
                     var resolution =
                             new IssueResolution(
@@ -253,12 +254,13 @@ public class ReviewService {
                         exchanges.delivery(context.state().task().operationId(), DeliveryStatus.STOPPED);
                         exchanges.removeQueue(context.state().task().operationId());
                     }
-                    tasks.history(
-                            context.state().task(),
-                            user.id(),
-                            HistoryType.ISSUE_RESOLVED,
-                            "Решение оператора: " + input.reason(),
-                            Map.of("issueId", id, "reconciliationId", input.reconciliationId()));
+                    if (context.state() != null)
+                        tasks.history(
+                                context.state().task(),
+                                user.id(),
+                                HistoryType.ISSUE_RESOLVED,
+                                "Решение оператора: " + input.reason(),
+                                Map.of("issueId", id, "reconciliationId", input.reconciliationId()));
                     return resolution;
                 });
     }
@@ -276,7 +278,7 @@ public class ReviewService {
     private ReviewContext loadContext(UUID id, Actor user, boolean lock) {
         var original = issues.get(id, false);
         var task = original.value().taskId();
-        if (task == null) return toContext(original, null, null);
+        if (task == null) return toContext(lock ? issues.get(id, true) : original, null, null);
         var record = tasks.get(task, user, lock);
         var state = exchanges.exchange(record.operationId(), false);
         var row = lock ? issues.get(id, true) : original;

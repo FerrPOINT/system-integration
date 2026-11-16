@@ -7,6 +7,7 @@ public record IssueResolution(
         UUID issueId, UUID reconciliationId, Action action, String reason, UUID decidedBy, OffsetDateTime decidedAt) {
     public enum Action {
         APPLY_EXTERNAL_RESULT,
-        ACKNOWLEDGE_DIFFERENCE
+        ACKNOWLEDGE_DIFFERENCE,
+        ACKNOWLEDGE_FEED_ISSUE
     }
 }

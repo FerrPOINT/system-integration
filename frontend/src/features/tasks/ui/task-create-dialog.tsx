@@ -1,3 +1,4 @@
+import { titleInputProps } from '../../../shared/lib/text-rules';
 import './tasks.css';
 import { ErrorMessage } from '../../../shared/ui/error-message';
 import { FormField } from '../../../shared/ui/form-field';
@@ -69,9 +70,7 @@ export function NewTask() {
               aria-label="Данные задания"
             >
               <FormField id="field-title" label="Название" required>
-                {(attrs) => (
-                  <Input {...attrs} ref={titleInput} name="title" maxLength={160} pattern=".*\S.*" autoFocus />
-                )}
+                {(attrs) => <Input {...attrs} ref={titleInput} name="title" {...titleInputProps} autoFocus />}
               </FormField>
               <div className="task-input-row">
                 <FormField

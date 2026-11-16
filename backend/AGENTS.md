@@ -94,3 +94,12 @@ Unit-тесты адаптеров следуют пакетам владель�
 сгруппированы по сценарию в tasks и используют тег postgres.
 Тесты размещаются в src/test/ соответствующего приложения, проверки запущенного
 сервиса — в tests/. Команды — в [README](../README.md#сборка-и-проверки).
+
+## Уточнения системного аудита
+
+Строки валидирует TextRule в code points до fingerprint/replay.
+Generated CodePointLength задаётся upstream partial, outputs не правятся.
+Pause — due_at=infinity, resume — конечное время; второго eligibility-флага нет.
+Общая проблема закрывается своим action с блокировкой строки, без фиктивных
+task/history/reconciliation. Idle-защиту не превращайте в короткий SQL-бюджет.
+pg_stat_activity читается только явной закрытой диагностикой без SQL-текста.

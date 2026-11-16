@@ -38,6 +38,105 @@ class OperationsWorkflowTest extends PostgresTest {
     }
 
     @Test
+    void generalFeedIssueHasAnAuditedVersionedDecisionWithoutTaskOrReconciliation() throws Exception {
+        UUID id = UUID.randomUUID(), key = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO exchange_issues(id,scope,fingerprint,kind,summary,evidence) VALUES (?,'feed',?,'PROTOCOL_ERROR','Общая проблема','{}')",
+                id,
+                id.toString());
+        var op = login("operator");
+        var before = issue(op, id);
+        assertEquals("ACKNOWLEDGE_FEED_ISSUE", body(before).get("allowedActions").get(0).asString());
+        long revision = body(before).get("issueRevision").asLong();
+        var input =
+                Map.of(
+                        "expectedIssueRevision",
+                        revision,
+                        "action",
+                        "ACKNOWLEDGE_FEED_ISSUE",
+                        "reason",
+                        "Проверили источник");
+        status(403, command(login("initiator.one"), "resolve", id, key, input));
+        var decision = command(op, "resolve", id, key, input);
+        status(200, decision);
+        assertFalse(body(decision).has("reconciliationId"));
+        assertEquals(operator.toString(), body(decision).get("decidedBy").asString());
+        assertEquals(body(decision), body(command(op, "resolve", id, key, input)));
+        status(409, command(op, "resolve", id, UUID.randomUUID(), input));
+        var after = issue(op, id);
+        assertEquals("RESOLVED", body(after).get("status").asString());
+        assertEquals(revision + 1, body(after).get("issueRevision").asLong());
+        assertTrue(body(after).get("allowedActions").isEmpty());
+        assertEquals(0, count("tasks"));
+        assertEquals(0, count("task_history"));
+        assertEquals(0, count("reconciliations"));
+        assertEquals(1, count("command_receipts"));
+    }
+
+    @Test
+    void competingOperatorsCannotOverwriteAGeneralDecision() throws Exception {
+        UUID id = UUID.randomUUID(), other = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO exchange_issues(id,scope,fingerprint,kind,summary,evidence) VALUES (?,'feed',?,'PROTOCOL_ERROR','Общая проблема','{}')",
+                id,
+                id.toString());
+        jdbc.update(
+                "INSERT INTO users VALUES (?,?,?,?)", other, "operator.two", passwords.encode(PASSWORD), "OPERATOR");
+        var a = login("operator");
+        var b = login("operator.two");
+        var input =
+                Map.of("expectedIssueRevision", 1, "action", "ACKNOWLEDGE_FEED_ISSUE", "reason", "Проверили источник");
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var first =
+                    pool.submit(() -> {
+                        start.await();
+                        return command(a, "resolve", id, UUID.randomUUID(), input);
+                    });
+            var second =
+                    pool.submit(() -> {
+                        start.await();
+                        return command(b, "resolve", id, UUID.randomUUID(), input);
+                    });
+            start.countDown();
+            var ra = first.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            var rb = second.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(
+                    java.util.Set.of(200, 409),
+                    java.util.Set.of(ra.getResponse().getStatus(), rb.getResponse().getStatus()));
+            var winner = ra.getResponse().getStatus() == 200 ? ra : rb;
+            assertEquals(body(winner), body(issue(a, id)).get("resolution"));
+        }
+        assertEquals(1, count("command_receipts"));
+    }
+
+    @Test
+    void generalAcknowledgementCannotBypassTaskReconciliation() throws Exception {
+        var scenario = difference();
+        var input =
+                Map.of(
+                        "expectedIssueRevision",
+                        scenario.revision(),
+                        "action",
+                        "ACKNOWLEDGE_FEED_ISSUE",
+                        "reason",
+                        "Проверили");
+        status(409, command(scenario.op(), "resolve", scenario.issue(), UUID.randomUUID(), input));
+        input =
+                Map.of(
+                        "expectedIssueRevision",
+                        scenario.revision(),
+                        "action",
+                        "ACKNOWLEDGE_FEED_ISSUE",
+                        "reason",
+                        "Проверили",
+                        "reconciliationId",
+                        scenario.reconciliation());
+        status(400, command(scenario.op(), "resolve", scenario.issue(), UUID.randomUUID(), input));
+        assertEquals("OPEN", body(issue(scenario.op(), scenario.issue())).get("status").asString());
+    }
+
+    @Test
     void countedIssuePagesRespectTheStatusFilter() throws Exception {
         difference();
         var op = login("operator");

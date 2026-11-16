@@ -37,7 +37,8 @@ public record Issue(
         RECONCILE,
         RETRY,
         APPLY_EXTERNAL_RESULT,
-        ACKNOWLEDGE_DIFFERENCE
+        ACKNOWLEDGE_DIFFERENCE,
+        ACKNOWLEDGE_FEED_ISSUE
     }
 
     public Issue {

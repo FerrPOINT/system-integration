@@ -143,7 +143,7 @@ function IssueDetails({ id }: { id: string }) {
                     <dd className="technical">{item.resolution.decidedBy}</dd>
                   </div>
                 </dl>
-                {item.taskId && (
+                {item.taskId && item.resolution.reconciliationId && (
                   <Link to={'/tasks/' + item.taskId + '/reconciliations/' + item.resolution.reconciliationId}>
                     Сверка, на которой основано решение
                   </Link>

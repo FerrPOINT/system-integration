@@ -2,6 +2,7 @@ FROM eclipse-temurin:25.0.5_8-jdk AS java-build
 WORKDIR /work
 COPY gradlew settings.gradle build.gradle ./
 COPY gradle gradle
+COPY contracts/templates contracts/templates
 COPY backend/build.gradle backend/build.gradle
 COPY emulator/build.gradle emulator/build.gradle
 RUN chmod +x gradlew

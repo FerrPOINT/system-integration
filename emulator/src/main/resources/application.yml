@@ -21,6 +21,10 @@ spring:
       connection-timeout: 2000
       validation-timeout: 1000
       maximum-pool-size: 4
+      data-source-properties:
+        ApplicationName: system-integration-emulator
+        tcpKeepAlive: true
+        options: '-c idle_in_transaction_session_timeout=${SI_EMULATOR_DB_IDLE_TRANSACTION_TIMEOUT:60s}'
   jackson:
     mapper:
       allow-coercion-of-scalars: false
