@@ -7,11 +7,16 @@
     "node": ">=26 <27"
   },
   "scripts": {
-    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "pnpm typecheck && playwright test",
+    "test:components": "pnpm typecheck && pnpm --dir ../frontend typecheck && playwright test --config components.config.ts",
+    "test:production": "pnpm typecheck && playwright test --config production.config.ts",
     "test:smoke": "node --test e2e/smoke.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
-    "pg": "8.23.1"
+    "@types/node": "26.6.6",
+    "pg": "8.23.1",
+    "typescript": "7.0.2"
   }
 }

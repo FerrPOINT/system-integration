@@ -50,7 +50,7 @@ export async function openAccountMenu(page: Page) {
   if ((await menu.getAttribute('aria-expanded')) === 'false') await menu.click();
 }
 
-export async function collectFeed(page: Page, region: import('@playwright/test').Locator) {
+export async function collectFeed(region: import('@playwright/test').Locator) {
   const footer = region.locator('[data-feed-end]');
   for (let attempt = 0; attempt < 100; attempt++) {
     await expect(region).toHaveAttribute('aria-busy', 'false');

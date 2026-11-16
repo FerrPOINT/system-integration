@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { reasonMaxLength } from '../../../shared/lib/form-rules';
+import { reasonCodePointLimit, reasonMaxLength } from '../../../shared/lib/form-rules';
 import type { Issue } from '../../../../build/generated/openapi/client';
 import { Button } from '../../../shared/ui/button';
 import { Notice } from '../../../shared/ui/notice';
@@ -75,7 +75,7 @@ export function DecisionForm({
             id="decision-reason"
             label="Причина решения"
             required
-            hint="До 500 символов. Укажите, что проверили и почему выбрали это действие."
+            hint={`До ${reasonCodePointLimit} символов. Укажите, что проверили и почему выбрали это действие.`}
           >
             {(attrs) => (
               <Textarea

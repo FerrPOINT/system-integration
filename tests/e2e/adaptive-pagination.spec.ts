@@ -60,7 +60,7 @@ async function fits(page: Page, region: Locator) {
 
 async function collect(page: Page, region: Locator, links: string) {
   if (page.viewportSize()!.width <= 760) {
-    await collectFeed(page, region);
+    await collectFeed(region);
     await fits(page, region);
     const hrefs = await region
       .locator(links)
@@ -258,7 +258,7 @@ test('UI-15: history fits its panel and exposes every saved event', async ({ pag
   await page.locator('.history-panel').scrollIntoViewIfNeeded();
   const seen = new Set<string>();
   if (info.project.name === 'mobile') {
-    await collectFeed(page, region);
+    await collectFeed(region);
     await fits(page, region);
     const ids = await region
       .locator('[data-page-item]')

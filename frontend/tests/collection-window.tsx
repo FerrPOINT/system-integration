@@ -32,12 +32,14 @@ Object.assign(window, {
   },
 });
 const alternate = new URLSearchParams(location.search).has('alternate');
+const root = appRoutes[0];
+if (root.index) throw new Error('Collection fixture requires a layout root route');
 const routes = alternate
   ? [
       {
-        ...appRoutes[0],
+        ...root,
         children: [
-          ...(appRoutes[0].children ?? []),
+          ...(root.children ?? []),
           {
             path: 'work-items',
             element: (

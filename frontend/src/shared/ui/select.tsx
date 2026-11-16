@@ -4,6 +4,7 @@ import { useComposedRefs } from '@radix-ui/react-compose-refs';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { getNonce } from 'get-nonce';
 import { cn } from './utils';
+import { Notice } from './notice';
 import { useUiLabels } from './labels';
 import {
   ChoiceFormBridge,
@@ -143,9 +144,9 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
         onInvalid={validation.onInvalid}
       />
       {validation.invalid && (
-        <span id={validation.errorId} role="alert" className="block text-sm text-danger">
+        <Notice id={validation.errorId} role="alert" tone="danger" appearance="inline">
           {validation.message}
-        </span>
+        </Notice>
       )}
     </>
   );

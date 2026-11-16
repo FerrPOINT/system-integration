@@ -1,6 +1,7 @@
 package com.azhukov.emulator.mapper;
 
 import com.azhukov.emulator.config.MapStructConfig;
+import com.azhukov.emulator.domain.FaultMode;
 import com.azhukov.emulator.domain.Operation;
 import com.azhukov.emulator.domain.OperationRequest;
 import com.azhukov.emulator.domain.OperationResult;
@@ -10,6 +11,8 @@ import org.mapstruct.Mapper;
 
 @Mapper(config = MapStructConfig.class)
 public interface OperationApiMapper {
+    FaultMode faultMode(FaultConfiguration.ModeEnum value);
+
     OperationInput input(OperationRequest value);
 
     OperationRequest request(OperationInput value);

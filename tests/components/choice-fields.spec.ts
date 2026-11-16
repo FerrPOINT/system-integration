@@ -8,8 +8,27 @@ test.beforeEach(async ({ page }) => {
 test('R08: required, FormData and controlled/uncontrolled reset preserve one native owner', async ({ page }) => {
   await expect(page.locator('[data-ui-choice-bridge]')).toHaveCount(2);
   await page.getByRole('button', { name: 'Submit', exact: true }).click();
-  await expect(page.getByRole('alert')).toHaveText('Выберите значение');
-  await expect(page.getByRole('combobox', { name: 'Controlled', exact: true })).toBeFocused();
+  const error = page.getByRole('alert');
+  await expect(error).toHaveText('Выберите значение');
+  for (const theme of ['dark', 'gray', 'light']) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    const palette = await page.evaluate(() => {
+      const reference = document.createElement('span');
+      reference.style.cssText = 'color:var(--color-danger);font-size:var(--ui-font-body)';
+      document.body.append(reference);
+      const { color, fontSize } = getComputedStyle(reference);
+      reference.remove();
+      return { color, fontSize };
+    });
+    await expect(error).toHaveCSS('display', 'flex');
+    await expect(error).toHaveCSS('font-size', palette.fontSize);
+    await expect(error.locator('svg')).toHaveCSS('color', palette.color);
+  }
+  const controlled = page.getByRole('combobox', { name: 'Controlled', exact: true });
+  await expect(controlled).toBeFocused();
+  expect((await controlled.getAttribute('aria-describedby'))?.split(' ')).toContain(await error.getAttribute('id'));
   await selectChoice(page, 'Controlled', 'Beta');
   await selectChoice(page, 'Uncontrolled', 'Beta');
   await page.getByRole('button', { name: 'Inspect FormData' }).click();
