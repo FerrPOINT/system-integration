@@ -600,8 +600,10 @@ test('general feed decision validates Unicode and submits no fabricated reconcil
   const submit = page.getByRole('button', { name: 'Закрыть общую проблему', exact: true });
   await reason.fill('\uFEFF');
   await expect(submit).toBeDisabled();
-  await reason.fill('😀'.repeat(501));
+  await reason.fill('x'.repeat(501));
   await expect(submit).toBeDisabled();
+  await reason.fill('😀'.repeat(501));
+  await expect(reason).toHaveValue('😀'.repeat(500));
   await reason.fill('😀'.repeat(500));
   await expect(submit).toBeEnabled();
   state.failRead = false;

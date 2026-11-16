@@ -412,8 +412,8 @@ backend worker с сохранённым курсором.
 и malformed UTF-16 согласованы в OpenAPI, Java и UI; outputs только в build.
 DataSource: TCP keepalive и idle transaction timeout 60s. Прямой запуск допускает
 SI_DB_IDLE_TRANSACTION_TIMEOUT / SI_EMULATOR_DB_IDLE_TRANSACTION_TIMEOUT
-(PostgreSQL duration). Compose требует передать overrides в environment сервиса:
-.env не экспортирует произвольные переменные автоматически.
+(PostgreSQL duration без пробелов, например 60s или 2min); Compose передаёт
+эти две переменные из .env в environment соответствующего сервиса.
 Общего активного SQL timeout нет. Закрытый Actuator exchange показывает
 ожидания/idle-транзакции своего DB user без SQL-текста по явному запросу.
 Кандидат, проверки и публичная версия различаются в
