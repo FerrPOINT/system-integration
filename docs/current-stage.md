@@ -3,13 +3,14 @@
 ## Кандидат и публикация
 
 Проверенный прикладной commit: e8b8f231869095a5a8917c856bd2505f88c94668.
-Изменения опубликованы через [PR #14](https://github.com/FerrPOINT/system-integration/pull/14).
+Интеграция в main выполняется через [PR #14](https://github.com/FerrPOINT/system-integration/pull/14);
+его актуальное состояние указано в GitHub.
 Последующие изменения документов и проверки геометрии не меняют приложения.
 
 В main слиты [PR #13](https://github.com/FerrPOINT/system-integration/pull/13)
 и [PR #15](https://github.com/FerrPOINT/system-integration/pull/15);
-текущая база — caa25fbedf59e5a079e4d6c18747bceac34aa6f8.
-Слияние PR #14 и deploy не выполнялись.
+база интегрированного кандидата — caa25fbedf59e5a079e4d6c18747bceac34aa6f8.
+Квалификация не включала публичный deploy.
 На demo.azhukov-dev.ru остаётся отдельная версия 2e97ce4.
 После проверок публичный корень возвращает 200; 11 обычных контейнеров
 сохранили ID, образ и время запуска.
