@@ -1,59 +1,198 @@
 # Обмен с внешней системой
 
-Внутренний сервис принимает задания и показывает, принял ли их внешний
-исполнитель и с каким результатом выполнил. Исполнителя представляет отдельный
-эмулятор. Разработка идёт по [декомпозиции](docs/decomposition.md).
-Проверенные возможности и оставшаяся приёмка указаны в [текущей стадии](docs/current-stage.md).
-Варианты и цикл оптимизации — в [плане производительности](docs/performance-options.md),
-измеренные решения и отклонённые эксперименты — в [журнале](docs/exchange-performance-plan.md).
+Сервис принимает задания, надёжно передаёт их внешнему исполнителю и показывает
+доставку, бизнес-результат и историю. Отдельный эмулятор позволяет воспроизводить
+сбои без реальных провайдеров. Инициатор работает со своими заданиями;
+оператор видит обмен, выполняет сверку и управляемое восстановление.
+
+Реализация основана на [исходном ТЗ 2.1](docs/original-specification.md).
+Подробная [матрица требований](docs/requirements.md) связывает его пункты с
+проверками. Версии исходников, проверенных образов и публичного демо указаны
+отдельно в [текущей стадии](docs/current-stage.md).
+
+## Что реализовано по исходному заданию
+
+| Требования | Реализация |
+| --- | --- |
+| D01, D-NF01, NF03 | Задание, outbox, история и квитанция сохраняются одной транзакцией. При недоступном исполнителе локальный приём продолжает работать; доставка восстанавливается после рестарта. |
+| D02 | REST-контракты приложения и эмулятора заданы в OpenAPI. Spring-интерфейсы, DTO, frontend-клиент и ограничения текстовых полей генерируются при сборке. |
+| D03, D-NF02, NF04 | Неизменный ID операции, идемпотентные команды и одно внешнее исполнение. Дубликат не создаёт новый эффект, старый результат не откатывает новый. |
+| D04, D-NF03 | Пять автоматических вызовов на серию с задержками; ошибки протокола и исчерпание попыток требуют оператора. Продолжение — по свежей сверке с тем же ID операции. |
+| D05, NF05 | Хранятся локальный и внешний снимки сверки, расхождение, автор, время и причина решения. Передача разбора и изменения задания остаются в истории. |
+| D06, NF01, NF02, NF06, NF07 | Серверные права, два инициатора и оператор, реестр, карточка, история и проблемы. Основной сценарий работает на 390–1440 px и с клавиатуры; даты и фильтры — UTC. |
+| D07, NF09, NF10 | Эмулятор с собственной БД и четырьмя режимами сбоя, шесть демосценариев, Docker Compose, миграции и автотесты с настоящим PostgreSQL. |
+| NF08 | Воспроизводимый профиль: 5000 записей, 20 клиентов, 30s прогрева и 120s измерения; реальные создание, изменение, список и карточка. Результаты — ниже. |
+
+Подтверждение получения и бизнес-исполнение — разные состояния:
+`ACKNOWLEDGED` не означает `SUCCEEDED`. Название меняется независимо
+от уже отправленного запроса; расхождение не затирается автоматически.
+
+## Устройство и поток задания
+
+Стрелки показывают, кто инициирует HTTP- или SQL-вызов:
+
+~~~text
+React ──HTTP──> Backend ──SQL──> si_app
+                   │
+                   └──HTTP──> Эмулятор ──SQL──> si_emulator
+~~~
+
+Backend и эмулятор — отдельные Spring Boot процессы. Их прикладные БД
+изолированы внутри одного PostgreSQL. Backend отправляет операцию через PUT
+и сам получает снимки и ленту результатов через GET.
+
+1. UI отправляет команду с ключом идемпотентности. После commit API возвращает ID сохранённого задания.
+2. Фоновая доставка backend захватывает короткий lease и фиксирует попытку. Сетевой вызов выполняется вне транзакции.
+3. Эмулятор сохраняет операцию по её ID, исполняет её один раз и публикует события в своей БД.
+4. Backend читает страницу результатов, атомарно сохраняет изменения, историю и курсор.
+5. При неопределённом исходе оператор видит проблему, выполняет сверку и выбирает допустимое действие.
+
+Outbox — таблица очереди в БД приложения, связанная с заданием одной транзакцией.
+Отдельный брокер для этого не требуется.
+[Подробные схемы и границы транзакций](docs/architecture.md#типичный-поток-задания).
+
+| Каталог | Назначение |
+| --- | --- |
+| `frontend/` | React + TypeScript: auth, задания, операторские сценарии и общие UI-компоненты. |
+| `backend/` | Domain, controller, service, repository, mapper, HTTP-клиент и планировщики. |
+| `emulator/` | Независимый исполнитель, его хранение, лента событий и режимы сбоев. |
+| `contracts/` | OpenAPI и небольшой шаблон строковой Java-валидации. |
+| `tests/` | API/UI, recovery, SQL-планы и нагрузка. |
+| `docs/` | Исходное задание, аналитика, архитектура, решения и критерии приёмки. |
+
+Domain не зависит от Spring или хранения; service владеет сценарием,
+правами и транзакцией. Controllers делегируют операции и используют MapStruct.
+Lombok применяется для простого DI; отдельный интерфейс каждому сервису не вводится.
+[Правила и навигация по коду](docs/architecture.md#границы-кода).
+
+## Что исправлено по ревью
+
+| Замечание | Что сделано |
+| --- | --- |
+| Структура и Spring-слои | Выделены controller/service/repository/mapper, отдельные Gradle-модули и Docker targets backend/эмулятора; закреплены зависимости слоёв и архитектурные тесты. [План Spring-слоёв](docs/spring-boot-refactoring-plan.md). |
+| Атомарность и восстановление | Команды и их квитанции фиксируются совместно. Сохранены leases/fencing, ограниченные попытки, порядок блокировок и атомарность результата с курсором. |
+| A01: повторный обход пауз | V10 выводит существующие NEEDS_REVIEW из due-диапазона через `due_at=infinity`. Resume назначает GET и текущее время; попытки и история сохраняются. |
+| A02: Unicode | Границы 160/500 считаются в code points в OpenAPI, Java и UI. NUL и malformed UTF-16 отклоняются до fingerprint/replay; ранее допустимый BOM сохраняется, старые записи читаются и переименовываются. |
+| R02: общая проблема ленты | Добавлено решение с причиной, автором, временем, версией и квитанцией без фиктивного задания/сверки. Конкурирующий оператор не перезаписывает решение. |
+| R01: транзакции и диагностика | Idle-транзакции ограничены 60s, включён TCP keepalive. Закрытая диагностика показывает ожидания без SQL-текста; активный SQL не получил общего короткого таймаута. |
+| A03: документация | Default in-flight согласован с конфигурацией: 8. Обновлены контракты, инструкции, сценарии и фактические результаты квалификации. |
+
+Предыдущие структурные этапы — в [декомпозиции](docs/decomposition.md#структура-проекта-r01r09),
+последние исправления — в [плане аудита](docs/backend-audit-followup-plan.md).
+
+## Выполненные оптимизации
+
+| Участок | Изменение и эффект |
+| --- | --- |
+| SQL и индексы | Индексы покрывают owner/status/created/id; V8 добавляет узкий индекс точного COUNT. V9 снижает vacuum scale factor таблицы tasks до 0,05. COUNT остаётся линейной работой. |
+| Приём результатов | За страницу сохраняется один итоговый UPDATE задания на операцию; каждое принятое событие, история и полный прирост версии сохраняются. |
+| Эмулятор | INSERT RETURNING и одно чтение replay; fault-map загружается для выбранной пачки. По умолчанию исполнение идёт пачкой 5, публикация — 25 с batch-записью и сохранением порядка курсора. |
+| Захват доставки | Независимые SKIP LOCKED захваты только при свободном HTTP-слоте, максимум 8 активных доставок по умолчанию. Lease не резервируется заранее на ожидание слота. |
+| Приостановленные записи | Пауза исключена из due-поиска. На fixture с 5000 паузами EXPLAIN подтверждает 0 task lookup для пустой очереди и 1 для одной готовой доставки. |
+| Лишняя работа | Пустая лента не записывает курсор; replay сохранённой сверки не вызывает внешний GET повторно. Проблемы списка обогащаются ограниченными пакетными чтениями без N+1. |
+| Потоки и соединения | Виртуальные HTTP-потоки, отдельные фоновые задачи, bounded delivery и Hikari 8/4. Параллелизм не заменяет ограниченную ёмкость БД. |
+| Frontend | React Query кэширует чтения с инвалидацией и очисткой при смене аккаунта. Мобильная лента ограничена 5 страницами / 100 записями; экраны загружаются лениво, JS/CSS сжимаются при сборке для gzip_static. |
+
+Выбор статического Statement для claim сохранён после проверки планов на
+растущих данных; server-prepared вариант дал неподходящий план.
+Результаты исследований и отклонённых экспериментов сохранены в
+[журнале оптимизации](docs/exchange-performance-plan.md), актуальная сводка —
+в [текущей стадии](docs/current-stage.md). Redis, физические партиции и
+производные счётчики не вводились.
+
+## Подтверждённые проверки и производительность
+
+Квалифицирован прикладной commit `f638e93`; последующие изменения документации
+не меняют эти приложения. Все числа относятся к описанному окружению.
+
+| Проверка | Результат |
+| --- | --- |
+| Java / PostgreSQL / архитектура | 272 теста без ошибок и пропусков; check, bootJar и Javadoc. |
+| Frontend и UI | Build, 61 API/unit, 2 asset, 76 desktop/mobile и 116 component-сценариев. |
+| Восстановление и данные | 10 recovery, 6 demo; чтение ранее допустимых значений и replay проверены после рестарта. |
+| SQL и артефакты | 69 SQL sites, 542 варианта, 1626 EXPLAIN с BUFFERS/WAL. Оба JAR и 55 файлов frontend сверены по байтам. |
+| NF08: 5000 / 20 клиентов | 51 700 запросов, ошибок 0; read/write p95 99,32/99,46 мс. Все 20 058 итоговых записей корректны. |
+| Полный 60×4, 3×300s | PASS, sustainable=true; 59 900 итоговых записей. Худший фазовый list/create p95 37,63/34,44 мс, max возраста очереди 0,90s. |
+| Дополнительный 70×4, 3×300s | Данные и HTTP корректны, sustainable=false: на последней ступени mean pending 30,94→34,42 при разрешённом приросте 2. |
+
+60×4 — по 60 созданий, переименований, списков и карточек в секунду.
+Лимит четырёх контейнеров суммарно 2 CPU / 4 ГиБ, включая frontend.
+Генератор работает на Firebat1 вне их cgroup через localhost API;
+публичная сеть и браузер в задержки не входят. Критерии устойчивости относятся
+к отчёту теста и не ограничивают SQL или запросы рабочего приложения.
+
+HTTP-принятие не равно внешнему исполнению: в интенсивном NF08 первое
+отправление p95 составило 70,73s, после окна очередь полностью обработана.
+60×4 подтверждён как рабочий профиль; 70×4 устойчивым не объявляется.
+[Команды и методика нагрузки](tests/load/README.md).
+
+## Локальный запуск
+
+Для полного стенда нужен Docker Compose v2. Для демокоманды и тестов —
+Node.js 26 с Corepack; для Java-сборки вне контейнеров — JDK 25.
+Закреплены Spring Boot 4.1.2, Gradle 9.9.1, MapStruct 1.6.3, Lombok 1.18.48
+и pnpm 12.19.0; контейнерные сборки используют Temurin 25.0.5,
+Node.js 26.13.1 и PostgreSQL 18.7.
+
+При первом запуске создайте в корне `.env` на основе `.env.example`
+и задайте шесть разных локальных паролей. `SI_DEMO_PASSWORD` должен
+содержать минимум 12 символов. Приватный файл исключён из Git.
+
+Из корня проекта соберите приложения последовательно:
+
+~~~sh
+docker compose --profile app build backend
+docker compose --profile app build emulator
+docker compose --profile app build frontend
+docker compose --profile app up -d --wait
+~~~
+
+Flyway применяет миграции при старте. Профиль `demo-users` создаёт отсутствующих
+`initiator.one`, `initiator.two` и `operator` с хешем `SI_DEMO_PASSWORD`;
+существующие пароли и роли не меняются. Начальный пароль передаётся через окружение,
+открытой регистрации нет.
+
+| Адрес | Назначение |
+| --- | --- |
+| [localhost:19573](http://127.0.0.1:19573/) | Собранный frontend. |
+| [localhost:19580/actuator/health/readiness](http://127.0.0.1:19580/actuator/health/readiness) | Готовность API и его БД после миграций. |
+| [localhost:19581/actuator/health/readiness](http://127.0.0.1:19581/actuator/health/readiness) | Готовность эмулятора и его БД. |
+
+PostgreSQL хранит данные в томе `system-integration_postgres`. Базы
+`si_app`, `si_emulator`, `si_test` и `si_emulator_test` принадлежат разным ролям;
+роль приложения не подключается к БД эмулятора. Порт 19532 открыт на loopback.
+Основная сеть — `10.252.95.0/24`, тестовая — `10.252.96.0/24`;
+при конфликте измените подсеть в Compose до запуска.
+
+`docker compose --profile app stop` останавливает приложения.
+`docker compose --profile app down` сохраняет том; `--volumes` удаляет его.
+Ручной Java-запуск требует согласовать server ports и адрес эмулятора
+с выбранным frontend; готовый dev-сценарий ниже использует порты 196xx.
 
 ## Рабочая среда
 
-Рабочую среду задаёт поручение: локальный Windows checkout или явно выбранный
-Firebat1 по SSH. Исходники и выбранный checkout проверяются по [AGENTS.md](AGENTS.md);
-фактическая среда квалификации указана в [текущей стадии](docs/current-stage.md).
 Публичная демонстрация — [demo.azhukov-dev.ru](https://demo.azhukov-dev.ru/).
-Демонстрационный runtime и изолированный тестовый system-integration-load —
-разные окружения: тесты и нагрузку не направляем на публичную БД.
-Точная версия и результаты приёмки указаны в [текущей стадии](docs/current-stage.md).
+Её версия и граница публикации указаны в [текущей стадии](docs/current-stage.md).
+Проверки используют отдельный `system-integration-load` с тестовыми БД.
+Выбор workspace, toolchains и правила Firebat1 — в [AGENTS.md](AGENTS.md).
 
-### Локальный Windows preview
+### Разработка с Docker и Vite
 
-Команды ниже запускают локальный preview на Windows. Отдельные API, эмулятор и БД
-используют проект system-integration-load и порты 19680/19681/19632;
-Vite с HMR — [127.0.0.1:19673](http://127.0.0.1:19673/).
-После настройки Node/Corepack по [AGENTS.md](AGENTS.md):
+Из корня, после подготовки `.env` и Node/Corepack:
 
-```powershell
+~~~sh
+docker compose -p system-integration-load -f compose.yml -f compose.load.yml --profile app build backend
+docker compose -p system-integration-load -f compose.yml -f compose.load.yml --profile app build emulator
 docker compose -p system-integration-load -f compose.yml -f compose.load.yml --profile app up -d --no-build --wait postgres backend emulator
-Push-Location frontend
-try { corepack pnpm dev } finally { Pop-Location }
-```
+corepack pnpm --dir frontend install --frozen-lockfile
+corepack pnpm --dir frontend dev
+~~~
 
-Эти команды используют уже собранные локальные образы; изменение backend
-требует их локальной сборки через общий host execution slot. Для полного
-Compose/UI-прогона Vite освобождает порт 19673 frontend-контейнеру.
-Приведённые ниже порты 195xx относятся к обычному Compose и публикации.
-
-## Диагностика обмена
-
-GET /actuator/exchange доступен на приватном backend с операторской сессией:
-anonymous получает 401, инициатор — 403. Frontend proxy его не публикует.
-Ответ содержит observedAt, workerEnabled, feed paused/lastSuccessfulRead/
-unavailableReads/invalidPages/deliveryInFlight и deliveryQueue operations/oldestCreatedAt.
-Очередь читается один раз по запросу и включает parked deliveries; это не всё
-business pending. Возраст oldestCreatedAt считается относительно observedAt.
-deliveryInFlight считает активные HTTP-доставки, а не чтение ленты.
-Feed counters локальны процессу; restart их обнуляет, а очередь остаётся в БД.
-si.exchange.enabled поддерживает true/false без учёта регистра; неоднозначные
-aliases yes/on/1 и ошибочные значения явно отклоняются при старте.
-Readiness зависит от приложения/БД, не от доступности исполнителя.
-
-API возвращает серверный X-Request-ID; caller ID игнорируется. Ошибки HTTP
-и прикладной audit используют requestId в журнале; после запроса MDC очищается.
-Эмулятор пишет lifecycle события после commit без тел запросов.
-Безопасная protocol detail сохраняется в существующем Evidence.reason;
-canonical reason/content для дедупликации и сохранённые receipts не меняются.
+Vite использует `127.0.0.1:19673` и проксирует `/api` на `127.0.0.1:19680`.
+Эмулятор доступен на 19681, PostgreSQL — на 19632. Если frontend-контейнер
+этого тестового проекта уже занимает 19673, сначала остановите именно его.
+Для полного UI/recovery прогона порт возвращается frontend-контейнеру.
+Обычный Compose использует отдельные порты 195xx.
 
 ## Доступ к данным
 
@@ -85,235 +224,28 @@ records или Spring Page. Причины и владельцы — в
 Подтверждённый профиль —
 [NF08](tests/load/README.md), его прохождение не гарантирует произвольную нагрузку.
 
-Внешний HTTP настраивается через si.exchange.http: base-url (прежний
-SI_EMULATOR_URL сохранён), connect-timeout=1s, response-timeout=2s,
-max-response-size=256KB. Последний ограничивает фактические байты ответа,
-включая chunked, а не количество принимаемых заданий. Параметры валидируются
-при старте; ограничения и владельцы — в [архитектуре](docs/architecture.md#потоки-и-ограничение-параллелизма).
-
-## Локальный запуск
-
-Для полного стенда нужен Docker Compose v2; для демокоманды и тестов —
-Node.js 26 с Corepack. При запуске Java вне контейнеров нужен JDK 25.
-Gradle Wrapper закрепляет
-Gradle 9.9.1, `frontend/package.json` — pnpm 12.19.0. Контейнерные сборки используют
-Temurin 25.0.5 и Node.js 26.13.1. Backend собран на Spring Boot 4.1.2.
-Явные controller/service/repository и mapper описаны в
-[архитектуре](docs/architecture.md#границы-кода). MapStruct 1.6.3 и Lombok 1.18.48
-настроены в root Gradle; код генерируется при сборке в build и не хранится в Git.
-
-В корне скопируйте `.env.example`
-в `.env` и задайте шесть разных локальных паролей. `SI_DEMO_PASSWORD`
-должен содержать не меньше 12 символов. Файл `.env` исключён из Git.
-
-Полный запуск в контейнерах описан в [сборке и проверках](#сборка-и-проверки).
-Команды ниже запускают приложения отдельно для разработки.
-
-```sh
-docker compose up -d --wait postgres
-docker compose ps
-```
-
-PostgreSQL 18.7 хранит данные в томе `system-integration_postgres`.
-Базы `si_app`, `si_emulator`, `si_test` и `si_emulator_test` принадлежат разным ролям.
-Роль приложения не подключается к БД эмулятора. Диагностический порт
-`19532` доступен только на `127.0.0.1`. Сеть проекта — `10.252.95.0/24`;
-при конфликте с вашей сетью измените её в `compose.yml` до первого запуска.
-
-Перед запуском Java загрузите `.env` в окружение каждого терминала.
-В PowerShell из корня репозитория:
-
-```powershell
-$settings = docker compose --profile app config --format json | ConvertFrom-Json
-foreach ($name in 'SI_DB_PASSWORD', 'SI_EMULATOR_DB_PASSWORD',
-    'SI_TEST_DB_PASSWORD', 'SI_EMULATOR_TEST_DB_PASSWORD') {
-    [Environment]::SetEnvironmentVariable($name,
-        [string]$settings.services.postgres.environment.$name, 'Process')
-}
-$env:SI_DEMO_PASSWORD = [string]$settings.services.backend.environment.SI_DEMO_PASSWORD
-```
-
-В POSIX shell выполните `set -a`, затем `. ./.env` и `set +a`.
-Запустите backend. Профиль `demo-users` создаёт отсутствующих
-`initiator.one`, `initiator.two` и `operator`, сохраняя хеш пароля.
-Существующие пароли и роли он не меняет. После первичной загрузки
-запускайте без этого профиля.
-
-```sh
-sh ./gradlew :backend:bootRun --args=--spring.profiles.active=demo-users
-```
-
-В PowerShell замените `sh ./gradlew` на `.\gradlew.bat`. Если терминал
-использует другой JDK, укажите путь к JDK 25 в `JAVA_HOME`.
-
-Эмулятор запускается отдельным процессом из корня репозитория. Профиль
-`test-faults` включает служебные команды воспроизведения сбоев.
-
-```sh
-sh ./gradlew :emulator:bootRun --args=--spring.profiles.active=test-faults
-```
-
-Для frontend откройте ещё один терминал в корне репозитория.
-
-```sh
-cd frontend
-corepack pnpm install --frozen-lockfile
-corepack pnpm dev
-```
-
-| Что открыть | Ожидаемый результат |
-| --- | --- |
-| [Frontend](http://127.0.0.1:19573/) | Вход, реестр и карточка. |
-| [Готовность API](http://127.0.0.1:19580/actuator/health/readiness) | `UP` после миграций и подключения PostgreSQL. |
-| [Готовность эмулятора](http://127.0.0.1:19581/actuator/health/readiness) | Независимая проверка процесса и его БД. |
-
-Vite направляет `/api` на порт `19580`; браузер работает в одном origin.
-Backend обращается к эмулятору по `SI_EMULATOR_URL`
-(по умолчанию `http://127.0.0.1:19581`). Адреса БД переопределяются
-`SI_DB_URL` и `SI_EMULATOR_DB_URL`.
-
-Для остановки приложений нажмите `Ctrl+C`, для БД выполните
-`docker compose stop`. `docker compose down` сохраняет том.
-Не добавляйте `--volumes`, если нужны сохранённые данные.
-
-## Форматирование кода
-
-Общие переводы строк LF, UTF-8 и завершающая новая строка заданы в
-.editorconfig. Java в backend/emulator форматирует
-[Spotless](https://github.com/diffplug/spotless/tree/main/plugin-gradle):
-google-java-format 2.0.0, AOSP, 4 пробела, ширина 120. Проверяется только
-рукописный src/**/*.java; generated в build и применённые миграции исключены.
-Автоматические semantic cleanups отключены. Imports сортируются, неиспользуемые
-удаляются штатным formatter. Сочетания полей/бизнес-правила не меняются.
-
-[Prettier](https://prettier.io/docs/install) 3.10.1 форматирует TS/TSX,
-CSS, JS-тесты и frontend-конфигурации: 2 пробела, ширина 120, одинарные
-кавычки в JS/TS, точки с запятой. .prettierignore исключает generated/build,
-node_modules, результаты и lockfile. Версии закреплены в Gradle/package.json
-и lockfile; не используйте npx с автоматически загружаемой latest.
-
-Общий проход выполнен по поручению пользователя. Format-on-save включён
-для настроенных редакторов. Gradle build/check выполняет spotlessCheck;
-frontend build — format:check, ESLint и TypeScript. Docker targets проверяют
-тот же стиль; frontend builder получает корневые настройки и исходники тестов,
-которые не попадают в финальный образ. Проверки завершаются ошибкой при
-расхождении, а не меняют файлы автоматически.
-
-Команды исправления и проверки стиля, из корня проекта:
-
-~~~sh
-./gradlew spotlessApply
-./gradlew spotlessCheck
-cd frontend
-corepack pnpm format
-corepack pnpm format:check
-~~~
-
-В VS Code рекомендованы Prettier и Spotless Gradle; в IntelliJ используйте
-Spotless plugin с этими Gradle-правилами,
-для frontend — локальный frontend/node_modules/prettier.
-CLI остаётся источником истины. Новых CI jobs и Git hooks нет.
-
-## Сборка и проверки
-
-Полный локальный стенд собирается из исходников. После заполнения `.env`,
-из корня репозитория:
-
-```sh
-docker compose --profile app build backend
-docker compose --profile app build emulator
-docker compose --profile app build frontend
-docker compose --profile app up -d --wait
-```
-
-Откройте `http://127.0.0.1:19573`. API, эмулятор и PostgreSQL публикуют
-диагностические порты только на loopback. Состояния здоровья и миграции
-проверяются при запуске. Для остановки — `docker compose --profile app stop`.
-Сборка контейнеров не заменяет интеграционные и браузерные проверки.
-
-Java-сборка запускается из корня репозитория; приложения адресуются отдельно.
-
-```sh
-sh ./gradlew --no-daemon --max-workers=2 :backend:test :emulator:test :backend:bootJar :emulator:bootJar
-```
-
-Транзакционные и API-тесты отдельно используют настоящий PostgreSQL `si_test`.
-Используется отдельный PostgreSQL system-integration-load на 19632;
-фоновые приложения этого проекта должны быть остановлены. Обычный стенд
-продолжает работать. Из корня с загруженным окружением:
-
-~~~sh
-docker compose -p system-integration-load -f compose.yml -f compose.load.yml --profile app stop backend emulator
-docker compose -p system-integration-load -f compose.yml -f compose.load.yml --profile app up -d --wait postgres
-~~~
-
-Затем из корня репозитория:
-
-```sh
-sh ./gradlew --no-daemon --max-workers=2 :backend:integrationTest :emulator:integrationTest
-```
-
-Команда требует `SI_TEST_DB_PASSWORD` и `SI_EMULATOR_TEST_DB_PASSWORD`,
-очищает только выделенные тестовые БД и не запускает фоновые отправки. Отчёт приложения —
-`backend/build/reports/tests/integrationTest/index.html`.
-
-Для демонстрации запущенного стенда загрузите `.env` в окружение терминала
-и из корня выполните:
-
-```sh
-node tests/demo.mjs seed
-```
-
-Создаются шесть заданий: успех, бизнес-отказ, недоступность исполнителя,
-потеря ответа, дубликат и запоздалый снимок. Демоучётки — `initiator.one`,
-`initiator.two` и `operator`, пароль берётся из `SI_DEMO_PASSWORD`.
-Сценарии используют зарезервированные демонстрационные номера
-`REQ-900001`–`REQ-900006` и постоянные ключи команд.
-
-Команды управления и независимого чтения:
-
-```sh
-node tests/demo.mjs fault REQ-900003 UNAVAILABLE
-node tests/demo.mjs clear REQ-900003
-node tests/demo.mjs clear REQ-900004
-node tests/demo.mjs inspect <operation-id>
-```
-
-После исчерпания пяти вызовов снятия недоступности недостаточно:
-войдите оператором, откройте задание, выполните свежую сверку, перейдите
-к разбору и выберите «Повторить обмен» с причиной. Новая серия сохранит ID.
-Снятие режима потери ответа выпускает удержанные события. Файл
-`tests/results/demo.json` содержит ID созданных заданий и операций.
-Браузерные сценарии и нагрузка запускаются по [инструкции тестов](tests/README.md)
-и [профилю NF08](tests/load/README.md).
-
-Соберите frontend и проверьте клиент из `frontend/` после установки зависимостей.
-
-```sh
-corepack pnpm build
-corepack pnpm test:assets
-corepack pnpm test:api
-```
-
-Build включает generation, ESLint React/Query/import boundaries, строгий TypeScript
-и Vite. `test:api` также запускает unit projections/positions, URL/polling и
-отрицательные lint fixtures. Структура app → features/{auth,tasks,operations} →
-shared и владельцы состояния описаны в [архитектуре](docs/architecture.md#архитектура-react).
-Component runner и полный UI-прогон разделены в [инструкции тестов](tests/README.md).
-
-Проверка HTTP после сборки описана в [инструкции для тестов](tests/README.md).
-
 ## Генерация из OpenAPI
 
-Gradle перед компиляцией генерирует Spring MVC интерфейсы и DTO обеих схем
-в `backend/build/generated/openapi/`. Эмулятор независимо генерирует внешнюю
-схему в `emulator/build/generated/openapi/`. Vite получает Fetch-клиент и DTO
-внутренней схемы из `frontend/build/generated/openapi/`. Команды
-`corepack pnpm dev` и `corepack pnpm build` запускают Orval автоматически.
-Для одной генерации из корня вызовите
-`sh ./gradlew :backend:openApiGenerate :backend:generateExchangeApi :emulator:openApiGenerate`,
-для frontend — `corepack pnpm generate:api` из `frontend/`.
-Каталоги сборки игнорируются Git.
+[Внутренняя схема](contracts/internal-api.openapi.yaml) задаёт frontend/backend
+API, [внешняя](contracts/external-exchange.openapi.yaml) — обмен с эмулятором.
+
+- Backend main получает Spring MVC интерфейсы и DTO внутренней схемы.
+  Внешние модели нужны его тестам и генерируются в test source set.
+- Эмулятор независимо генерирует Spring MVC интерфейсы и DTO внешней схемы.
+- Orval генерирует frontend Fetch-клиент, DTO и ограничения текстовых полей.
+  `pnpm dev` / `pnpm build` запускают генерацию автоматически.
+- MapStruct и Lombok выполняются Java annotation processors при компиляции.
+
+Outputs находятся в `backend/build/`, `emulator/build/` и `frontend/build/`,
+а не в `src` или Git. Для отдельной генерации:
+
+~~~sh
+sh ./gradlew :backend:openApiGenerate :backend:generateExchangeApi :emulator:openApiGenerate
+corepack pnpm --dir frontend generate:api
+~~~
+
+Строковый шаблон CodePointLength и его происхождение описаны в
+[contracts/templates/README.md](contracts/templates/README.md).
 
 ## Допущения
 
@@ -339,6 +271,111 @@ Gradle перед компиляцией генерирует Spring MVC инт�
   чтение ленты и ручная сверка выполняются отдельно.
   [Правила доставки](docs/analysis.md#доставка-и-повтор).
 
+- Название и причина ограничены 160/500 Unicode code points без нормализации.
+  Пробелы определены как Unicode White_Space; BOM сохраняется как ранее
+  допустимый символ. NUL и некорректный UTF-16 отклоняются до fingerprint/replay.
+- Общая проблема ленты закрывается с причиной и автором без задания/сверки.
+  Закрытие не исправляет источник и не снимает защитную паузу чтения.
+
+## Сборка и проверки
+
+Команды выполняются из корня. В PowerShell вместо `sh ./gradlew`
+используйте `.\gradlew.bat`. Для frontend и тестового runner установите
+зависимости по lockfile:
+
+~~~sh
+corepack pnpm --dir frontend install --frozen-lockfile
+corepack pnpm --dir tests install --frozen-lockfile
+sh ./gradlew --no-daemon --max-workers=1 :backend:check :emulator:check :backend:bootJar :emulator:bootJar
+corepack pnpm --dir frontend build
+corepack pnpm --dir frontend test:api
+corepack pnpm --dir frontend test:assets
+~~~
+
+Для PostgreSQL integrationTest используется только тестовый Compose на 19632.
+Остановите его фоновые приложения, оставив БД:
+
+~~~sh
+docker compose -p system-integration-load -f compose.yml -f compose.load.yml --profile app stop backend emulator
+docker compose -p system-integration-load -f compose.yml -f compose.load.yml --profile app up -d --wait postgres
+~~~
+
+Загрузите `SI_TEST_DB_PASSWORD` и `SI_EMULATOR_TEST_DB_PASSWORD` из своего
+`.env` в окружение. В POSIX shell: `set -a`, `. ./.env`, `set +a`.
+В PowerShell можно получить значения без вывода секретов:
+
+~~~powershell
+$settings = docker compose --profile app config --format json | ConvertFrom-Json
+foreach ($name in 'SI_TEST_DB_PASSWORD', 'SI_EMULATOR_TEST_DB_PASSWORD') {
+    [Environment]::SetEnvironmentVariable($name,
+        [string]$settings.services.postgres.environment.$name, 'Process')
+}
+~~~
+
+~~~sh
+sh ./gradlew --no-daemon --max-workers=1 :backend:integrationTest :emulator:integrationTest
+~~~
+
+Тесты очищают только `si_test` / `si_emulator_test`. Отчёты — в
+`backend/build/reports/tests/` и `emulator/build/reports/tests/`.
+UI, component и recovery runner, подготовка браузера и обязательная очистка
+QA описаны в [tests/README.md](tests/README.md). SQL-планы —
+в [tests/sql/README.md](tests/sql/README.md), нагрузка —
+в [tests/load/README.md](tests/load/README.md). Результаты остаются в
+игнорируемом `tests/results/`.
+
+## Демонстрационные данные
+
+Для отдельной демонстрационной установки, с `SI_DEMO_PASSWORD`
+в окружении, из корня:
+
+~~~sh
+node tests/demo.mjs seed
+~~~
+
+Создаются шесть заданий: успех, бизнес-отказ, недоступность исполнителя,
+потеря ответа, дубликат и запоздалый снимок. Используются номера
+`REQ-900001`–`REQ-900006` и постоянные ключи команд. Учётки —
+`initiator.one`, `initiator.two` и `operator`; пароль берётся из окружения.
+ID заданий/операций записываются в `tests/results/demo.json`.
+
+По умолчанию скрипт использует 19580/19581. Для проверки кандидата на
+изолированном стенде задайте `SI_BACKEND_URL=http://127.0.0.1:19680` и
+`SI_EMULATOR_URL=http://127.0.0.1:19681` в окружении; инструкции —
+в [tests/README.md](tests/README.md#демосценарии-на-qa).
+
+~~~sh
+node tests/demo.mjs fault REQ-900003 UNAVAILABLE
+node tests/demo.mjs clear REQ-900003
+node tests/demo.mjs clear REQ-900004
+node tests/demo.mjs inspect '<operation-id>'
+~~~
+
+В команде inspect замените `<operation-id>` на ID из demo.json или карточки.
+После пяти неуспешных вызовов снимите недоступность, войдите оператором,
+выполните свежую сверку и выберите «Повторить обмен» с причиной.
+Новая серия сохраняет ID. Снятие режима потери ответа выпускает
+удержанные события.
+
+## Форматирование кода
+
+Java проверяется Spotless/google-java-format; frontend — Prettier, ESLint
+и TypeScript. Gradle build/check и frontend build проверяют стиль, не меняя
+файлы автоматически. Настройки заданы в `.editorconfig`, `build.gradle`,
+`.prettierrc.json`, `.prettierignore` и `.vscode/`.
+Generated/build/results, lockfile и применённые миграции исключены.
+
+~~~sh
+sh ./gradlew spotlessCheck
+sh ./gradlew spotlessApply
+corepack pnpm --dir frontend format:check
+corepack pnpm --dir frontend format
+~~~
+
+В VS Code рекомендованы Prettier и Spotless Gradle; в IntelliJ — Spotless
+с правилами проекта и локальный frontend Prettier. CLI остаётся источником
+истины. GitHub CI jobs и Git hooks не добавлялись.
+
 ## Ограничения локального стенда
 
 При интенсивном создании заданий внешняя очередь растёт. Отчёт NF08
@@ -352,12 +389,50 @@ Gradle перед компиляцией генерирует Spring MVC инт�
 предназначены для локальной проверки; порты Compose доступны только с этого
 компьютера. Публичный домен и TLS конфигурация запуска не настраивает.
 
+## Диагностика обмена
+
+GET /actuator/exchange доступен на приватном backend с операторской сессией:
+anonymous получает 401, инициатор — 403. Frontend proxy его не публикует.
+Ответ содержит observedAt, workerEnabled, feed paused/lastSuccessfulRead/
+unavailableReads/invalidPages/deliveryInFlight deliveryQueue operations/oldestCreatedAt и database blockedSessions/idleTransactions/
+oldestTransactionSeconds. Последние относятся к другим client sessions той же БД и роли.
+Очередь читается один раз по запросу и включает parked deliveries; это не всё
+business pending. Возраст oldestCreatedAt считается относительно observedAt.
+deliveryInFlight считает активные HTTP-доставки, а не чтение ленты.
+Feed counters локальны процессу; restart их обнуляет, а очередь остаётся в БД.
+si.exchange.enabled поддерживает true/false без учёта регистра; неоднозначные
+aliases yes/on/1 и ошибочные значения явно отклоняются при старте.
+Readiness зависит от приложения/БД, не от доступности исполнителя.
+
+API возвращает серверный X-Request-ID; caller ID игнорируется. Ошибки HTTP
+и прикладной audit используют requestId в журнале; после запроса MDC очищается.
+Эмулятор пишет lifecycle события после commit без тел запросов.
+Безопасная protocol detail сохраняется в существующем Evidence.reason;
+canonical reason/content для дедупликации и сохранённые receipts не меняются.
+
+Оба DataSource используют TCP keepalive и idle transaction timeout 60s.
+Переопределения: `SI_DB_IDLE_TRANSACTION_TIMEOUT` и
+`SI_EMULATOR_DB_IDLE_TRANSACTION_TIMEOUT` (PostgreSQL duration без пробелов,
+например 60s или 2min); Compose передаёт их из `.env`.
+Это защита от бездействия внутри транзакции. Общего statement/lock/socket
+timeout нет: активный SQL может ждать внешнюю блокировку до освобождения.
+Hikari connection-timeout 2s ограничивает только получение соединения.
+
+Внешний HTTP настраивается через si.exchange.http: base-url (прежний
+SI_EMULATOR_URL сохранён), connect-timeout=1s, response-timeout=2s,
+max-response-size=256KB. Последний ограничивает фактические байты ответа,
+включая chunked, а не количество принимаемых заданий. Параметры валидируются
+при старте; ограничения и владельцы — в [архитектуре](docs/architecture.md#потоки-и-ограничение-параллелизма).
+
 ## Публичный стенд
 
 Адрес — [demo.azhukov-dev.ru](https://demo.azhukov-dev.ru).
 Публикация использует существующий TLS gateway Koara и отдельный SSH-туннель
 на Firebat1. Доступны три демоучётки из раздела запуска; пароль хранится
 в приватном `SI_DEMO_PASSWORD`. Установка не публикует порты БД и эмулятора.
+
+<details>
+<summary>Конфигурация существующей HTTPS-публикации</summary>
 
 На Firebat1 полный стенд запускается с HTTPS-настройками:
 
@@ -385,10 +460,11 @@ node --test tests/e2e/public.test.mjs
 
 Сертификат домена обслуживает существующий Certbot. Его deploy hook
 `/etc/letsencrypt/renewal-hooks/deploy/demo-certificate` обновляет TLS-файлы,
-которые читает общий Xray. Действующий каталог TLS сохраняется независимо
-от удаления приложения Mini-CRM. Обновление приложения не требует
-перезапуска общего Xray. Публичный вход ограничивает частоту попыток входа:
+которые читает общий Xray. TLS-каталог общего gateway сохраняется при обновлении приложения.
+Обновление приложения не требует перезапуска общего Xray. Публичный вход ограничивает частоту попыток входа:
 10 в минуту на адрес с кратковременным запасом 10 запросов, ответ 429.
+
+</details>
 
 ## Документация
 
@@ -400,21 +476,3 @@ node --test tests/e2e/public.test.mjs
 | План и состояние работы | [Роадмап](docs/roadmap.md), [задачи](docs/decomposition.md), [текущая стадия](docs/current-stage.md). |
 | Проверки и сдача | [Сценарии приёмки](docs/test-cases.md), [план эксплуатации и комплект сдачи](docs/roadmap.md#эксплуатация-и-сдача). |
 | Вклад и безопасность | [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md), [AGENTS](AGENTS.md). |
-
-## Очередь, решения и защита транзакций
-
-V10 выводит сохранённые NEEDS_REVIEW из due-поиска без сброса попыток.
-Общую проблему ленты можно закрыть с причиной и автором без задания/сверки.
-Закрытие не чинит источник: после исправления invalid page нужен перезапуск
-backend worker с сохранённым курсором.
-
-Границы title/reason — 160/500 Unicode code points. Unicode White_Space, NUL
-и malformed UTF-16 согласованы в OpenAPI, Java и UI; outputs только в build.
-DataSource: TCP keepalive и idle transaction timeout 60s. Прямой запуск допускает
-SI_DB_IDLE_TRANSACTION_TIMEOUT / SI_EMULATOR_DB_IDLE_TRANSACTION_TIMEOUT
-(PostgreSQL duration без пробелов, например 60s или 2min); Compose передаёт
-эти две переменные из .env в environment соответствующего сервиса.
-Общего активного SQL timeout нет. Закрытый Actuator exchange показывает
-ожидания/idle-транзакции своего DB user без SQL-текста по явному запросу.
-Кандидат, проверки и публичная версия различаются в
-[текущей стадии](docs/current-stage.md).
