@@ -49,7 +49,8 @@ public interface ExchangeRepository {
 
     void delivery(UUID operation, DeliveryStatus status);
 
-    void applyResult(OperationResult result);
+    /** Persists a final snapshot while preserving every accepted advance within the locked transaction. */
+    void applyResult(OperationResult result, int advances);
 
     /** Includes parked deliveries awaiting an operator; read only on an explicit diagnostic request. */
     DeliveryBacklog backlog();

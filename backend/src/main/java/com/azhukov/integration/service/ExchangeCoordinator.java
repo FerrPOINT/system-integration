@@ -4,17 +4,18 @@ import com.azhukov.integration.client.ExternalExchangeClient;
 import com.azhukov.integration.domain.exchange.DeliveryAttempt;
 import com.azhukov.integration.dto.exchange.ClaimResult;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
  * Runs HTTP between claim/finish transactions: bounded in-flight requests and at most
- * 32 claims per pass. This bean owns/closes the per-task virtual executor.
+ * 32 claims per pass. Completed selections do not wait for a slow reply before
+ * the next pass. Async failures are logged; durable leases remain recoverable.
+ * This bean owns/closes the per-task virtual executor.
  * These bounds protect resources; they are not a throughput promise.
  */
 @Service
@@ -22,9 +23,9 @@ import org.springframework.stereotype.Service;
 public class ExchangeCoordinator implements AutoCloseable {
     private final ExchangeService tasks;
     private final ExternalExchangeClient client;
-    private final int maxInFlight;
     private static final int MAX_CLAIMS_PER_PASS = 32;
     private final ExecutorService senders;
+    private final Semaphore slots;
     private Instant retryAfter = Instant.MIN;
     private volatile int feedFailures;
     private volatile boolean feedPaused;
@@ -41,7 +42,7 @@ public class ExchangeCoordinator implements AutoCloseable {
             throw new IllegalArgumentException("si.exchange.max-in-flight must be 1.." + MAX_CLAIMS_PER_PASS);
         this.tasks = tasks;
         this.client = client;
-        this.maxInFlight = maxInFlight;
+        this.slots = new Semaphore(maxInFlight);
         this.senders = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("delivery-", 0).factory());
         log.info("delivery-worker slots={} selectionsPerPass={}", maxInFlight, MAX_CLAIMS_PER_PASS);
     }
@@ -66,48 +67,65 @@ public class ExchangeCoordinator implements AutoCloseable {
     }
 
     public void deliver() {
-        // An empty queue costs one probe; maintenance must not masquerade as emptiness.
+        if (!slots.tryAcquire()) return;
         int submitted = 0;
         ClaimResult first;
-        do {
-            first = claim();
-            submitted++;
-        } while (first.outcome() == ClaimResult.Outcome.SKIPPED && submitted < MAX_CLAIMS_PER_PASS);
-        if (first.attempt() == null) return;
-        var initial = first.attempt();
-        var pending = new ArrayList<CompletableFuture<Boolean>>();
-        boolean exhausted = false;
         try {
-            pending.add(
-                    CompletableFuture.supplyAsync(
-                            () -> {
-                                deliverClaim(initial);
-                                return true;
-                            },
-                            senders));
-            while (!exhausted && submitted < MAX_CLAIMS_PER_PASS) {
-                while (pending.size() < maxInFlight && submitted < MAX_CLAIMS_PER_PASS) {
-                    pending.add(
-                            CompletableFuture.supplyAsync(
-                                    () -> {
-                                        var next = claim();
-                                        if (next.attempt() != null) deliverClaim(next.attempt());
-                                        return next.outcome() != ClaimResult.Outcome.EMPTY;
-                                    },
-                                    senders));
-                    submitted++;
-                }
-                CompletableFuture.anyOf(pending.toArray(CompletableFuture[]::new)).join();
-                for (var completed = pending.iterator(); completed.hasNext(); ) {
-                    var future = completed.next();
-                    if (future.isDone()) {
-                        if (!future.join()) exhausted = true;
-                        completed.remove();
-                    }
-                }
+            // An empty queue costs one probe; maintenance must not masquerade as emptiness.
+            do {
+                first = claim();
+                submitted++;
+            } while (first.outcome() == ClaimResult.Outcome.SKIPPED && submitted < MAX_CLAIMS_PER_PASS);
+            if (first.attempt() == null) {
+                slots.release();
+                return;
             }
-        } finally {
-            CompletableFuture.allOf(pending.toArray(CompletableFuture[]::new)).join();
+        } catch (RuntimeException | Error failure) {
+            slots.release();
+            throw failure;
+        }
+        var initial = first.attempt();
+        var exhausted = new java.util.concurrent.atomic.AtomicBoolean();
+        submit(() -> deliverClaim(initial));
+        while (submitted < MAX_CLAIMS_PER_PASS && !exhausted.get()) {
+            try {
+                // Any pass may return a slot. Waiting on only this pass's futures
+                // would strand capacity when an older pass finishes first.
+                slots.acquire();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            if (exhausted.get()) {
+                slots.release();
+                return;
+            }
+            submit(() -> {
+                if (exhausted.get()) return;
+                var next = claim();
+                if (next.outcome() == ClaimResult.Outcome.EMPTY) exhausted.set(true);
+                else if (next.attempt() != null) deliverClaim(next.attempt());
+            });
+            submitted++;
+        }
+    }
+
+    /** A caller-reserved slot covers claim/HTTP/finish, even after dispatch returns. */
+    private void submit(Runnable work) {
+        try {
+            senders.execute(() -> {
+                try {
+                    work.run();
+                } catch (RuntimeException failure) {
+                    // Async work must fail explicitly; exception messages can contain SQL values.
+                    log.error("delivery slot failed exception={}", failure.getClass().getSimpleName());
+                } finally {
+                    slots.release();
+                }
+            });
+        } catch (RuntimeException | Error failure) {
+            slots.release();
+            throw failure;
         }
     }
 

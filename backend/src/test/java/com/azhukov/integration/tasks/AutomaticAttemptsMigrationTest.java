@@ -65,6 +65,7 @@ class AutomaticAttemptsMigrationTest extends PostgresTest {
                     .schemas(schema)
                     .defaultSchema(schema)
                     .locations("classpath:db/migration")
+                    .target("7")
                     .load()
                     .migrate();
             try (var connection = DriverManager.getConnection(url, "si_test", password);

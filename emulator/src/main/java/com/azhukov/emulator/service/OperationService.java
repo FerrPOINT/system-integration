@@ -31,19 +31,23 @@ public class OperationService {
     @Transactional
     public Accepted accept(UUID id, OperationRequest input) {
         operations.lockOperation(id);
-        if (operations.exists(id)) {
-            var operation = operations.get(id);
+        var existing = operations.find(id);
+        if (existing.isPresent()) {
+            var operation = existing.get();
             operation.requireRequest(input);
             auditAfterCommit("replayed", id, "executions=" + operation.executions());
             return new Accepted(operation, false, false);
         }
         var fault = operations.lockFault(input.reference());
         var mode = fault == null ? FaultMode.NONE : fault.forNextAcceptance();
-        operations.insert(id, input);
+        var operation = operations.insert(id, input);
         auditAfterCommit("accepted", id, "mode=" + mode.name());
         if (mode != FaultMode.NONE) operations.bindFault(input.reference(), id);
-        if (mode == FaultMode.DROP_RESPONSE_AFTER_EXECUTION) execute(operations.get(id), mode);
-        return new Accepted(operations.get(id), true, mode == FaultMode.DROP_RESPONSE_AFTER_EXECUTION);
+        if (mode == FaultMode.DROP_RESPONSE_AFTER_EXECUTION) {
+            execute(operation, mode);
+            return new Accepted(operations.get(id), true, true);
+        }
+        return new Accepted(operation, true, false);
     }
 
     @Transactional(readOnly = true)
@@ -65,7 +69,8 @@ public class OperationService {
     public int executeNext(int limit) {
         if (limit < 1 || limit > MAX_EXECUTION_BATCH) throw new RuleViolation(RuleViolation.Code.VALIDATION_FAILED);
         var rows = operations.lockNext(limit);
-        for (var operation : rows) execute(operation, operations.fault(operation.operationId()));
+        var modes = operations.faults(rows.stream().map(Operation::operationId).toList());
+        for (var operation : rows) execute(operation, modes.getOrDefault(operation.operationId(), FaultMode.NONE));
         return rows.size();
     }
 

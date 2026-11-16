@@ -2,6 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { loadSnapshot } from '../load/metrics.mjs';
+import { queueSql } from '../load/queue-observer.mjs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -37,6 +38,61 @@ const resources = services.map((service) => {
   return { service, containerId: container.Id, startedAt: container.State.StartedAt };
 });
 const sessions = [];
+
+test('queue snapshot counts both unfinished states and excludes both terminal neighbors', () => {
+  const output = execFileSync(
+    'docker',
+    [
+      'exec',
+      '-i',
+      'system-integration-load-postgres-1',
+      'psql',
+      '-XqAt',
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-U',
+      'si_test',
+      '-d',
+      'si_test',
+    ],
+    {
+      encoding: 'utf8',
+      input: `
+BEGIN;
+CREATE TEMP TABLE tasks (LIKE public.tasks INCLUDING ALL) ON COMMIT DROP;
+INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,business_status,created_at)
+VALUES
+(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'pending-fixture','REQ-000001',25,'PENDING','2003-01-01T00:00:00Z'),
+(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'running-fixture','REQ-000002',25,'RUNNING','2002-01-01T00:00:00Z'),
+(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'succeeded-fixture','REQ-000003',25,'SUCCEEDED','2000-01-01T00:00:00Z'),
+(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'rejected-fixture','REQ-000004',25,'REJECTED','2001-01-01T00:00:00Z');
+${queueSql};
+UPDATE tasks SET business_status='SUCCEEDED' WHERE title='running-fixture';
+${queueSql};
+UPDATE tasks SET business_status='REJECTED' WHERE title='pending-fixture';
+${queueSql};
+ROLLBACK;
+`,
+    },
+  );
+  const snapshots = output
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
+  assert.deepEqual(
+    snapshots.map((s) => s.app.pending),
+    [2, 1, 0],
+  );
+  for (const [index, created] of ['2002-01-01T00:00:00Z', '2003-01-01T00:00:00Z'].entries()) {
+    const sample = snapshots[index];
+    const expected = (Date.parse(sample.at) - Date.parse(created)) / 1000;
+    assert.ok(Number.isFinite(expected));
+    // PostgreSQL retains microseconds; JavaScript Date truncates to milliseconds.
+    assert.ok(Math.abs(sample.app.oldestPendingSeconds - expected) < 0.001001);
+  }
+  assert.equal(snapshots[2].app.oldestPendingSeconds, 0);
+});
+
 function session(label) {
   const child = spawn(
     'docker',

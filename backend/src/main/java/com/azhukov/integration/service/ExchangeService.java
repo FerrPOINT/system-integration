@@ -141,10 +141,18 @@ public class ExchangeService {
                         .filter(java.util.Objects::nonNull)
                         .distinct()
                         .toList();
-        var states = new java.util.HashMap<>(exchanges.lockExchanges(ids));
+        var initial = exchanges.lockExchanges(ids);
+        var states = new java.util.HashMap<>(initial);
         for (var event : page) {
             receive(event, states);
             current = event.cursor();
+        }
+        // Only APPLY advances these locked states. Keep each event's effects and history,
+        // but write its task once with the full version delta, even for RUNNING-only pages.
+        for (var before : initial.values()) {
+            var after = states.get(before.task().operationId());
+            int advances = Math.toIntExact(after.version() - before.version());
+            if (advances > 0) exchanges.applyResult(after.result(), advances);
         }
         exchanges.advanceCursor(current);
         return true;
@@ -226,13 +234,17 @@ public class ExchangeService {
                             received,
                             received,
                             cursor);
-            case APPLY -> states.put(received.operationId(), apply(state, received, null));
+            case APPLY -> states.put(received.operationId(), recordApplied(state, received, null));
         }
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public ExchangeState apply(ExchangeState state, OperationResult result, UUID actor) {
-        exchanges.applyResult(result);
+        exchanges.applyResult(result, 1);
+        return recordApplied(state, result, actor);
+    }
+
+    private ExchangeState recordApplied(ExchangeState state, OperationResult result, UUID actor) {
         exchanges.removeQueue(result.operationId());
         issues.confirm(state);
         tasks.history(

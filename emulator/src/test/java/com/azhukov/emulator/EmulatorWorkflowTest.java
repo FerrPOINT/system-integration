@@ -310,6 +310,9 @@ class EmulatorWorkflowTest {
                 json.readTree(repeat.getResponse().getContentAsString()));
         var state = mvc.perform(get("/operations/" + id)).andReturn();
         var accepted = json.readTree(state.getResponse().getContentAsString());
+        var acknowledgement = json.readTree(first.getResponse().getContentAsString());
+        assertEquals(accepted.get("acceptedAt"), acknowledgement.get("acceptedAt"));
+        assertEquals(accepted.get("request"), acknowledgement.get("request"));
         assertEquals(0, accepted.get("executions").asInt());
         assertTrue(accepted.get("result").isNull());
         var conflict =
@@ -424,7 +427,9 @@ class EmulatorWorkflowTest {
         var id = UUID.randomUUID();
         var input = new OperationRequest("REQ-000004", 25);
         service.configure(input.reference(), FaultMode.DROP_RESPONSE_AFTER_EXECUTION);
-        assertTrue(service.accept(id, input).dropResponse());
+        var acceptance = service.accept(id, input);
+        assertTrue(acceptance.dropResponse());
+        assertEquals(operations.get(id), acceptance.operation());
         var before = json.valueToTree(operations.get(id));
         assertEquals(1, before.get("executions").asInt());
         assertFalse(service.publish(1) > 0);
@@ -437,20 +442,23 @@ class EmulatorWorkflowTest {
     }
 
     @Test
-    void duplicateAndLateModesPublishDifferentCursorsWithoutReexecution() throws Exception {
+    void mixedExecutionBatchKeepsConfiguredModesAndUnconfiguredOperationsIndependent() throws Exception {
         var duplicate = new OperationRequest("REQ-000005", 25);
         var late = new OperationRequest("REQ-000006", 25);
+        var normal = new OperationRequest("REQ-000007", 101);
         service.configure(duplicate.reference(), FaultMode.DUPLICATE_RESULT);
         service.configure(late.reference(), FaultMode.DELAY_RESULT);
-        UUID duplicateId = UUID.randomUUID(), lateId = UUID.randomUUID();
+        UUID duplicateId = UUID.randomUUID(), lateId = UUID.randomUUID(), normalId = UUID.randomUUID();
         service.accept(duplicateId, duplicate);
         service.accept(lateId, late);
-        while (service.executeNext(1) > 0) {}
-        assertEquals(4, service.publish(25), "Both duplicate terminal copies belong to the initial batch");
+        service.accept(normalId, normal);
+        assertEquals(3, service.executeNext(3));
+        assertEquals(0, service.executeNext(3));
+        assertEquals(6, service.publish(25), "Normal and duplicate events belong to the initial batch");
         assertEquals(1, service.publish(25), "The newly eligible late RUNNING belongs to the next batch");
         assertEquals(0, service.publish(25));
         var events = operations.events(0, 100);
-        assertEquals(5, events.size());
+        assertEquals(7, events.size());
         var duplicates =
                 events.stream()
                         .filter(e -> e.result().operationId().equals(duplicateId) && e.result().version() == 2)
@@ -462,6 +470,10 @@ class EmulatorWorkflowTest {
         assertEquals(2, delayed.get(0).result().version());
         assertEquals(1, delayed.get(1).result().version());
         assertEquals(1, operations.get(lateId).executions());
+        var normalEvents = events.stream().filter(e -> e.result().operationId().equals(normalId)).toList();
+        assertEquals(java.util.List.of(1, 2), normalEvents.stream().map(e -> e.result().version()).toList());
+        assertEquals(OperationResult.Status.REJECTED, normalEvents.get(1).result().status());
+        assertEquals(1, operations.get(normalId).executions());
         var wire = mvc.perform(get("/result-events").param("after", "0").param("limit", "100")).andReturn();
         assertEquals(200, wire.getResponse().getStatus());
         // Compare actual JSON; tree conversion keeps long cursors as LongNode while parsing uses IntNode.

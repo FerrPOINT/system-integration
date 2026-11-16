@@ -69,6 +69,9 @@ public class JdbcExchangeRepository implements ExchangeRepository {
      * misestimate correlated task status after an empty queue grows and scan the
      * already-delivered population for every claim. The ordered subquery keeps queue
      * sorting before the lateral row lock, so LIMIT never locks an unrelated tail.
+     * Intentionally use the static Statement overload: a server-prepared plan made
+     * on an empty queue can keep scanning its entire later backlog until ANALYZE.
+     * This parameter-free selection must adapt immediately as the queue grows.
      * See DeliveryClaimPlanTest and docs/exchange-performance-plan.md.
      */
     public ExchangeState lockDueExchange() {
@@ -181,11 +184,13 @@ public class JdbcExchangeRepository implements ExchangeRepository {
                 status.name());
     }
 
-    public void applyResult(OperationResult result) {
+    public void applyResult(OperationResult result, int advances) {
+        if (advances < 1) throw new IllegalArgumentException("An applied result must advance the exchange version");
         jdbc.update(
-                "UPDATE tasks SET accepted_result = ?::jsonb,business_status = ?,delivery_status = 'ACKNOWLEDGED',exchange_version = exchange_version + 1 WHERE operation_id = ?",
+                "UPDATE tasks SET accepted_result = ?::jsonb,business_status = ?,delivery_status = 'ACKNOWLEDGED',exchange_version = exchange_version + ? WHERE operation_id = ?",
                 json.writeValueAsString(result),
                 result.status().name(),
+                advances,
                 result.operationId());
     }
 

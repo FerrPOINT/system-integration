@@ -17,6 +17,210 @@ import org.junit.jupiter.api.Test;
 
 class ExchangeCoordinatorTest {
     @Test
+    void interruptedDispatchKeepsItsInterruptAndDoesNotPreclaimAnotherTask() throws Exception {
+        var tasks = mock(ExchangeService.class);
+        var client = mock(ExternalExchangeClient.class);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var returned = new CountDownLatch(1);
+        var interrupted = new java.util.concurrent.atomic.AtomicBoolean();
+        when(tasks.claim())
+                .thenAnswer(call ->
+                        ClaimResult.claimed(
+                                new DeliveryAttempt(
+                                        UUID.randomUUID(),
+                                        UUID.randomUUID(),
+                                        "PUT",
+                                        1,
+                                        1,
+                                        new TaskInput("REQ-900001", 25))));
+        when(client.deliver(any()))
+                .thenAnswer(call -> {
+                    entered.countDown();
+                    assertTrue(release.await(5, TimeUnit.SECONDS));
+                    return new ExternalExchangeClient.DeliveryReply(
+                            DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
+                });
+        try (var runner = Executors.newVirtualThreadPerTaskExecutor();
+                var worker = new ExchangeCoordinator(tasks, client, 1)) {
+            var dispatch =
+                    runner.submit(() -> {
+                        worker.deliver();
+                        interrupted.set(Thread.currentThread().isInterrupted());
+                        returned.countDown();
+                    });
+            try {
+                assertTrue(entered.await(1, TimeUnit.SECONDS));
+                assertTrue(dispatch.cancel(true));
+                assertTrue(returned.await(1, TimeUnit.SECONDS), "A stopped dispatcher must leave its capacity wait");
+                assertTrue(interrupted.get());
+                verify(tasks).claim();
+                assertEquals(1, release.getCount(), "Already sent work still owns its slot");
+            } finally {
+                release.countDown();
+            }
+        }
+        verify(tasks).finish(any(), any());
+    }
+
+    @Test
+    void completionFromAnOlderPassWakesCurrentDispatchWhileItsOwnReplyIsStillHeld() throws Exception {
+        var tasks = mock(ExchangeService.class);
+        var client = mock(ExternalExchangeClient.class);
+        UUID oldSlow = UUID.randomUUID(), newSlow = UUID.randomUUID();
+        var claims = new AtomicInteger();
+        var firstFastRemaining = new AtomicInteger(15);
+        var secondPhase = new java.util.concurrent.atomic.AtomicBoolean();
+        var secondClaim = new AtomicInteger();
+        var firstFastFinished = new CountDownLatch(15);
+        var newEntered = new CountDownLatch(1);
+        var nextFastEntered = new CountDownLatch(1);
+        var releaseOld = new CountDownLatch(1);
+        var releaseNew = new CountDownLatch(1);
+        when(tasks.claim())
+                .thenAnswer(call -> {
+                    UUID id;
+                    int n = claims.incrementAndGet();
+                    if (n == 1) id = oldSlow;
+                    else if (!secondPhase.get()) {
+                        if (firstFastRemaining.getAndDecrement() <= 0) return ClaimResult.empty();
+                        id = UUID.randomUUID();
+                    } else {
+                        int next = secondClaim.incrementAndGet();
+                        if (next > 2) return ClaimResult.empty();
+                        id = next == 1 ? newSlow : UUID.randomUUID();
+                    }
+                    return ClaimResult.claimed(
+                            new DeliveryAttempt(id, UUID.randomUUID(), "PUT", 1, 1, new TaskInput("REQ-900001", 25)));
+                });
+        doAnswer(
+                        call -> {
+                            DeliveryAttempt attempt = call.getArgument(0);
+                            if (!attempt.operationId().equals(oldSlow) && !secondPhase.get())
+                                firstFastFinished.countDown();
+                            return null;
+                        })
+                .when(tasks)
+                .finish(any(), any());
+        when(client.deliver(any()))
+                .thenAnswer(call -> {
+                    DeliveryAttempt attempt = call.getArgument(0);
+                    if (attempt.operationId().equals(oldSlow)) assertTrue(releaseOld.await(5, TimeUnit.SECONDS));
+                    else if (attempt.operationId().equals(newSlow)) {
+                        newEntered.countDown();
+                        assertTrue(releaseNew.await(5, TimeUnit.SECONDS));
+                    } else if (secondPhase.get()) nextFastEntered.countDown();
+                    return new ExternalExchangeClient.DeliveryReply(
+                            DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
+                });
+        try (var runner = Executors.newVirtualThreadPerTaskExecutor();
+                var worker = new ExchangeCoordinator(tasks, client, 2)) {
+            var first = runner.submit(worker::deliver);
+            java.util.concurrent.Future<?> second = null;
+            try {
+                assertTrue(firstFastFinished.await(2, TimeUnit.SECONDS));
+                first.get(1, TimeUnit.SECONDS);
+                secondPhase.set(true);
+                second =
+                        runner.submit(() -> {
+                            while (newEntered.getCount() != 0) {
+                                worker.deliver();
+                                Thread.sleep(1);
+                            }
+                            return null;
+                        });
+                assertTrue(newEntered.await(1, TimeUnit.SECONDS));
+                releaseOld.countDown();
+                assertTrue(
+                        nextFastEntered.await(1, TimeUnit.SECONDS),
+                        "A global free slot must wake dispatch even when its own current reply is held");
+                assertEquals(1, releaseNew.getCount());
+            } finally {
+                releaseOld.countDown();
+                releaseNew.countDown();
+                first.get(5, TimeUnit.SECONDS);
+                if (second != null) second.get(5, TimeUnit.SECONDS);
+            }
+        }
+        verify(tasks, times(18)).finish(any(), any());
+    }
+
+    @Test
+    void aFinishedSelectionPassDoesNotWaitForOneSlowReplyBeforeFillingFreeSlotsAgain() throws Exception {
+        var tasks = mock(ExchangeService.class);
+        var client = mock(ExternalExchangeClient.class);
+        var claimed = new AtomicInteger();
+        var finished = new AtomicInteger();
+        var active = new AtomicInteger();
+        var peak = new AtomicInteger();
+        var peakUnfinished = new AtomicInteger();
+        var firstFast = new CountDownLatch(31);
+        var allFast = new CountDownLatch(63);
+        var slowEntered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        UUID slow = UUID.randomUUID();
+        when(tasks.claim())
+                .thenAnswer(call -> {
+                    int n = claimed.incrementAndGet();
+                    peakUnfinished.accumulateAndGet(n - finished.get(), Math::max);
+                    return ClaimResult.claimed(
+                            new DeliveryAttempt(
+                                    n == 1 ? slow : UUID.randomUUID(),
+                                    UUID.randomUUID(),
+                                    "PUT",
+                                    1,
+                                    1,
+                                    new TaskInput("REQ-900001", 25)));
+                });
+        doAnswer(
+                        call -> {
+                            finished.incrementAndGet();
+                            return null;
+                        })
+                .when(tasks)
+                .finish(any(), any());
+        when(client.deliver(any()))
+                .thenAnswer(call -> {
+                    DeliveryAttempt attempt = call.getArgument(0);
+                    peak.accumulateAndGet(active.incrementAndGet(), Math::max);
+                    try {
+                        if (attempt.operationId().equals(slow)) {
+                            slowEntered.countDown();
+                            assertTrue(release.await(5, TimeUnit.SECONDS));
+                        } else {
+                            firstFast.countDown();
+                            allFast.countDown();
+                        }
+                        return new ExternalExchangeClient.DeliveryReply(
+                                DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
+                    } finally {
+                        active.decrementAndGet();
+                    }
+                });
+        try (var runner = Executors.newVirtualThreadPerTaskExecutor();
+                var worker = new ExchangeCoordinator(tasks, client, 8)) {
+            var firstPass = runner.submit(worker::deliver);
+            try {
+                assertTrue(slowEntered.await(1, TimeUnit.SECONDS));
+                assertTrue(firstFast.await(2, TimeUnit.SECONDS));
+                firstPass.get(250, TimeUnit.MILLISECONDS);
+                worker.deliver();
+                assertTrue(
+                        allFast.await(2, TimeUnit.SECONDS),
+                        "The next pass must use free slots while the old reply is held");
+                assertEquals(1, release.getCount());
+                assertTrue(peak.get() <= 8, "The bound applies across overlapping passes");
+                assertTrue(peakUnfinished.get() <= 8, "No attempt can be preclaimed ahead of a free slot");
+            } finally {
+                release.countDown();
+                firstPass.get(5, TimeUnit.SECONDS);
+            }
+        }
+        assertEquals(64, claimed.get(), "Each pass selects at most 32 candidates");
+        verify(tasks, times(64)).finish(any(), any());
+    }
+
+    @Test
     void drainsMoreThanOneBatchButBoundsEachCycleAndParallelHttpCalls() throws Exception {
         var tasks = mock(ExchangeService.class);
         var client = mock(ExternalExchangeClient.class);
@@ -51,12 +255,12 @@ class ExchangeCoordinatorTest {
                 });
         try (var worker = new ExchangeCoordinator(tasks, client, 8)) {
             worker.deliver();
-            assertTrue(claimed.get() > 8, "a backlog should not wait after every eight records");
-            assertTrue(claimed.get() <= 32, "one scheduler turn must remain bounded");
-            assertTrue(peak.get() <= 8);
-            verify(tasks, times(claimed.get())).finish(any(), any());
-            assertEquals(claimed.get(), threads.size(), "Each delivery is its own virtual thread");
         }
+        assertTrue(claimed.get() > 8, "a backlog should not wait after every eight records");
+        assertTrue(claimed.get() <= 32, "one scheduler turn must remain bounded");
+        assertTrue(peak.get() <= 8);
+        verify(tasks, times(claimed.get())).finish(any(), any());
+        assertEquals(claimed.get(), threads.size(), "Each delivery is its own virtual thread");
     }
 
     @Test
@@ -122,10 +326,10 @@ class ExchangeCoordinatorTest {
                 release.countDown();
                 cycle.get(5, TimeUnit.SECONDS);
             }
-            assertEquals(32, claimed.get());
-            assertTrue(peakUnfinishedClaims.get() <= 8, "No attempts may be claimed ahead of free slots");
-            verify(tasks, times(32)).finish(any(), any());
         }
+        assertEquals(32, claimed.get());
+        assertTrue(peakUnfinishedClaims.get() <= 8, "No attempts may be claimed ahead of free slots");
+        verify(tasks, times(32)).finish(any(), any());
     }
 
     @Test
@@ -169,9 +373,9 @@ class ExchangeCoordinatorTest {
                 release.countDown();
                 cycle.get(5, TimeUnit.SECONDS);
             }
-            assertEquals(32, claimed.get());
-            verify(tasks, times(32)).finish(any(), any());
         }
+        assertEquals(32, claimed.get());
+        verify(tasks, times(32)).finish(any(), any());
     }
 
     @Test
@@ -213,9 +417,9 @@ class ExchangeCoordinatorTest {
                 release.countDown();
                 cycle.get(5, TimeUnit.SECONDS);
             }
-            assertEquals(32, claims.get());
-            verify(tasks, times(31)).finish(any(), any());
         }
+        assertEquals(32, claims.get());
+        verify(tasks, times(31)).finish(any(), any());
     }
 
     @Test
@@ -243,9 +447,9 @@ class ExchangeCoordinatorTest {
                                 DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null));
         try (var worker = new ExchangeCoordinator(tasks, client, 8)) {
             worker.deliver();
-            verify(tasks).finish(any(), any());
-            assertTrue(calls.get() <= 32);
         }
+        verify(tasks).finish(any(), any());
+        assertTrue(calls.get() <= 32);
     }
 
     @Test
@@ -297,9 +501,9 @@ class ExchangeCoordinatorTest {
                     release.countDown();
                     cycle.get(5, TimeUnit.SECONDS);
                 }
-                assertEquals(32, claimed.get());
-                verify(tasks, times(32)).finish(any(), any());
             }
+            assertEquals(32, claimed.get());
+            verify(tasks, times(32)).finish(any(), any());
         }
     }
 
@@ -313,7 +517,7 @@ class ExchangeCoordinatorTest {
     }
 
     @Test
-    void aFailedPeerIsPropagatedAndOtherSubmittedAttemptsFinishBeforeReturn() {
+    void aFailedPeerIsReportedAndOtherSubmittedAttemptsFinishBeforeShutdownReturns() {
         var tasks = mock(ExchangeService.class);
         var client = mock(ExternalExchangeClient.class);
         var claimed = new AtomicInteger();
@@ -339,9 +543,62 @@ class ExchangeCoordinatorTest {
                     return new ExternalExchangeClient.DeliveryReply(
                             DeliveryAttempt.Outcome.ACKNOWLEDGED, 202, false, null, null);
                 });
-        try (var worker = new ExchangeCoordinator(tasks, client, 8)) {
-            assertThrows(java.util.concurrent.CompletionException.class, worker::deliver);
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(ExchangeCoordinator.class);
+        var events = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        events.start();
+        logger.addAppender(events);
+        try {
+            try (var worker = new ExchangeCoordinator(tasks, client, 8)) {
+                worker.deliver();
+            }
             verify(tasks, times(3)).finish(any(), any());
+            assertEquals(
+                    1,
+                    events.list.stream()
+                            .filter(event ->
+                                    event.getLevel() == ch.qos.logback.classic.Level.ERROR
+                                            && event.getFormattedMessage()
+                                                    .equals("delivery slot failed exception=IllegalStateException"))
+                            .count());
+            assertTrue(
+                    events.list.stream()
+                            .noneMatch(event -> event.getFormattedMessage().contains("Controlled peer failure")),
+                    "Exception messages may contain SQL values");
+        } finally {
+            logger.detachAppender(events);
+            events.stop();
+        }
+    }
+
+    @Test
+    void failedInitialProbeReturnsItsReservedSlot() {
+        var tasks = mock(ExchangeService.class);
+        var client = mock(ExternalExchangeClient.class);
+        when(tasks.claim())
+                .thenThrow(new IllegalStateException("Controlled claim failure"))
+                .thenReturn(ClaimResult.empty());
+        try (var worker = new ExchangeCoordinator(tasks, client, 1)) {
+            assertThrows(IllegalStateException.class, worker::deliver);
+            worker.deliver();
+            verify(tasks, times(2)).claim();
+            verifyNoInteractions(client);
+        }
+    }
+
+    @Test
+    void failedSenderReturnsItsReservedSlotBeforeAnotherPass() {
+        var tasks = mock(ExchangeService.class);
+        var client = mock(ExternalExchangeClient.class);
+        var attempt =
+                new DeliveryAttempt(UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput("REQ-900001", 25));
+        when(tasks.claim()).thenReturn(ClaimResult.claimed(attempt), ClaimResult.empty());
+        when(client.deliver(attempt)).thenThrow(new IllegalStateException("Controlled sender failure"));
+        try (var worker = new ExchangeCoordinator(tasks, client, 1)) {
+            assertTimeoutPreemptively(java.time.Duration.ofSeconds(2), worker::deliver);
+            worker.deliver();
+            assertEquals(0, worker.diagnostics().deliveryInFlight());
+            verify(tasks, times(3)).claim();
+            verify(tasks, never()).finish(any(), any());
         }
     }
 

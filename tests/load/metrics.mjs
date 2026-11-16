@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { hostname, freemem, totalmem, loadavg } from 'node:os';
+import { observeQueue } from './queue-observer.mjs';
 
 const execute = promisify(execFile);
 const root = fileURLToPath(new URL('../..', import.meta.url));
@@ -20,7 +21,8 @@ const appSql = [
   "'transactions',(SELECT json_build_object('active',count(*) FILTER (WHERE state='active'),'idleInTransaction',count(*) FILTER (WHERE state='idle in transaction'),'oldestSeconds',coalesce(max(extract(epoch FROM clock_timestamp()-xact_start)),0)) FROM pg_stat_activity WHERE datname IN ('si_test','si_emulator_test') AND pid<>pg_backend_pid() AND xact_start IS NOT NULL),",
   "'wal',(SELECT row_to_json(w) FROM (SELECT wal_records,wal_fpi,wal_bytes,wal_buffers_full FROM pg_stat_wal) w),",
   "'database',(SELECT json_agg(d) FROM (SELECT datname,xact_commit,xact_rollback,blks_hit,blks_read,deadlocks,temp_bytes FROM pg_stat_database WHERE datname IN ('si_test','si_emulator_test')) d),",
-  "'settings',(SELECT json_object_agg(name,json_build_object('value',setting,'unit',unit)) FROM pg_settings WHERE name IN ('shared_buffers','effective_cache_size','work_mem','max_connections','track_activity_query_size')));",
+  "'tasksTable',(SELECT json_build_object('pages',c.relpages,'plannerVisiblePages',c.relallvisible,'options',c.reloptions,'tableBytes',pg_table_size(c.oid),'indexBytes',pg_indexes_size(c.oid),'liveRows',s.n_live_tup,'deadRows',s.n_dead_tup,'autovacuumCount',s.autovacuum_count,'autoanalyzeCount',s.autoanalyze_count,'lastAutovacuum',s.last_autovacuum,'lastAutoanalyze',s.last_autoanalyze) FROM pg_class c JOIN pg_stat_user_tables s ON s.relid=c.oid WHERE c.oid='tasks'::regclass),",
+  "'settings',(SELECT json_object_agg(name,json_build_object('value',setting,'unit',unit)) FROM pg_settings WHERE name IN ('shared_buffers','effective_cache_size','work_mem','max_connections','track_activity_query_size','autovacuum_naptime','autovacuum_vacuum_scale_factor','autovacuum_analyze_scale_factor')));",
 ].join('\n');
 const emulatorSql = [
   'SELECT json_build_object(',
@@ -129,12 +131,13 @@ export async function loadSnapshot(resources) {
 }
 
 export async function observeLoad(resources) {
-  const samples = [],
-    errors = [];
+  const samples = [];
   const collect = async () => {
     samples.push(await loadSnapshot(resources));
   };
   await collect();
+  const queue = await observeQueue();
+  const errors = queue.errors;
   let pending;
   const timer = setInterval(() => {
     if (pending) return;
@@ -147,6 +150,7 @@ export async function observeLoad(resources) {
   return {
     samples,
     errors,
+    queue: { samples: queue.samples, cadence: queue.cadence },
     async stop() {
       clearInterval(timer);
       await pending;
@@ -154,6 +158,8 @@ export async function observeLoad(resources) {
         await collect();
       } catch (error) {
         errors.push(error.code || error.name);
+      } finally {
+        await queue.stop();
       }
     },
   };

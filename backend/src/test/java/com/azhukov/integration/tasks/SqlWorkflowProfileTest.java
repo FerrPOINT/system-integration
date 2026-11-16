@@ -159,6 +159,12 @@ class SqlWorkflowProfileTest extends PostgresTest {
                         "SELECT count(*) FROM task_history WHERE event_type='RESULT_APPLIED'", Integer.class));
         assertEquals(0, count("delivery_queue"));
         assertEquals(1, reads, "Page state must be loaded by one bounded locking query, not once per result");
+        long writes =
+                TIMINGS.entrySet().stream()
+                        .filter(entry -> entry.getKey().startsWith("UPDATE tasks SET accepted_result"))
+                        .mapToLong(entry -> entry.getValue().calls.sum())
+                        .sum();
+        assertTrue(writes > 0 && writes <= 50, "Repeated events must not write a task once per event: " + writes);
     }
 
     private long taskReadCalls() {
@@ -176,11 +182,7 @@ class SqlWorkflowProfileTest extends PostgresTest {
         long started = System.nanoTime();
         try {
             var observed = ReadSqlCapture.record(operation::get);
-            generatedReads.addAll(
-                    observed.statements().stream()
-                            .filter(s ->
-                                    s.sql().contains("FROM \"tasks\"") || s.sql().contains("FROM \"task_history\""))
-                            .toList());
+            generatedReads.addAll(observed.statements());
             return observed.value();
         } finally {
             long after = TIMINGS.values().stream().mapToLong(t -> t.calls.sum()).sum();

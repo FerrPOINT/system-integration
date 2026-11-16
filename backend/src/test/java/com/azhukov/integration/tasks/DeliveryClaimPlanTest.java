@@ -36,23 +36,68 @@ class DeliveryClaimPlanTest extends PostgresTest {
                 .executeWithoutResult(tx -> {
                     clearInvocations(observedSql);
                     assertNotNull(exchanges.lockDueExchange());
-                    String sql =
-                            mockingDetails(observedSql).getInvocations().stream()
-                                    .filter(call ->
-                                            call.getMethod().getName().equals("query")
-                                                    && call.getArguments()[0] instanceof String value
-                                                    && value.contains("SKIP LOCKED"))
-                                    .map(call -> (String) call.getArguments()[0])
-                                    .findFirst()
-                                    .orElseThrow();
+                    String sql = claimSql();
                     var plan =
                             json.readTree(
                                     jdbc.queryForObject(
                                             "EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON) " + sql, String.class));
                     assertEquals(1, plan.get(0).get("Plan").get("Actual Rows").asInt());
                     assertTrue(
-                            taskRowsVisited(plan) <= 2,
+                            rowsVisited(plan, "tasks") <= 2,
                             "Claim must look up the next task, not scan the completed population: " + plan);
+                    tx.setRollbackOnly();
+                });
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, 10000})
+    void anEmptyQueueCanGrowWithoutReusingAFullScanPlan(int delivered) {
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(tx -> {
+                    // TRUNCATE keeps earlier column statistics. Give this plan-cache regression
+                    // fresh relations with the production columns/indexes, all rolled back below.
+                    String schema = "claim_plan_" + UUID.randomUUID().toString().replace("-", "");
+                    jdbc.execute("CREATE SCHEMA " + schema);
+                    jdbc.execute("CREATE TABLE " + schema + ".tasks (LIKE tasks INCLUDING ALL)");
+                    jdbc.execute("CREATE TABLE " + schema + ".delivery_queue (LIKE delivery_queue INCLUDING ALL)");
+                    jdbc.execute("SET LOCAL search_path TO " + schema);
+                    jdbc.execute("ALTER TABLE tasks SET (autovacuum_enabled=false)");
+                    jdbc.execute("ALTER TABLE delivery_queue SET (autovacuum_enabled=false)");
+                    jdbc.update(
+                            """
+                            INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,delivery_status)
+                            SELECT gen_random_uuid(),?,gen_random_uuid(),'Delivered population','REQ-000001',25,'ACKNOWLEDGED'
+                            FROM generate_series(1,?)
+                            """,
+                            first,
+                            delivered);
+                    jdbc.execute("ANALYZE tasks");
+                    jdbc.execute("ANALYZE delivery_queue");
+                    clearInvocations(observedSql);
+                    for (int n = 0; n < 30; n++) assertNull(exchanges.lockDueExchange());
+                    String sql = claimSql();
+                    ready(20000);
+                    assertNotNull(exchanges.lockDueExchange());
+                    var names =
+                            jdbc.queryForList(
+                                    "SELECT name FROM pg_prepared_statements WHERE statement = ?", String.class, sql);
+                    // Explain the path actually used by the driver, including a server-cached
+                    // empty-queue plan if one exists; a fresh EXPLAIN would hide that regression.
+                    String execution =
+                            names.isEmpty() ? sql : "EXECUTE \"" + names.getFirst().replace("\"", "\"\"") + "\"";
+                    var plan =
+                            json.readTree(
+                                    jdbc.queryForObject(
+                                            "EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON) " + execution, String.class));
+                    assertEquals(1, plan.get(0).get("Plan").get("Actual Rows").asInt());
+                    var fresh =
+                            json.readTree(
+                                    jdbc.queryForObject(
+                                            "EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON) " + sql, String.class));
+                    assertEquals(
+                            fresh.findValues("Plan Rows"),
+                            plan.findValues("Plan Rows"),
+                            "The driver must use current estimates after queue growth, not its empty-queue estimates");
                     tx.setRollbackOnly();
                 });
     }
@@ -108,14 +153,25 @@ class DeliveryClaimPlanTest extends PostgresTest {
                 count);
     }
 
-    private double taskRowsVisited(JsonNode node) {
+    private String claimSql() {
+        return mockingDetails(observedSql).getInvocations().stream()
+                .filter(call ->
+                        call.getMethod().getName().equals("query")
+                                && call.getArguments()[0] instanceof String value
+                                && value.contains("SKIP LOCKED"))
+                .map(call -> (String) call.getArguments()[0])
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private double rowsVisited(JsonNode node, String relation) {
         double result = 0;
-        if (node.isObject() && node.path("Relation Name").asString("").equals("tasks")) {
+        if (node.isObject() && node.path("Relation Name").asString("").equals(relation)) {
             result +=
                     (node.path("Actual Rows").asDouble() + node.path("Rows Removed by Filter").asDouble())
                             * node.path("Actual Loops").asDouble();
         }
-        for (var child : node) result += taskRowsVisited(child);
+        for (var child : node) result += rowsVisited(child, relation);
         return result;
     }
 }

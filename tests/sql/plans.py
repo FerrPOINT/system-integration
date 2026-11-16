@@ -47,7 +47,7 @@ params={
 'JdbcExchangeRepository.lockDueExchange/0:1':[],'JdbcExchangeRepository.lockQueue/1:1':[O],'JdbcExchangeRepository.startAttempt/4:1':[C,2,O],'JdbcExchangeRepository.startAttempt/4:2':[C,O,2,'PUT'],
 'JdbcExchangeRepository.finishAttempt/2:1':['ACK',uid(500002)],'JdbcExchangeRepository.ownsClaim/2:1':[uid(100002),uid(500002)],
 'JdbcExchangeRepository.scheduleAfterInterruptedClaim/3:1':['2026-01-01T00:00:00Z',5,O],'JdbcExchangeRepository.scheduleRetry/3:1':['GET',5,O],'JdbcExchangeRepository.pauseQueue/1:1':[O],'JdbcExchangeRepository.resumeDelivery/1:1':[O],
-'JdbcExchangeRepository.removeQueue/1:1':[O],'JdbcExchangeRepository.delivery/2:1':['RETRY_WAIT',O,'RETRY_WAIT'],'JdbcExchangeRepository.applyResult/1:1':[result,'SUCCEEDED',O],
+'JdbcExchangeRepository.removeQueue/1:1':[O],'JdbcExchangeRepository.delivery/2:1':['RETRY_WAIT',O,'RETRY_WAIT'],'JdbcExchangeRepository.applyResult/2:1':[result,'SUCCEEDED',2,O],
 'JdbcExchangeRepository.advanceCursor/1:1':[100],
 'JdbcReviewRepository.open/6:1':[uid(210001),T,O,O,'new-fingerprint','PROTOCOL_ERROR','probe','{}'],
 'JdbcReviewRepository.open/6:2':[O,'seed'],'JdbcReviewRepository.temporary/1:1':[uid(2)],'JdbcReviewRepository.delay/2:1':['probe',uid(200002),'probe'],'JdbcReviewRepository.confirm/1:1':[uid(2)],
@@ -57,17 +57,22 @@ params={
 'JdbcReviewRepository.active/1:1':[T],'JdbcReviewRepository.saveReconciliation/2:1':[uid(310001),T,1,'2026-01-01T00:00:00Z',uid(900003),'{}'],
 'JdbcReviewRepository.saveReconciliation/2:2':[R,T],'JdbcReviewRepository.reconciliation/2:1':[R,T],'JdbcReviewRepository.resumeDelivery/2:1':['probe',I],
 'JdbcReviewRepository.resolve/2:1':['{"decision":"STOP","reason":"probe"}',I],
-'JdbcOperationRepository.get/1:1':[O],'JdbcOperationRepository.lockNext/1:1':[1],'JdbcOperationRepository.events/2:1':[0,100],
-'JdbcOperationRepository.fault/1:1':[O],'JdbcOperationRepository.event/3:1':[O,1,1,result,False],
-'JdbcOperationRepository.lockOperation/1:1':[O],'JdbcOperationRepository.exists/1:1':[O],'JdbcOperationRepository.lockFault/1:1':['REQ-100001'],
+'JdbcOperationRepository.find/1:1':[O],'JdbcOperationRepository.lockNext/1:1':[1],'JdbcOperationRepository.events/2:1':[0,100],
+'JdbcOperationRepository.event/3:1':[O,1,1,result,False],
+'JdbcOperationRepository.lockOperation/1:1':[O],'JdbcOperationRepository.lockFault/1:1':['REQ-100001'],
 'JdbcOperationRepository.insert/2:1':[NO,'REQ-110001',25],'JdbcOperationRepository.bindFault/2:1':[uid(100003),'REQ-100002'],
 'JdbcOperationRepository.complete/1:1':[result,'2026-01-02T00:00:00Z',O],'JdbcOperationRepository.publish/1:1':[],
 'JdbcOperationRepository.publish/1:2':[25],'JdbcOperationRepository.publish/1:3':[20001,uid(105001),1,0],'JdbcOperationRepository.publish/1:4':[20001],
 'JdbcOperationRepository.lockFaultConfiguration/1:1':['fault:REQ-100001'],'JdbcOperationRepository.configure/2:1':['REQ-100002','DELAY_RESULT'],
 'JdbcOperationRepository.releaseEvents/1:1':[uid(105001)],'JdbcOperationRepository.releaseEvents/1:2':[uid(105001)],'JdbcOperationRepository.clearFault/1:1':['REQ-100001']}
 for key,values in params.items():static(key,values)
+static('JdbcExchangeRepository.applyResult/2:1',[result,'SUCCEEDED',1,O],'single-result')
 for batch in [1,10,50]:static('JdbcOperationRepository.publish/1:2',[batch],f'batch={batch}')
 for batch in [5,10,25]:static('JdbcOperationRepository.lockNext/1:1',[batch],f'batch={batch}')
+for n in [1,5,25]:
+ add('JdbcOperationRepository.faults/1:1','SELECT bound_operation_id,mode FROM faults WHERE bound_operation_id IN ('+','.join('?'*n)+') ORDER BY reference FOR UPDATE',
+     [uid(i+100001) for i in range(n)],f'ids={n}')
+add('JdbcOperationRepository.faults/1:1','SELECT bound_operation_id,mode FROM faults WHERE bound_operation_id IN (?) ORDER BY reference FOR UPDATE',[uid(999999)],'unconfigured')
 static('JdbcExchangeRepository.ownsClaim/2:1',[uid(100006),uid(500006)],'active-lease-owned')
 static('JdbcReviewRepository.temporary/1:1',[T],'no-temporary-issue')
 static('JdbcReviewRepository.confirm/1:1',[T],'no-temporary-issue')
