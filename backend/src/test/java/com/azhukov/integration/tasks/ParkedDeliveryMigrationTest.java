@@ -63,11 +63,12 @@ class ParkedDeliveryMigrationTest extends PostgresTest {
                     var sql = connection.createStatement();
                     var rows =
                             sql.executeQuery(
-                                    "SELECT operation_id,due_at::text,attempts,automatic_attempts,next_step,claim_id IS NOT NULL FROM delivery_queue")) {
+                                    "SELECT operation_id,due_at='infinity'::timestamptz,attempts,automatic_attempts,next_step,claim_id IS NOT NULL,due_at='2026-01-01T00:00:00Z'::timestamptz FROM delivery_queue")) {
                 int count = 0;
                 while (rows.next()) {
                     boolean parked = rows.getObject(1, UUID.class).equals(paused);
-                    assertEquals(parked ? "infinity" : "2026-01-01 00:00:00+00", rows.getString(2));
+                    assertEquals(parked, rows.getBoolean(2));
+                    assertEquals(!parked, rows.getBoolean(7));
                     assertEquals(8, rows.getInt(3));
                     assertEquals(5, rows.getInt(4));
                     assertEquals("GET", rows.getString(5));
