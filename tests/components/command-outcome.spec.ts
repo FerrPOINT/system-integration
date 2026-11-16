@@ -33,6 +33,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     createKeys: new Set<string>(),
     holdWrite: undefined as Promise<void> | undefined,
     holdLogout: undefined as Promise<void> | undefined,
+    sessionCookie: false,
     holdRead: undefined as Promise<void> | undefined,
     rejectRename: false,
     reads: [] as string[],
@@ -112,14 +113,20 @@ async function mockApi(page: Page, role = 'INITIATOR') {
       if (path === '/api/login') {
         state.signedIn = true;
         state.logins++;
-        return route.fulfill({ status: 204 });
+        return route.fulfill({
+          status: 204,
+          headers: state.sessionCookie ? { 'set-cookie': 'JSESSIONID=fixture-renewed; Path=/; SameSite=Lax' } : {},
+        });
       }
       if (path === '/api/logout') {
         state.signedIn = false;
         state.logouts++;
         state.failCsrf = true;
         await state.holdLogout;
-        return route.fulfill({ status: 204 });
+        return route.fulfill({
+          status: 204,
+          headers: state.sessionCookie ? { 'set-cookie': 'JSESSIONID=; Max-Age=0; Path=/' } : {},
+        });
       }
       if (['POST', 'PATCH'].includes(request.method())) {
         state.commands.push({
@@ -226,17 +233,17 @@ for (const identity of ['same account', 'other account']) {
       state.role = 'OPERATOR';
     }
     state.username = 'renewed';
-    await page.getByRole('textbox', { name: 'Логин', exact: true }).fill('renewed');
-    await page.getByRole('textbox', { name: 'Пароль', exact: true }).fill('fixture');
-    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    // A session established elsewhere is observed before this tab receives its old logout response.
+    state.signedIn = true;
+    await refetchSession(page);
     await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
-    await expect.poll(successes).toBe(1);
+    await expect.poll(successes).toBe(0);
     if (identity === 'same account') {
       await page.getByRole('button', { name: 'Изменить название', exact: true }).click();
       await page.getByRole('textbox', { name: 'Новое название', exact: true }).fill('New session draft');
     }
     release();
-    await expect.poll(successes).toBe(2);
+    await expect.poll(successes).toBe(1);
     await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
     if (identity === 'same account')
       await expect(page.getByRole('textbox', { name: 'Новое название', exact: true })).toHaveValue('New session draft');
@@ -248,6 +255,82 @@ for (const identity of ['same account', 'other account']) {
     expect(state.commands).toHaveLength(0);
   });
 }
+
+test('a delayed logout cannot erase the login cookie of another tab', async ({ page, context }) => {
+  const old = await mockApi(page);
+  old.sessionCookie = true;
+  let release!: () => void;
+  old.holdLogout = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.goto('/tests/command-outcome.html');
+  await openAccountMenu(page);
+  const logout = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/logout');
+  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+  await expect.poll(() => old.logouts).toBe(1);
+
+  const other = await context.newPage();
+  const renewed = await mockApi(other);
+  renewed.signedIn = false;
+  renewed.sessionCookie = true;
+  await other.goto('/tests/command-outcome.html');
+  await other.getByRole('textbox', { name: 'Логин', exact: true }).fill('renewed');
+  await other.getByLabel('Пароль *', { exact: true }).fill('fixture');
+  const login = other.waitForResponse((response) => new URL(response.url()).pathname === '/api/login');
+  await other.getByRole('button', { name: 'Войти', exact: true }).click();
+  // With serialization the login is queued; without it the server has already set the new cookie.
+  await Promise.any([
+    login,
+    other.waitForFunction(async () =>
+      (await navigator.locks.query()).pending?.some((lock) => lock.name === 'system-integration-session-cookie'),
+    ),
+  ]);
+  release();
+  await Promise.all([logout, login]);
+  await expect(other.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+  await expect
+    .poll(async () => (await context.cookies()).find((cookie) => cookie.name === 'JSESSIONID')?.value)
+    .toBe('fixture-renewed');
+  expect(old.logouts).toBe(1);
+  expect(renewed.logins).toBe(1);
+  await other.close();
+});
+
+for (const command of ['login', 'logout']) {
+  test('unsupported cookie coordination reports an error without sending ' + command, async ({ page }) => {
+    const state = await mockApi(page);
+    state.signedIn = command === 'logout';
+    await page.addInitScript(() => Object.defineProperty(navigator, 'locks', { value: undefined }));
+    await page.goto('/tests/command-outcome.html');
+    if (command === 'login') {
+      await page.getByRole('textbox', { name: 'Логин', exact: true }).fill('fixture');
+      await page.getByLabel('Пароль *', { exact: true }).fill('fixture');
+      await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    } else {
+      await openAccountMenu(page);
+      await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+    }
+    await expect(page.getByRole('alert').filter({ hasText: 'Для безопасной смены сессии' })).toBeVisible();
+    expect(state.logins).toBe(0);
+    expect(state.logouts).toBe(0);
+  });
+}
+
+test('logout read failure remains visible in the active account controls', async ({ page }) => {
+  const state = await mockApi(page);
+  await page.goto('/tests/command-outcome.html');
+  state.failCsrf = true;
+  await openAccountMenu(page);
+  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Не удалось выполнить запрос' })).toBeVisible();
+  expect(state.logouts).toBe(0);
+  if (test.info().project.name === 'mobile') {
+    await expect(page.getByRole('dialog', { name: 'Меню приложения' }).getByRole('alert')).toBeVisible();
+    await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Не удалось выполнить запрос' })).toBeVisible();
+  }
+  await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+});
 
 for (const exit of ['route', 'logout']) {
   test('failed conflict refresh keeps the rename departure guard for ' + exit, async ({ page }) => {
@@ -264,6 +347,7 @@ for (const exit of ['route', 'logout']) {
     await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Повторить обновление', exact: true })).toBeVisible();
     await title.fill('Draft after failed refresh');
+    await expect(page.getByRole('alert').filter({ hasText: 'Название сохранено.' })).toHaveCount(0);
     if (exit === 'route') await page.evaluate(() => (window as unknown as { fixtureBack: () => void }).fixtureBack());
     else {
       await openAccountMenu(page);
@@ -277,6 +361,11 @@ for (const exit of ['route', 'logout']) {
     expect(state.logouts).toBe(0);
     state.failRead = false;
     await page.getByRole('button', { name: 'Повторить обновление', exact: true }).click();
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await page.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
+    await expect(title).toHaveValue('Draft after failed refresh');
+    await page.getByRole('button', { name: 'Повторить обновление', exact: true }).click();
+    await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
     await expect(title).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
     expect(state.commands).toHaveLength(1);

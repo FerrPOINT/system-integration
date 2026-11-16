@@ -60,10 +60,10 @@ export function RenameForm({ task, onClose }: { task: Task; onClose: () => void 
         </fieldset>
         <ErrorMessage error={rename.error} />
         <CommandRefresh
-          message="Название сохранено."
+          message={conflict ? 'Название изменено в другой сессии.' : 'Название сохранено.'}
           error={refresh.error}
           pending={refresh.isPending}
-          onRetry={refreshTask}
+          onRetry={() => guard.requestClose(refreshTask)}
         />
         <ActionGroup align="start">
           {!rename.isSuccess && (

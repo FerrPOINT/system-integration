@@ -33,6 +33,9 @@ export class ProtocolError extends Error {
   }
 }
 
+/** An actionable browser prerequisite, authored by the request layer for the user. */
+export class RequestCapabilityError extends Error {}
+
 type HttpResponse = { status: number; data: unknown };
 type Success<T> = Extract<T, { status: 200 | 201 | 204 }>;
 
