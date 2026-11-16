@@ -1,6 +1,8 @@
 allowBuilds:
   esbuild: true
 overrides:
+  # GHSA-g3hv-75wg-m249; remove when estree itself accepts minimatch 11.
+  '@typescript-eslint/typescript-estree@8.72.2>minimatch': 11.0.8
   # Lint utilities use their supported TS 6 API; app typechecking stays on TS 7.
   '@typescript-eslint/utils@8.72.2>typescript:peer': '-'
   '@typescript-eslint/typescript-estree@8.72.2>typescript:peer': '-'

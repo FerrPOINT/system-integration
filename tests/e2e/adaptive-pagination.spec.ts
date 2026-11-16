@@ -237,6 +237,9 @@ test('UI-15: history fits its panel and exposes every saved event', async ({ pag
   loadUiEnvironment();
   await login(page);
   const id = await create(page, 'E2E история с адаптивной пагинацией');
+  await expect
+    .poll(async () => (await (await page.request.get('/api/tasks/' + id)).json()).businessStatus)
+    .toBe('SUCCEEDED');
   const { token } = await (await page.request.get('/api/csrf')).json();
   let revision = (await (await page.request.get('/api/tasks/' + id)).json()).titleRevision;
   for (let index = 0; index < 26; index++) {
@@ -247,9 +250,6 @@ test('UI-15: history fits its panel and exposes every saved event', async ({ pag
     expect(response.status()).toBe(200);
     revision = (await response.json()).titleRevision;
   }
-  await expect
-    .poll(async () => (await (await page.request.get('/api/tasks/' + id)).json()).businessStatus)
-    .toBe('SUCCEEDED');
   const expected = (await (await page.request.get('/api/tasks/' + id + '/history?size=100')).json()).items.map(
     (event: { eventId: string }) => event.eventId,
   );
@@ -268,22 +268,37 @@ test('UI-15: history fits its panel and exposes every saved event', async ({ pag
     expect(new Set(ids)).toEqual(new Set(expected));
     return;
   }
+  const windows: { page: number; size: number; ids: string[] }[] = [];
+  let previousEnd = 0;
+  let previousSize: number | undefined;
   for (let attempt = 0; attempt < 100; attempt++) {
     await settled(page, region);
     await region.scrollIntoViewIfNeeded();
     await fits(page, region);
-    for (const id of await region
+    const search = new URL(page.url()).searchParams;
+    const ids = await region
       .locator('[data-page-item]')
-      .evaluateAll((elements) => elements.map((element) => element.getAttribute('data-event-id')!))) {
-      expect(seen.has(id)).toBe(false);
-      seen.add(id);
-    }
+      .evaluateAll((elements) => elements.map((element) => element.getAttribute('data-event-id')!));
+    const window = { page: Number(search.get('page') ?? 0), size: Number(search.get('size')), ids };
+    windows.push(window);
+    const start = window.page * window.size;
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids, JSON.stringify(windows)).toEqual(expected.slice(start, start + window.size));
+    // A taller event can shrink size and re-anchor the page around its old first record.
+    // The new window may overlap, but must advance without skipping any unseen records.
+    expect(start).toBeLessThanOrEqual(previousEnd);
+    if (previousSize === window.size) expect(start).toBe(previousEnd);
+    expect(start + ids.length).toBeGreaterThan(previousEnd);
+    previousEnd = start + ids.length;
+    previousSize = window.size;
+    for (const id of ids) seen.add(id);
     const next = region.getByRole('button', { name: 'Далее →', exact: true });
     if (!(await next.count()) || !(await next.isEnabled())) break;
     const previous = new URL(page.url()).searchParams.get('page') || '0';
     await next.click();
     await expect.poll(() => new URL(page.url()).searchParams.get('page')).not.toBe(previous);
   }
+  await info.attach('history-windows', { body: JSON.stringify(windows), contentType: 'application/json' });
   expect(seen).toEqual(new Set(expected));
   await expect(region).toContainText('Задание принято и поставлено в очередь');
   await page.screenshot({ path: info.outputPath('adaptive-history.png') });

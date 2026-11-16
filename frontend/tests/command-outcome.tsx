@@ -12,26 +12,38 @@ import '../src/app/shell/shell.css';
 
 const taskId = '00000000-0000-4000-8000-000000000001';
 const queryClient = createQueryClient();
+let failedCommands = 0;
+queryClient.getMutationCache().subscribe((event) => {
+  if (event.type === 'updated' && event.action.type === 'error') failedCommands++;
+});
 const screen = new URLSearchParams(location.search).get('screen');
 const initial =
   screen === 'list'
     ? '/tasks?size=10'
-    : screen === 'issue'
-      ? '/issues/' + taskId
-      : screen === 'new'
-        ? '/tasks/new?size=10'
-        : screen === 'missing'
-          ? '/missing'
-          : '/tasks/' + taskId + '?size=10';
-const router = createMemoryRouter(appRoutes, { initialEntries: [initial] });
-// Security assertion only: expose keys, never credentials or private payloads.
+    : screen === 'issues'
+      ? '/issues?status=RESOLVED&page=999&size=10'
+      : screen === 'issue'
+        ? '/issues/' + taskId
+        : screen === 'reconciliation'
+          ? '/tasks/' + taskId + '/reconciliations/00000000-0000-4000-8000-000000000010'
+          : screen === 'new'
+            ? '/tasks/new?size=10'
+            : screen === 'missing'
+              ? '/missing'
+              : '/tasks/' + taskId + '?size=10';
+const router = createMemoryRouter(appRoutes, { initialEntries: ['/tasks', initial] });
+// Fixture navigation/lifecycle controls expose no credentials or private payloads.
 Object.assign(window, {
+  fixtureBack: () => {
+    void router.navigate(-1);
+  },
   fixturePrivateKeyCount: () =>
     queryClient
       .getQueryCache()
       .getAll()
       .filter((query) => query.queryKey[0] !== 'session').length,
   fixtureRefetchSession: () => queryClient.invalidateQueries({ queryKey: ['session'] }),
+  fixtureFailedCommands: () => failedCommands,
 });
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

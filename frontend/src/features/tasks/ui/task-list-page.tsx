@@ -30,6 +30,7 @@ export function TaskList({ user }: { user: GetSession200 }) {
   const { status, params, validPeriod, hasFilters } = filters;
   const { query: tasks, items: tasksItems, meta: tasksPage } = collection;
   const { viewportRef: registryRef, restoring, positionNotice, loadNext, loadPrevious, refresh } = collection;
+  const missingPage = Boolean(tasksPage && page >= tasksPage.totalPages && page > 0);
   const [filtersOpen, setFiltersOpen] = useState(true);
   const filterFields = (
     <TaskFilterFields
@@ -88,7 +89,12 @@ export function TaskList({ user }: { user: GetSession200 }) {
         )}
       </div>
       <section className="paged-list ui-page-stack" aria-busy={tasks.isFetching || restoring}>
-        <div className="paged-viewport" ref={registryRef} data-feed-viewport={mobile || undefined}>
+        <div
+          className="paged-viewport"
+          ref={registryRef}
+          data-feed-viewport={mobile || undefined}
+          data-page-measurement={tasks.isError ? 'paused' : undefined}
+        >
           {mobile && valid && tasksPage && (
             <FeedStart
               hasPrevious={tasks.hasPreviousPage}
@@ -125,16 +131,22 @@ export function TaskList({ user }: { user: GetSession200 }) {
                   <EmptyState
                     headingLevel={2}
                     message={
-                      status || params.createdFrom || params.createdTo ? 'Ничего не найдено' : 'Заданий пока нет'
+                      missingPage ? 'Страница не найдена' : hasFilters ? 'Ничего не найдено' : 'Заданий пока нет'
                     }
                     description={
-                      status || params.createdFrom || params.createdTo
-                        ? 'Измените условия или сбросьте фильтры, чтобы увидеть задания.'
-                        : 'Создайте первое задание. Здесь появятся доставка и результат исполнения.'
+                      missingPage
+                        ? 'Список изменился или в адресе указана недоступная страница.'
+                        : hasFilters
+                          ? 'Измените условия или сбросьте фильтры, чтобы увидеть задания.'
+                          : user.role === 'INITIATOR'
+                            ? 'Создайте первое задание. Здесь появятся доставка и результат исполнения.'
+                            : 'Задания появятся после создания инициатором.'
                     }
                     action={
-                      (status || params.createdFrom || params.createdTo) && (
-                        <Button onClick={() => resetFilters(false)}>Сбросить фильтры</Button>
+                      missingPage ? (
+                        <Button onClick={() => changePage(0)}>К первой странице</Button>
+                      ) : (
+                        hasFilters && <Button onClick={() => resetFilters(false)}>Сбросить фильтры</Button>
                       )
                     }
                   />

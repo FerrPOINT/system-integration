@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { changeTaskFilters, parseTaskSearch, utcFilterValue } from '../src/features/tasks/model/task-search.ts';
+import {
+  changeTaskFilters,
+  parseTaskSearch,
+  utcFilterValue,
+  utcFilterHint,
+} from '../src/features/tasks/model/task-search.ts';
 
 test('URL owns filters, validation and independent pagination resets', () => {
   const source = new URLSearchParams('businessStatus=SUCCEEDED&size=7&page=3&createdFrom=2026-11-14T00:00:00Z');
@@ -70,4 +75,16 @@ test('half-open period comparison preserves sub-millisecond precision', () => {
   assert.equal(parsed.params.createdTo, to);
   assert.equal(parseTaskSearch(new URLSearchParams({ createdFrom: to, createdTo: from })).validPeriod, false);
   assert.equal(parseTaskSearch(new URLSearchParams({ createdFrom: from, createdTo: from })).validPeriod, false);
+});
+
+test('minute editors disclose exact sub-minute boundaries without changing the applied range', () => {
+  for (const value of ['2026-11-14T00:00:45Z', '2026-11-14T00:00:00.000000001Z']) {
+    assert.equal(utcFilterValue(value), '2026-11-14T00:00');
+    assert.ok(utcFilterHint(value).includes(value));
+    assert.ok(utcFilterHint(value).includes('до минуты'));
+    assert.equal(parseTaskSearch(new URLSearchParams({ createdFrom: value })).params.createdFrom, value);
+  }
+  assert.equal(utcFilterHint('2026-11-14T07:30:00+07:00'), undefined);
+  assert.equal(utcFilterHint('invalid'), undefined);
+  assert.equal(utcFilterHint(undefined), undefined);
 });

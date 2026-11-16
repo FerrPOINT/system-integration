@@ -5,7 +5,7 @@ import type {
   HistoryEventType,
 } from '../../../../build/generated/openapi/client';
 
-/** Protocol details remain verbatim inside a disclosure, apart from the readable event title. */
+/** Protocol descriptions remain verbatim below the readable event title. */
 export const technicalHistoryLabels: Partial<Record<HistoryEventType, string>> = {
   DELIVERY_ATTEMPT: 'Попытка доставки',
   DELIVERY_UNCERTAIN: 'Доставка требует уточнения',

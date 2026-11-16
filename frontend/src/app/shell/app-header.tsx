@@ -7,29 +7,27 @@ import { Brand } from './brand';
 import { MobileAccountMenu } from './mobile-account-menu';
 
 export function AppHeader({
-  user,
   appearance,
-  pending,
-  onLogout,
+  account,
 }: {
-  user: Readonly<GetSession200>;
   appearance: ReactNode;
-  pending: boolean;
-  onLogout: () => void;
+  account?: { user: Readonly<GetSession200>; pending: boolean; onLogout: () => void };
 }) {
   const mobile = useMediaQuery('(max-width: 760px)');
   const controls = (
     <>
       {appearance}
-      <div className="account">
-        <span>
-          {user.username}
-          <small>{user.role === 'OPERATOR' ? 'Оператор' : 'Инициатор'}</small>
-        </span>
-        <Button onClick={onLogout} disabled={pending}>
-          Выйти
-        </Button>
-      </div>
+      {account && (
+        <div className="account">
+          <span>
+            {account.user.username}
+            <small>{account.user.role === 'OPERATOR' ? 'Оператор' : 'Инициатор'}</small>
+          </span>
+          <Button onClick={account.onLogout} disabled={account.pending}>
+            Выйти
+          </Button>
+        </div>
+      )}
     </>
   );
   return (
@@ -37,11 +35,17 @@ export function AppHeader({
       <Link to="/tasks" className="brand-link">
         <Brand />
       </Link>
-      <nav className="main-nav" aria-label="Основная навигация">
-        <NavLink to="/tasks">Задания</NavLink>
-        {user.role === 'OPERATOR' && <NavLink to="/issues">Разбор обмена</NavLink>}
-      </nav>
-      {mobile ? <MobileAccountMenu>{controls}</MobileAccountMenu> : <div className="header-controls">{controls}</div>}
+      {account && (
+        <nav className="main-nav" aria-label="Основная навигация">
+          <NavLink to="/tasks">Задания</NavLink>
+          {account.user.role === 'OPERATOR' && <NavLink to="/issues">Разбор обмена</NavLink>}
+        </nav>
+      )}
+      {mobile && account ? (
+        <MobileAccountMenu>{controls}</MobileAccountMenu>
+      ) : (
+        <div className="header-controls">{controls}</div>
+      )}
     </header>
   );
 }

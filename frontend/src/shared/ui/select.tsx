@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useId, useState } from 'react';
 import * as Primitive from '@radix-ui/react-select';
 import { useComposedRefs } from '@radix-ui/react-compose-refs';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { getNonce } from 'get-nonce';
 import { cn } from './utils';
 import { useUiLabels } from './labels';
 import {
@@ -103,7 +104,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
             <Primitive.ScrollUpButton className="ui-choice-scroll">
               <ChevronUp size={16} />
             </Primitive.ScrollUpButton>
-            <Primitive.Viewport className="ui-choice-viewport">
+            <Primitive.Viewport nonce={getNonce()} className="ui-choice-viewport">
               {options.map((option) => (
                 <Primitive.Item
                   key={option.value}

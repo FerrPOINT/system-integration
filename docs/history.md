@@ -24,3 +24,6 @@
 Подробный [журнал экспериментов по производительности](exchange-performance-plan.md)
 сохраняется отдельно: в нём записаны причины принятия и отклонения решений.
 [Декомпозиция](decomposition.md) связывает завершённые этапы с критериями проверки.
+
+Frontend-аудит и интеграция PR #15: [аудит](https://github.com/FerrPOINT/system-integration/blob/caa25fbedf59e5a079e4d6c18747bceac34aa6f8/docs/frontend-full-audit-2026-11-16.md),
+[квалификация](https://github.com/FerrPOINT/system-integration/blob/caa25fbedf59e5a079e4d6c18747bceac34aa6f8/docs/current-stage.md).

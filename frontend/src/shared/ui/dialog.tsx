@@ -1,7 +1,7 @@
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import type { ReactNode, RefObject } from 'react';
+import { useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { Button } from './button';
 
 // Radix owns the portal, modal focus and dismissal.
@@ -68,6 +68,7 @@ export function DiscardDialog({
   onCancel,
   onDiscard,
   returnFocusRef,
+  title = 'Закрыть форму?',
   description = 'Введённые данные будут потеряны.',
   discardLabel = 'Не сохранять',
   cancelLabel = 'Продолжить заполнение',
@@ -76,10 +77,16 @@ export function DiscardDialog({
   onCancel: () => void;
   onDiscard: () => void;
   returnFocusRef: RefObject<HTMLElement | null>;
+  title?: string;
   description?: string;
   discardLabel?: string;
   cancelLabel?: string;
 }) {
+  const returnTarget = useRef<HTMLElement | null>(null);
+  // Closing resets the page blocker before Radix restores focus. Keep this dialog's opening target.
+  useLayoutEffect(() => {
+    if (open) returnTarget.current = returnFocusRef.current;
+  }, [open, returnFocusRef]);
   return (
     <AlertDialogPrimitive.Root
       open={open}
@@ -92,14 +99,14 @@ export function DiscardDialog({
         <AlertDialogPrimitive.Content
           className="ui-dialog-content"
           onCloseAutoFocus={(event) => {
-            if (returnFocusRef.current) {
+            if (returnTarget.current?.isConnected) {
               event.preventDefault();
-              returnFocusRef.current.focus();
+              returnTarget.current.focus();
             }
           }}
         >
           <div className="ui-dialog-header">
-            <AlertDialogPrimitive.Title className="ui-dialog-title">Закрыть форму?</AlertDialogPrimitive.Title>
+            <AlertDialogPrimitive.Title className="ui-dialog-title">{title}</AlertDialogPrimitive.Title>
             <AlertDialogPrimitive.Description className="ui-dialog-description">
               {description}
             </AlertDialogPrimitive.Description>

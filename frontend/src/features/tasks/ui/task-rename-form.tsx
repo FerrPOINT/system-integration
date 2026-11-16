@@ -48,7 +48,6 @@ export function RenameForm({ task, onClose }: { task: Task; onClose: () => void 
                 ref={titleInput}
                 name="title"
                 {...titleInputProps}
-
                 defaultValue={initialTitle}
                 autoFocus
                 onChange={(event) => setDirty(event.target.value !== initialTitle)}
@@ -87,7 +86,12 @@ export function RenameForm({ task, onClose }: { task: Task; onClose: () => void 
           </Button>
         </ActionGroup>
       </form>
-      <DiscardDialog open={guard.open} returnFocusRef={titleInput} onCancel={guard.cancel} onDiscard={guard.discard} />
+      <DiscardDialog
+        open={guard.open}
+        returnFocusRef={guard.exitFocusRef ?? titleInput}
+        onCancel={guard.cancel}
+        onDiscard={guard.discard}
+      />
     </>
   );
 }
