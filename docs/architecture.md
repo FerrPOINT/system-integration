@@ -632,7 +632,7 @@ FOR UPDATE (до 100 операций). Локальная map живёт тол
 [Gradle Wrapper](../gradle/wrapper/gradle-wrapper.properties) и
 [package.json](../frontend/package.json). Версии библиотек Spring и
 управляемых зависимостей определяет BOM Spring Boot. Для базы выбран
-PostgreSQL 18.6. Образ `postgres:18.6-alpine` закреплён в
+PostgreSQL 18.7. Образ `postgres:18.7-alpine` закреплён в
 [Compose](../compose.yml). Порты и запуск описаны в [README](../README.md#локальный-запуск).
 
 Получение пользователя для входа различает ошибку учётных данных (401)
@@ -673,7 +673,7 @@ SpringDataTaskReadRepository объединяет узкие TaskRows/HistoryRow
 без пагинации. V8 добавляет узкий tasks(owner_id,business_status) для точного
 COUNT без периода; V6 сохраняет порядок страниц. Индекс не хранит готовый total,
 увеличивает цену записи и не обещает одинаковый выигрыш при любом churn.
-V9 снижает только tasks.autovacuum_vacuum_scale_factor до0,05: чаще допускается
+V9 снижает только tasks.autovacuum_vacuum_scale_factor до 0,05: чаще допускается
 обычный autovacuum при частых изменениях задач. Глобальные интервалы/пороги,
 ресурсы, durability и остальные таблицы не меняются. Это обслуживание страниц,
 а не кэш total; новый COUNT по-прежнему выполняется в том же RR snapshot.

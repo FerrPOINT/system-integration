@@ -9,7 +9,7 @@
 
 1. Используйте квалифицированные образы одного source commit. Сборка, PostgreSQL,
    UI, recovery и NF08 выполняются на отдельном QA по [инструкции](../tests/README.md).
-2. Проверьте фактический Compose project, каталог установки, config files,
+2. Проверьте фактический Compose project, каталог установки, config files и environment_file,
    image ID/revision, состояние контейнеров и версию Flyway. Не определяйте
    установку только по имени соседнего source checkout.
 3. Зафиксируйте компактные контрольные сведения о существующих данных и образах.
@@ -33,20 +33,30 @@ V11 нормализует прежние открытые DELIVERY_DELAYED с �
 не должен работать одновременно с новой политикой и миграциями.
 Применённые Flyway-миграции не редактируются и не удаляются.
 
-Команды выполняются из каталога выбранной установки после подготовки точных
-образов и её image override. Ниже images.yml — уже проверенный файл этой установки:
+Команды выполняются после подготовки точных образов и image override.
+В текущей установке runtime inputs находятся в /opt/dev/system-integration/.local/runtime,
+а приватный environment file — отдельно в /opt/dev/system-integration/.env.
+Перед запуском на другой установке уточните оба пути по Compose labels.
+Ниже images.yml — уже проверенный файл выбранной установки:
 
 ~~~sh
-docker compose -f compose.yml -f compose.public.yml -f images.yml --profile app config --quiet
-docker compose -f compose.yml -f compose.public.yml -f images.yml --profile app stop backend emulator
-docker compose -f compose.yml -f compose.public.yml -f images.yml --profile app up -d --no-build --wait
+cd /opt/dev/system-integration/.local/runtime
+export SI_RUNTIME_ENV_FILE=/opt/dev/system-integration/.env
+docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app config --quiet
+docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app stop backend emulator
+docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app up -d --no-build --wait
 systemctl status system-integration-tunnel.service
 ~~~
 
 Из checkout квалифицированного кандидата выполните публичный smoke с
-SI_DEMO_PASSWORD именно публичной демонстрации в окружении:
+SI_DEMO_PASSWORD именно публичной демонстрации в окружении.
+Compose --env-file сам по себе не экспортирует переменные для Node.
+Из checkout кандидата, сохранив абсолютный SI_RUNTIME_ENV_FILE:
 
 ~~~sh
+set -a
+. "$SI_RUNTIME_ENV_FILE"
+set +a
 node --test tests/e2e/public.test.mjs
 ~~~
 
