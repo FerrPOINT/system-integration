@@ -117,6 +117,28 @@ D-NF03: конечная серия пяти автоматических выз
   Сохранены 3 итоговых образа и ≈5,6 МБ lossless receipts. Все 11 обычных
   контейнеров сохранили ID/image/StartedAt. Общий build cache не чистился.
 
+## Проверка перед слиянием
+
+16 ноября 2026 на исходниках aa4a8ff повторены check/bootJar/Javadoc обоих
+приложений и frontend build. Свежие результаты: 260 Java без ошибок/пропусков,
+1617 SQL-планов, 60 frontend API, 2 assets, 34 Node/SQL, 6 Python,
+112 component, 76 desktop/mobile UI, 4 HTTP smoke и 2 build/context проверки.
+Оба JAR и 28 обслуживаемых файлов frontend совпали с native build по байтам.
+
+Ревью цепочки [#9](https://github.com/FerrPOINT/system-integration/pull/9),
+[#10](https://github.com/FerrPOINT/system-integration/pull/10),
+[#11](https://github.com/FerrPOINT/system-integration/pull/11),
+[#12](https://github.com/FerrPOINT/system-integration/pull/12) не выявило
+блокирующих замечаний к коду. Исправлены неточности документации.
+Это owner review, не внешнее одобрение.
+
+Длинные нагрузочные и recovery-прогоны здесь не повторялись: код приложений,
+контракты и настройки сборки приложений не изменились относительно 6e66aa3;
+идентичность образов и сохранённых результатов проверена отдельно.
+Исследовательские предложения по кешам/новым таблицам не входят в интеграцию.
+Receipts — ignored tests/results/merge-readiness-2026-11-16.
+Публичный deploy не выполняется.
+
 ## История этапов
 
 Предыдущие квалификации/рефакторинги доступны в
