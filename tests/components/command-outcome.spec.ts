@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { selectChoice } from '../e2e/support';
+import { openAccountMenu, selectChoice } from '../e2e/support';
 
 const taskId = '00000000-0000-4000-8000-000000000001';
 const snapshotId = '00000000-0000-4000-8000-000000000010';
@@ -11,6 +11,8 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     username: 'fixture',
     rejectHeldWrite: false,
     failRead: false,
+    emptyIssues: false,
+    issueReads: [] as string[],
     failSession: false,
     failCsrf: false,
     loseWrite: false,
@@ -158,6 +160,22 @@ async function mockApi(page: Page, role = 'INITIATOR') {
       }
       state.reads.push(path);
       if (state.failRead) return fail();
+      if (path === '/api/exchange/issues') {
+        const search = new URL(request.url()).searchParams;
+        state.issueReads.push(search.toString());
+        const number = Number(search.get('page') ?? 0),
+          size = Number(search.get('size') ?? 20);
+        const items = state.emptyIssues ? [] : [issue()];
+        return route.fulfill({
+          json: {
+            items: items.slice(number * size, (number + 1) * size),
+            page: number,
+            totalItems: items.length,
+            totalPages: Math.ceil(items.length / size),
+            hasNext: false,
+          },
+        });
+      }
       if (path === '/api/exchange/issues/' + taskId) return route.fulfill({ json: issue() });
       if (path.endsWith('/reconciliations/' + snapshotId)) return route.fulfill({ json: snapshot() });
       if (path.endsWith('/history'))
@@ -779,6 +797,133 @@ test('accepted logout clears private queries before any further token read', asy
   expect(
     await page.evaluate(() => (window as unknown as { fixturePrivateKeyCount: () => number }).fixturePrivateKeyCount()),
   ).toBe(0);
+});
+
+for (const screen of ['', 'issue', 'reconciliation']) {
+  test('logout respects pending and uncertain reconciliation on ' + (screen || 'task'), async ({ page }) => {
+    const state = await mockApi(page, 'OPERATOR');
+    let release!: () => void;
+    state.holdWrite = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    state.badSnapshotReceipt = {};
+    await page.goto('/tests/command-outcome.html?screen=' + screen);
+    await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
+    await expect.poll(() => state.commands.length).toBe(1);
+    await openAccountMenu(page);
+    const logout = page.getByRole('button', { name: 'Выйти', exact: true });
+    await expect(logout).toBeDisabled();
+    expect(state.logouts).toBe(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    if (test.info().project.name === 'mobile') await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+    release();
+    await expect(page.getByRole('alert')).toContainText('Сверка могла сохраниться');
+    await openAccountMenu(page);
+    await logout.click();
+    await expect(page.getByRole('alertdialog', { name: 'Уйти без проверки сверки?' })).toBeVisible();
+    expect(state.logouts).toBe(0);
+    await page.getByRole('button', { name: 'Вернуться к проверке', exact: true }).click();
+    await expect(logout).toBeFocused();
+    if (test.info().project.name === 'mobile') await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+    state.badSnapshotReceipt = undefined;
+    await page.getByRole('button', { name: 'Проверить результат сверки', exact: true }).click();
+    await expect.poll(() => state.commands.length).toBe(2);
+    await expect(page.getByRole('button', { name: 'Сверяем…', exact: true })).toHaveCount(0);
+    expect(state.commands[1]).toEqual(state.commands[0]);
+    await openAccountMenu(page);
+    await logout.click();
+    await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
+    expect(state.logouts).toBe(1);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  });
+}
+
+test('explicitly abandoning an uncertain reconciliation permits logout and clears private data', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  state.badSnapshotReceipt = {};
+  await page.goto('/tests/command-outcome.html?screen=issue');
+  await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Сверка могла сохраниться');
+  await openAccountMenu(page);
+  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+  await page.getByRole('button', { name: 'Уйти без проверки', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
+  expect(state.commands).toHaveLength(1);
+  expect(state.logouts).toBe(1);
+  expect(
+    await page.evaluate(() => (window as unknown as { fixturePrivateKeyCount: () => number }).fixturePrivateKeyCount()),
+  ).toBe(0);
+});
+
+test('logout cancellation preserves a rename draft and explicit discard still logs out', async ({ page }) => {
+  const state = await mockApi(page);
+  await page.goto('/tests/command-outcome.html');
+  await page.getByRole('button', { name: 'Изменить название' }).click();
+  await page.getByRole('textbox', { name: 'Новое название' }).fill('Unsubmitted draft');
+  await openAccountMenu(page);
+  const logout = page.getByRole('button', { name: 'Выйти', exact: true });
+  await logout.click();
+  await expect(page.getByRole('alertdialog')).toContainText('Введённые данные будут потеряны');
+  await page.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
+  await expect(logout).toBeFocused();
+  expect(state.logouts).toBe(0);
+  if (test.info().project.name === 'mobile') await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Новое название' })).toHaveValue('Unsubmitted draft');
+  await openAccountMenu(page);
+  await logout.click();
+  await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
+  expect(state.commands).toHaveLength(0);
+  expect(state.logouts).toBe(1);
+});
+
+test('missing issue page is distinct from an empty status and returns with the same filter', async ({ page }) => {
+  test.skip(test.info().project.name === 'mobile', 'Mobile feed does not use a desktop page number');
+  const state = await mockApi(page, 'OPERATOR');
+  state.resolved = true;
+  await page.goto('/tests/command-outcome.html?screen=issues');
+  await expect(page.getByRole('heading', { name: 'Страница не найдена', exact: true })).toBeVisible();
+  await expect(page.getByText('Проблем в выбранном состоянии нет.', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'К первой странице', exact: true }).click();
+  await expect(page.getByRole('table', { name: 'Реестр разборов обмена' })).toBeVisible();
+  expect(new URLSearchParams(state.issueReads.at(-1)).get('status')).toBe('RESOLVED');
+  expect(new URLSearchParams(state.issueReads.at(-1)).get('page')).toBe('0');
+  state.emptyIssues = true;
+  await page.getByRole('button', { name: 'Обновить', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Проблем в выбранном состоянии нет.', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'К первой странице', exact: true })).toHaveCount(0);
+});
+
+test('login shares the full-width brand and theme header and preserves entered credentials through theme changes', async ({
+  page,
+}) => {
+  const state = await mockApi(page);
+  state.signedIn = false;
+  await page.goto('/tests/command-outcome.html');
+  await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
+  const header = page.getByRole('banner');
+  await expect(header.getByRole('link', { name: 'Обмен с внешней системой', exact: true })).toBeVisible();
+  await expect(header.locator('.base-icon-mark')).toBeVisible();
+  await expect(header.getByRole('combobox', { name: 'Цветовая тема', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Основная навигация', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toHaveCount(0);
+  expect(
+    await header.evaluate((element) => ({
+      left: element.getBoundingClientRect().left,
+      width: element.getBoundingClientRect().width,
+    })),
+  ).toEqual({ left: 0, width: await page.evaluate(() => document.documentElement.clientWidth) });
+  await page.getByRole('textbox', { name: 'Логин', exact: true }).fill('fixture');
+  await page.getByLabel('Пароль *', { exact: true }).fill('fixture-password');
+  await selectChoice(page, 'Цветовая тема', 'Светлая');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.getByRole('textbox', { name: 'Логин', exact: true })).toHaveValue('fixture');
+  await expect(page.getByLabel('Пароль *', { exact: true })).toHaveValue('fixture-password');
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(header.getByRole('navigation', { name: 'Основная навигация', exact: true })).toBeVisible();
+  expect(state.logins).toBe(1);
 });
 
 test('login acknowledgement followed by session failure recovers with GET only', async ({ page }) => {

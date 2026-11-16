@@ -21,7 +21,7 @@ async function mockApi(
   page: Page,
   role = 'INITIATOR',
   historyCount = 0,
-  control: { failTasks?: boolean; failHistory?: boolean; totalTasks?: number } = {},
+  control: { failTasks?: boolean; failHistory?: boolean; totalTasks?: number; signedIn?: boolean } = {},
 ) {
   const reads: string[] = [];
   await page.route(
@@ -30,7 +30,13 @@ async function mockApi(
       const url = new URL(route.request().url());
       reads.push(url.pathname + url.search);
       if (url.pathname === '/api/session')
-        return route.fulfill({ json: { userId, username: 'production-fixture', role } });
+        return route.fulfill({
+          status: control.signedIn === false ? 401 : 200,
+          json:
+            control.signedIn === false
+              ? { code: 'SESSION_REQUIRED' }
+              : { userId, username: 'production-fixture', role },
+        });
       if (url.pathname === '/api/tasks') {
         if (control.failTasks) return route.fulfill({ status: 502, json: { code: 'SERVICE_UNAVAILABLE' } });
         const size = Number(url.searchParams.get('size') ?? 20),
@@ -176,6 +182,19 @@ test('failed history polling retains its window and the next ordinary poll can r
   const events = page.locator('[data-event-id]');
   await expect.poll(() => events.count()).toBeGreaterThan(0);
   await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeLessThan(20);
+  // A new size in the URL precedes its response; freeze the baseline only after that window is rendered.
+  await expect
+    .poll(async () => {
+      const size = Number(new URL(page.url()).searchParams.get('size'));
+      return (
+        (await events.count()) === size &&
+        (await page
+          .getByRole('region', { name: 'История', exact: true })
+          .locator('[aria-busy]')
+          .getAttribute('aria-busy')) === 'false'
+      );
+    })
+    .toBe(true);
   const originalUrl = page.url();
   const originalEvents = await events.allTextContents();
   const count = reads.filter((read) => read.includes('/history?')).length;
@@ -220,6 +239,43 @@ test('out-of-range task pages differ from empty lists and empty filters @desktop
   await expect(page.getByRole('heading', { name: 'Все задания', exact: true })).toBeVisible();
   await expect(page.getByText('Задания появятся после создания инициатором.', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Создать задание', exact: true })).toHaveCount(0);
+});
+
+test('login header remains usable with production CSP at narrow and wide widths', async ({ page }) => {
+  const violations: string[] = [];
+  page.on('console', (message) => {
+    if (/content security policy|violates.*directive/i.test(message.text())) violations.push(message.text());
+  });
+  await mockApi(page, 'INITIATOR', 0, { signedIn: false });
+  await page.goto('/tasks');
+  await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
+  for (const [width, height] of [
+    [320, 740],
+    [390, 844],
+    [1440, 1000],
+    [900, 360],
+  ]) {
+    await page.setViewportSize({ width, height });
+    const header = page.getByRole('banner');
+    const theme = header.getByRole('combobox', { name: 'Цветовая тема', exact: true });
+    await expect(header.getByRole('link', { name: 'Обмен с внешней системой', exact: true })).toBeVisible();
+    await expect(header.locator('.base-icon-mark')).toBeVisible();
+    await expect(theme).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+    ).toBe(true);
+    await selectChoice(page, 'Цветовая тема', 'Светлая');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await selectChoice(page, 'Цветовая тема', 'Тёмная');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    const login = page.getByRole('textbox', { name: 'Логин', exact: true });
+    await login.scrollIntoViewIfNeeded();
+    await login.fill('production-fixture');
+    await expect(login).toBeInViewport();
+    await page.getByRole('button', { name: 'Войти', exact: true }).scrollIntoViewIfNeeded();
+    await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeInViewport();
+  }
+  expect(violations).toEqual([]);
 });
 
 test('production CSP permits modal styles with a fresh document nonce', async ({ page, request }) => {

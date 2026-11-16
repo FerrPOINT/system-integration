@@ -24,7 +24,7 @@ export default async function setup() {
     if (network) docker(['network', 'rm', network]);
   };
   try {
-    network = docker(['network', 'create', name]);
+    network = docker(['network', 'create', '--subnet', '10.252.97.0/28', name]);
     container = docker([
       'create',
       '--name',

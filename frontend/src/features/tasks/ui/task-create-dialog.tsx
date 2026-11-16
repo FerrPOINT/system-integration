@@ -118,7 +118,7 @@ export function NewTask() {
       </Dialog>
       <DiscardDialog
         open={guard.open}
-        returnFocusRef={unresolvedInput ? retryButton : titleInput}
+        returnFocusRef={guard.exitFocusRef ?? (unresolvedInput ? retryButton : titleInput)}
         onCancel={guard.cancel}
         onDiscard={guard.discard}
         description={

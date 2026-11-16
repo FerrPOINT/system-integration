@@ -42,6 +42,7 @@ export function IssueList() {
     identify: identifyIssue,
   });
   const { query: issues, items: issuesItems, meta: issuesPage } = collection;
+  const missingPage = Boolean(issuesPage && page >= issuesPage.totalPages && page > 0);
   const { viewportRef: registryRef, restoring, positionNotice, loadNext, loadPrevious, refresh } = collection;
   return (
     <>
@@ -104,7 +105,14 @@ export function IssueList() {
               )}
               {issuesItems.length === 0 ? (
                 <Card>
-                  <EmptyState message="Проблем в выбранном состоянии нет." />
+                  <EmptyState
+                    headingLevel={2}
+                    message={missingPage ? 'Страница не найдена' : 'Проблем в выбранном состоянии нет.'}
+                    description={
+                      missingPage ? 'Список изменился или в адресе указана недоступная страница.' : undefined
+                    }
+                    action={missingPage && <Button onClick={() => changePage(0)}>К первой странице</Button>}
+                  />
                 </Card>
               ) : mobile ? (
                 <ul className="issue-cards" data-page-items>

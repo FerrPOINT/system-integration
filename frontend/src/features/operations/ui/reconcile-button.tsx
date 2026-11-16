@@ -28,7 +28,7 @@ function ReconcileAction({ taskId }: { taskId: string }) {
       />
       <DiscardDialog
         open={guard.open}
-        returnFocusRef={trigger}
+        returnFocusRef={guard.exitFocusRef ?? trigger}
         onCancel={guard.cancel}
         onDiscard={guard.discard}
         title="Уйти без проверки сверки?"

@@ -195,6 +195,11 @@ main {
 .app-shell > main > .paged-list {
   flex-shrink: 1;
 }
+.app-shell > main.login-page {
+  display: grid;
+  flex: 1;
+  place-items: center;
+}
 @media (max-width: 760px) {
   .app-shell {
     height: auto;

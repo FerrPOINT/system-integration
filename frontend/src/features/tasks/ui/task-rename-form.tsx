@@ -86,7 +86,12 @@ export function RenameForm({ task, onClose }: { task: Task; onClose: () => void 
           </Button>
         </ActionGroup>
       </form>
-      <DiscardDialog open={guard.open} returnFocusRef={titleInput} onCancel={guard.cancel} onDiscard={guard.discard} />
+      <DiscardDialog
+        open={guard.open}
+        returnFocusRef={guard.exitFocusRef ?? titleInput}
+        onCancel={guard.cancel}
+        onDiscard={guard.discard}
+      />
     </>
   );
 }

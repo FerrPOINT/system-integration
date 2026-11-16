@@ -237,6 +237,11 @@ corepack pnpm exec playwright test --config components.config.ts
 однократный FormData, disabled/fieldset, клавиатуру и недоступное значение.
 Основной playwright.config.ts эту fixture не запускает.
 
+Production UI tests (`production.config.ts`) запускают временный Nginx на
+loopback 19778 в отдельной сети 10.252.97.0/28. Сеть и контейнер удаляются
+global teardown; перед запуском проверьте отсутствие пересечений Docker/host/VPN.
+API перехватывается тестами, доступ к БД не требуется.
+
 ## Измерение пагинации и навигация
 
 Из tests/: corepack pnpm exec playwright test -c components.config.ts.

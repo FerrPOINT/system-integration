@@ -20,15 +20,17 @@ const screen = new URLSearchParams(location.search).get('screen');
 const initial =
   screen === 'list'
     ? '/tasks?size=10'
-    : screen === 'issue'
-      ? '/issues/' + taskId
-      : screen === 'reconciliation'
-        ? '/tasks/' + taskId + '/reconciliations/00000000-0000-4000-8000-000000000010'
-        : screen === 'new'
-          ? '/tasks/new?size=10'
-          : screen === 'missing'
-            ? '/missing'
-            : '/tasks/' + taskId + '?size=10';
+    : screen === 'issues'
+      ? '/issues?status=RESOLVED&page=999&size=10'
+      : screen === 'issue'
+        ? '/issues/' + taskId
+        : screen === 'reconciliation'
+          ? '/tasks/' + taskId + '/reconciliations/00000000-0000-4000-8000-000000000010'
+          : screen === 'new'
+            ? '/tasks/new?size=10'
+            : screen === 'missing'
+              ? '/missing'
+              : '/tasks/' + taskId + '?size=10';
 const router = createMemoryRouter(appRoutes, { initialEntries: ['/tasks', initial] });
 // Fixture navigation/lifecycle controls expose no credentials or private payloads.
 Object.assign(window, {

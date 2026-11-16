@@ -94,6 +94,27 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
   await expect(page).toHaveURL(/page=0/);
 });
 
+test('UI-09: a missing issue page recovers without claiming that the filtered registry is empty', async ({
+  page,
+}, info) => {
+  await login(page, 'operator');
+  const status = 'RESOLVED';
+  const registry = await (await page.request.get('/api/exchange/issues?status=' + status)).json();
+  expect(registry.totalItems).toBeGreaterThan(0);
+  await page.goto('/issues?' + new URLSearchParams({ status, page: '999999', size: '10' }));
+  if (info.project.name === 'mobile') {
+    await expect(page).not.toHaveURL(/page=/);
+    await expect(page.locator('[data-record-id]').first()).toBeVisible();
+  } else {
+    await expect(page.getByRole('heading', { name: 'Страница не найдена', exact: true })).toBeVisible();
+    await expect(page.getByText('Проблем в выбранном состоянии нет.', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'К первой странице', exact: true }).click();
+    await expect(page.getByRole('table', { name: 'Реестр разборов обмена' })).toBeVisible();
+    await expect(page).toHaveURL(/page=0/);
+  }
+  expect(new URL(page.url()).searchParams.get('status')).toBe(status);
+});
+
 test('UI-09: invalid URL filters stay local and valid filters still load', async ({ page }, info) => {
   await login(page);
   const invalid = [
