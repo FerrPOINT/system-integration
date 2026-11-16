@@ -1,40 +1,32 @@
 # Текущая стадия
 
-## Frontend: защищённый выход и общая панель входа
+## Frontend: история задания и адаптивная пагинация
 
-Кандидат b94ddc4a3829927e0aa6fdc8897d18e5d5ea3d49 закрывает два дополнительных
-замечания ревью. Logout использует guard активной формы: pending блокирует
-кнопку, dirty/unresolved требуют подтверждения, отмена сохраняет ключ команды
-и возвращает фокус, включая мобильное меню. Принудительный 401 по-прежнему
-очищает приватную сессию. Недоступная страница разборов отличается от пустого
-статуса, восстановление первой страницы сохраняет фильтр.
-
-До и после входа используется один AppHeader с Brand и переключателем темы.
-Публичной оболочкой владеет app; LoginForm содержит только форму. Общая панель
-остаётся доступна при первоначальной загрузке и ошибке проверки сессии.
+Кандидат 202a0839e347b9e16820a52272dcabcf161b3c07 переносит историю в левую
+колонку, состояние — в правую. Высота карточки истории задаётся рабочей областью;
+заголовок и footer окружают отдельный scroll viewport. Его измеряет штатный
+usePagination, поэтому resize пересчитывает size, а навигация остаётся внизу.
+На mobile состояние расположено перед историей с прежней лентой. Текст
+технических событий показывается сразу, без «Подробностей обмена».
 
 Свежие проверки: format/codegen/lint/strict TypeScript/Vite build, 64 unit,
-2 asset, 149 component, 10 production Nginx, 4 real-API UI и 4 HTTP smoke —
-233 успешных проверки. Один component case для desktop page number пропущен
-на mobile, где используется feed. Полный прежний real-API UI suite повторно
-не запускался; выполнены UI-01 и восстановление issue page из UI-09 на двух
-ширинах. Production-тест истории получил явное ожидание загруженного окна
-перед фиксацией baseline; его проверки строк и числа GET сохранены. После
-исправления ожидания весь production-набор прошёл 10/10. Dependency audit: 0.
+2 asset, 5 mobile-history component, 12 production Nginx, 2 read-only real-API
+UI и 4 HTTP smoke — 89 успешных проверок. Проверены высота/resize, обе колонки,
+видимость footer, переход страницы, открытые описания, mobile Back и polling.
+Полные component/real-API suites в этом проходе не повторялись.
 
-Локальный frontend на http://127.0.0.1:19673 работает из образа b94ddc4,
-backend/emulator остаются на 1d0b826 с подтверждённым совпадением inputs.
-Временный Vite остановлен; после возврата образа повторены HTTP smoke,
-сверка отдаваемых JS/CSS, CSP nonce и контрольные суммы бизнес-данных.
-Сохранены 706 заданий и 705 внешних операций; новых бизнес-fixtures не создавали.
-Финальная IAB-проверка подтверждает общую панель и отсутствие горизонтального
-переполнения на 320/390/1280 px. Исходная тема восстановлена.
+Локальный frontend на http://127.0.0.1:19673 работает из образа 202a083;
+backend/emulator остаются на 1d0b826 с совпадением inputs. Отдаваемые JS/CSS,
+CSP nonce и контрольные суммы бизнес-данных проверены. Временный Vite остановлен.
+Сохранены 706 заданий и 705 внешних операций; бизнес-fixtures не создавались.
+Доказательства: ignored tests/results/frontend-task-history-2026-11-16/ —
+qualification.json, gate.log, completion.log, browser reports, runtime-verification.json,
+protected-verified.json и IAB artifacts. Изменения остаются в локальной ветке.
 
-Доказательства: ignored tests/results/frontend-login-guard-2026-11-16/
-с qualification.json, source-gate.log, source-completion.log, runtime-gate.log,
-результатами browser suites, runtime-verification.json, protected-verified.json,
-IAB receipts и снимками login-desktop.png / login-mobile.png.
-Изменения остаются в локальной ветке; merge и публичное обновление не выполнялись.
+Предыдущая доработка входа и защиты форм квалифицирована на b94ddc4:
+233 успешных проверки, включая 149 component и 10 production Nginx.
+Её код app/auth/shared в текущем кандидате не менялся. Доказательства сохранены
+в tests/results/frontend-login-guard-2026-11-16/qualification.json.
 
 ## Предыдущая квалификация frontend, 16 ноября 2026
 
