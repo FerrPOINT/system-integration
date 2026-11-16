@@ -72,7 +72,7 @@ class OperationsWorkflowTest extends PostgresTest {
         var initiator = login("initiator.two");
         for (int n = 0; n < 18; n++) {
             created(initiator, UUID.randomUUID());
-            var claim = exchange.claim();
+            var claim = exchange.claim().attempt();
             assertNotNull(claim);
             finish(exchange, claim, new ExchangeReply(400, null, false, null));
         }
@@ -126,7 +126,7 @@ class OperationsWorkflowTest extends PostgresTest {
     @Test
     void comparisonIsOutsideTheTransactionAndOldSnapshotsRemainReadable() throws Exception {
         UUID task = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         var op = login("operator");
         when(client.get(claim.operationId()))
                 .thenAnswer(call -> {
@@ -169,7 +169,7 @@ class OperationsWorkflowTest extends PostgresTest {
     @Test
     void reconciliationReplayAndKeyConflictDoNotReadExternalState() throws Exception {
         UUID task = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         when(client.get(claim.operationId())).thenReturn(missing());
         var op = login("operator");
         var key = UUID.randomUUID();
@@ -436,7 +436,7 @@ class OperationsWorkflowTest extends PostgresTest {
     @Test
     void protocolRetryRequiresFreshEvidenceAndPreservesInputAndCounter() throws Exception {
         UUID task = created(login("initiator.one"), UUID.randomUUID());
-        var original = exchange.claim();
+        var original = exchange.claim().attempt();
         finish(exchange, original, new ExchangeReply(400, null, false, null));
         var op = login("operator");
         UUID issue = jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id = ?", UUID.class, task);
@@ -472,7 +472,7 @@ class OperationsWorkflowTest extends PostgresTest {
         assertEquals("DELIVERY_UNCERTAIN", body(retry).get("kind").asString());
         assertTrue(body(retry).at("/evidence/reason").asString().contains("протокола"));
         status(200, command(op, "retry", issue, key, input));
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         assertEquals("GET", claim.step());
         assertEquals(2, claim.number());
         assertEquals(original.operationId(), claim.operationId());
@@ -487,7 +487,7 @@ class OperationsWorkflowTest extends PostgresTest {
     @Test
     void differentExternalRequestCannotAuthorizeRetryOrApplyAndStopPreservesBusinessState() throws Exception {
         UUID task = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         finish(exchange, claim, new ExchangeReply(409, null, false, null));
         var op = login("operator");
         when(client.get(claim.operationId())).thenReturn(external(claim, true, 26));
@@ -523,7 +523,7 @@ class OperationsWorkflowTest extends PostgresTest {
         DeliveryAttempt claim = null;
         for (int n = 1; n <= 5; n++) {
             jdbc.update("UPDATE delivery_queue SET due_at=clock_timestamp()-interval '1 second'");
-            claim = exchange.claim();
+            claim = exchange.claim().attempt();
             assertEquals(n, claim.number());
             finish(exchange, claim, new ExchangeReply(0, null, true, null));
         }
@@ -567,7 +567,7 @@ class OperationsWorkflowTest extends PostgresTest {
         }
         assertEquals(0, jdbc.queryForObject("SELECT automatic_attempts FROM delivery_queue", Integer.class));
         assertEquals(5, jdbc.queryForObject("SELECT attempts FROM delivery_queue", Integer.class));
-        var next = exchange.claim();
+        var next = exchange.claim().attempt();
         assertEquals(6, next.number());
         assertEquals(1, next.automaticNumber());
         assertEquals("GET", next.step());
@@ -590,7 +590,7 @@ class OperationsWorkflowTest extends PostgresTest {
         DeliveryAttempt claim = null;
         for (int n = 1; n <= 5; n++) {
             jdbc.update("UPDATE delivery_queue SET due_at=clock_timestamp()-interval '1 second'");
-            claim = exchange.claim();
+            claim = exchange.claim().attempt();
             finish(exchange, claim, new ExchangeReply(503, null, false, null));
         }
         var op = login("operator");
@@ -628,7 +628,7 @@ class OperationsWorkflowTest extends PostgresTest {
         DeliveryAttempt claim = null;
         for (int n = 1; n <= 5; n++) {
             jdbc.update("UPDATE delivery_queue SET due_at=clock_timestamp()-interval '1 second'");
-            claim = exchange.claim();
+            claim = exchange.claim().attempt();
             finish(exchange, claim, new ExchangeReply(503, null, false, null));
         }
         var op = login("operator");
@@ -658,7 +658,7 @@ class OperationsWorkflowTest extends PostgresTest {
         assertEquals(
                 "PENDING", jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?", String.class, task));
         assertEquals(0, count("delivery_queue"));
-        assertNull(exchange.claim());
+        assertNull(exchange.claim().attempt());
     }
 
     @Test
@@ -667,7 +667,7 @@ class OperationsWorkflowTest extends PostgresTest {
         DeliveryAttempt last = null;
         for (int n = 1; n <= 5; n++) {
             jdbc.update("UPDATE delivery_queue SET due_at=clock_timestamp()-interval '1 second'");
-            last = exchange.claim();
+            last = exchange.claim().attempt();
             finish(exchange, last, new ExchangeReply(503, null, false, null));
         }
         var op = login("operator");
@@ -702,7 +702,7 @@ class OperationsWorkflowTest extends PostgresTest {
     @Test
     void aLocalExchangeChangeDuringGetRollsBackTheComparison() throws Exception {
         UUID task = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         when(client.get(claim.operationId()))
                 .thenAnswer(call -> {
                     assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
@@ -726,7 +726,7 @@ class OperationsWorkflowTest extends PostgresTest {
     @Test
     void malformedComparisonIsVisibleAsAProtocolProblemAndCannotApply() throws Exception {
         UUID task = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         when(client.get(claim.operationId()))
                 .thenReturn(new ExchangeReply(200, json.readTree("{\"bad\":true}"), false, null));
         var op = login("operator");
@@ -849,7 +849,7 @@ class OperationsWorkflowTest extends PostgresTest {
     @Test
     void concurrentComparisonReplaysOneSnapshotWhileAnotherActorHasAnIndependentCommand() throws Exception {
         UUID task = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         finish(exchange, claim, external(claim, false, 25));
         when(client.get(claim.operationId())).thenReturn(external(claim, true, 25));
         var op = login("operator");
@@ -941,7 +941,7 @@ class OperationsWorkflowTest extends PostgresTest {
 
     private Scenario difference() throws Exception {
         UUID task = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         var reply = external(claim, false, 25);
         finish(exchange, claim, reply);
         when(client.get(claim.operationId())).thenReturn(external(claim, true, 25));

@@ -64,14 +64,30 @@ public class JdbcExchangeRepository implements ExchangeRepository {
         jdbc.update("INSERT INTO delivery_queue(operation_id) VALUES (?)", operationId);
     }
 
+    /**
+     * Visit the ordered queue before looking up/locking a task. A flat join can
+     * misestimate correlated task status after an empty queue grows and scan the
+     * already-delivered population for every claim. The ordered subquery keeps queue
+     * sorting before the lateral row lock, so LIMIT never locks an unrelated tail.
+     * See DeliveryClaimPlanTest and docs/exchange-performance-plan.md.
+     */
     public ExchangeState lockDueExchange() {
         return jdbc
                 .query(
                         """
-                        SELECT t.* FROM tasks t JOIN delivery_queue q ON q.operation_id = t.operation_id
-                        WHERE t.delivery_status IN ('QUEUED','RETRY_WAIT','UNKNOWN') AND q.due_at <= statement_timestamp()
-                          AND (q.claim_id IS NULL OR q.claimed_until <= statement_timestamp())
-                        ORDER BY q.due_at,q.operation_id LIMIT 1 FOR UPDATE OF t SKIP LOCKED
+                        SELECT t.* FROM (
+                            SELECT operation_id,due_at FROM delivery_queue
+                            WHERE due_at <= statement_timestamp()
+                              AND (claim_id IS NULL OR claimed_until <= statement_timestamp())
+                            ORDER BY due_at,operation_id
+                        ) q
+                        CROSS JOIN LATERAL (
+                            SELECT * FROM tasks
+                            WHERE operation_id = q.operation_id
+                              AND delivery_status IN ('QUEUED','RETRY_WAIT','UNKNOWN')
+                            FOR UPDATE SKIP LOCKED
+                        ) t
+                        ORDER BY q.due_at,q.operation_id LIMIT 1
                         """,
                         rowMapper::exchange)
                 .stream()
@@ -81,14 +97,19 @@ public class JdbcExchangeRepository implements ExchangeRepository {
 
     public Queue lockQueue(UUID id) {
         return jdbc.queryForObject(
-                "SELECT * FROM delivery_queue WHERE operation_id = ? FOR UPDATE",
+                """
+                SELECT *,due_at <= statement_timestamp()
+                    AND (claim_id IS NULL OR claimed_until <= statement_timestamp()) AS eligible
+                FROM delivery_queue WHERE operation_id = ? FOR UPDATE
+                """,
                 (rs, n) ->
                         new Queue(
                                 rs.getString("next_step"),
                                 rs.getInt("attempts"),
                                 rs.getInt("automatic_attempts"),
                                 rs.getObject("claim_id", UUID.class),
-                                rs.getObject("claimed_until", OffsetDateTime.class)),
+                                rs.getObject("claimed_until", OffsetDateTime.class),
+                                rs.getBoolean("eligible")),
                 id);
     }
 

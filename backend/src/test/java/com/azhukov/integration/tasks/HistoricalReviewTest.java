@@ -25,7 +25,7 @@ class HistoricalReviewTest extends PostgresTest {
     @Test
     void historicalIssueReceiptKeepsItsOldOwnerAndDoesNotRewriteCurrentIssue() throws Exception {
         var task = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         finish(exchange, claim, new com.azhukov.integration.client.http.ExchangeReply(400, null, false, null));
         UUID issue = jdbc.queryForObject("SELECT id FROM exchange_issues WHERE task_id=?", UUID.class, task);
         UUID key = UUID.randomUUID();
@@ -59,7 +59,7 @@ class HistoricalReviewTest extends PostgresTest {
     @Test
     void historicalReconciliationIsReadableAndItsReceiptReplaysWithoutAuditWrites() throws Exception {
         var task = created(login("initiator.one"), UUID.randomUUID());
-        var claim = exchange.claim();
+        var claim = exchange.claim().attempt();
         UUID id = UUID.randomUUID(), key = UUID.randomUUID();
         String historical =
                 """

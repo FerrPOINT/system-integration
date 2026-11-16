@@ -7,7 +7,7 @@ import java.util.UUID;
 public interface OperationRepository {
     Operation get(UUID id);
 
-    List<Operation> lockNext();
+    List<Operation> lockNext(int limit);
 
     List<ResultEvent> events(long after, int limit);
 

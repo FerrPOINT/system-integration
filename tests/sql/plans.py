@@ -57,7 +57,7 @@ params={
 'JdbcReviewRepository.active/1:1':[T],'JdbcReviewRepository.saveReconciliation/2:1':[uid(310001),T,1,'2026-01-01T00:00:00Z',uid(900003),'{}'],
 'JdbcReviewRepository.saveReconciliation/2:2':[R,T],'JdbcReviewRepository.reconciliation/2:1':[R,T],'JdbcReviewRepository.resumeDelivery/2:1':['probe',I],
 'JdbcReviewRepository.resolve/2:1':['{"decision":"STOP","reason":"probe"}',I],
-'JdbcOperationRepository.get/1:1':[O],'JdbcOperationRepository.lockNext/0:1':[],'JdbcOperationRepository.events/2:1':[0,100],
+'JdbcOperationRepository.get/1:1':[O],'JdbcOperationRepository.lockNext/1:1':[1],'JdbcOperationRepository.events/2:1':[0,100],
 'JdbcOperationRepository.fault/1:1':[O],'JdbcOperationRepository.event/3:1':[O,1,1,result,False],
 'JdbcOperationRepository.lockOperation/1:1':[O],'JdbcOperationRepository.exists/1:1':[O],'JdbcOperationRepository.lockFault/1:1':['REQ-100001'],
 'JdbcOperationRepository.insert/2:1':[NO,'REQ-110001',25],'JdbcOperationRepository.bindFault/2:1':[uid(100003),'REQ-100002'],
@@ -67,6 +67,7 @@ params={
 'JdbcOperationRepository.releaseEvents/1:1':[uid(105001)],'JdbcOperationRepository.releaseEvents/1:2':[uid(105001)],'JdbcOperationRepository.clearFault/1:1':['REQ-100001']}
 for key,values in params.items():static(key,values)
 for batch in [1,10,50]:static('JdbcOperationRepository.publish/1:2',[batch],f'batch={batch}')
+for batch in [5,10,25]:static('JdbcOperationRepository.lockNext/1:1',[batch],f'batch={batch}')
 static('JdbcExchangeRepository.ownsClaim/2:1',[uid(100006),uid(500006)],'active-lease-owned')
 static('JdbcReviewRepository.temporary/1:1',[T],'no-temporary-issue')
 static('JdbcReviewRepository.confirm/1:1',[T],'no-temporary-issue')

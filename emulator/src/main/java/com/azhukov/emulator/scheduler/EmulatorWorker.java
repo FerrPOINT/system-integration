@@ -16,17 +16,29 @@ import org.springframework.stereotype.Component;
 class EmulatorWorker {
     private final OperationService operations;
     private final int publicationBatch;
+    private final int executionBatch;
 
-    EmulatorWorker(OperationService operations, @Value("${si.emulator.publication-batch-size}") int publicationBatch) {
+    EmulatorWorker(
+            OperationService operations,
+            @Value("${si.emulator.publication-batch-size}") int publicationBatch,
+            @Value("${si.emulator.execution-batch-size}") int executionBatch) {
         if (publicationBatch < 1 || publicationBatch > OperationService.MAX_PUBLICATION_BATCH)
             throw new IllegalArgumentException("si.emulator.publication-batch-size must be 1..100");
+        if (executionBatch < 1 || executionBatch > OperationService.MAX_EXECUTION_BATCH)
+            throw new IllegalArgumentException("si.emulator.execution-batch-size must be 1..25");
+        this.executionBatch = executionBatch;
         this.operations = operations;
         this.publicationBatch = publicationBatch;
     }
 
     @Scheduled(fixedDelay = 250)
     void execute() {
-        for (int n = 0; n < 50 && operations.executeNext(); n++) {}
+        int executed = 0;
+        while (executed < 50) {
+            int count = operations.executeNext(Math.min(executionBatch, 50 - executed));
+            if (count == 0) break;
+            executed += count;
+        }
     }
 
     @Scheduled(fixedDelay = 250)

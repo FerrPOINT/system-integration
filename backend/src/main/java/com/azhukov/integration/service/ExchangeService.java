@@ -8,6 +8,7 @@ import com.azhukov.integration.domain.exchange.OperationResult;
 import com.azhukov.integration.domain.review.Issue;
 import com.azhukov.integration.domain.task.DeliveryStatus;
 import com.azhukov.integration.domain.task.HistoryType;
+import com.azhukov.integration.dto.exchange.ClaimResult;
 import com.azhukov.integration.dto.exchange.DeliveryBacklog;
 import com.azhukov.integration.repository.ExchangeRepository;
 import com.azhukov.integration.repository.TaskRepository;
@@ -27,16 +28,18 @@ public class ExchangeService {
     private final IssueLifecycleService issues;
 
     @Transactional
-    public DeliveryAttempt claim() {
+    public ClaimResult claim() {
         // All writers lock the task before its queue/issue rows to keep a single lock order.
         var state = exchanges.lockDueExchange();
-        if (state == null) return null;
+        if (state == null) return ClaimResult.empty();
         var queue = exchanges.lockQueue(state.task().operationId());
+        // The nonlocking queue candidate may predate another committed claim/retry.
+        if (!queue.eligible()) return ClaimResult.skipped();
         if (queue.claim() != null) {
             exchanges.finishAttempt(queue.claim(), "INTERRUPTED");
             if (DeliveryAttempt.exhausted(queue.automaticAttempts())) {
                 pauseAutomaticSeries(state, queue.claim());
-                return null;
+                return ClaimResult.skipped();
             }
             exchanges.scheduleAfterInterruptedClaim(
                     state.task().operationId(), queue.until(), DeliveryAttempt.delay(queue.automaticAttempts()));
@@ -48,11 +51,11 @@ public class ExchangeService {
                     HistoryType.DELIVERY_UNCERTAIN,
                     "Прерванная попытка: следующее действие — уточняющий GET",
                     Map.of("attemptId", queue.claim()));
-            return null;
+            return ClaimResult.skipped();
         }
         if (DeliveryAttempt.exhausted(queue.automaticAttempts())) {
             pauseAutomaticSeries(state, null);
-            return null;
+            return ClaimResult.skipped();
         }
         UUID claim = UUID.randomUUID();
         int number = Math.addExact(queue.attempts(), 1);
@@ -63,13 +66,14 @@ public class ExchangeService {
                 HistoryType.DELIVERY_ATTEMPT,
                 "Попытка " + number + ": " + queue.step(),
                 Map.of("attemptId", claim));
-        return new DeliveryAttempt(
-                state.task().operationId(),
-                claim,
-                queue.step(),
-                number,
-                queue.automaticAttempts() + 1,
-                state.task().request());
+        return ClaimResult.claimed(
+                new DeliveryAttempt(
+                        state.task().operationId(),
+                        claim,
+                        queue.step(),
+                        number,
+                        queue.automaticAttempts() + 1,
+                        state.task().request()));
     }
 
     @Transactional

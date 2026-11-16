@@ -42,10 +42,11 @@ public class JdbcOperationRepository implements OperationRepository {
                 .orElseThrow(() -> new RuleViolation(RuleViolation.Code.OPERATION_NOT_FOUND));
     }
 
-    public List<Operation> lockNext() {
+    public List<Operation> lockNext(int limit) {
         return jdbc.query(
-                "SELECT * FROM operations WHERE executions = 0 ORDER BY accepted_at,id LIMIT 1 FOR UPDATE SKIP LOCKED",
-                operationRow);
+                "SELECT * FROM operations WHERE executions = 0 ORDER BY accepted_at,id LIMIT ? FOR UPDATE SKIP LOCKED",
+                operationRow,
+                limit);
     }
 
     public List<ResultEvent> events(long after, int limit) {

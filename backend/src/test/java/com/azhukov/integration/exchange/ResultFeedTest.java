@@ -28,17 +28,59 @@ class ResultFeedTest extends PostgresTest {
     @MockitoSpyBean JdbcTemplate observedSql;
 
     @Test
-    void emptyFeedKeepsItsIdleDelayWithoutWritingTheCursor() throws Exception {
+    void aPublishedResultAfterAnEmptyReadIsConsumedOnTheNextSchedulerTrigger() throws Exception {
+        var task = created(login("initiator.one"), java.util.UUID.randomUUID());
+        var operation = jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?", java.util.UUID.class, task);
+        var requests = new AtomicInteger();
+        var page = new AtomicReference<>("[]");
+        var server = source(requests, page, new AtomicInteger(200));
+        try (var http = transport(server);
+                var worker =
+                        new ExchangeCoordinator(
+                                exchange, new HttpExternalExchangeClient(http, json, settings(server)), 8)) {
+            worker.receive();
+            assertEquals(0, exchange.cursor());
+            page.set(
+                    json.writeValueAsString(
+                            java.util.List.of(
+                                    java.util.Map.of(
+                                            "cursor",
+                                            1,
+                                            "result",
+                                            java.util.Map.of(
+                                                    "operationId",
+                                                    operation,
+                                                    "request",
+                                                    java.util.Map.of("reference", "REQ-000001", "quantity", 25),
+                                                    "version",
+                                                    2,
+                                                    "status",
+                                                    "SUCCEEDED",
+                                                    "completedAt",
+                                                    java.time.Instant.now().toString())))));
+            worker.receive();
+            assertEquals(2, requests.get(), "A successful empty read must leave normal pacing to the scheduler");
+            assertEquals(1, exchange.cursor());
+            assertEquals(
+                    "SUCCEEDED",
+                    jdbc.queryForObject("SELECT business_status FROM tasks WHERE id=?", String.class, task));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void emptyFeedUsesTheSchedulerCadenceWithoutWritingTheCursor() throws Exception {
         var requests = new AtomicInteger();
         var server = source(requests, new AtomicReference<>("[]"), new AtomicInteger(200));
         try (var http = transport(server);
                 var worker =
                         new ExchangeCoordinator(
-                                exchange, new HttpExternalExchangeClient(http, json, settings(server)))) {
+                                exchange, new HttpExternalExchangeClient(http, json, settings(server)), 8)) {
             clearInvocations(observedSql);
             worker.receive();
             worker.receive();
-            assertEquals(1, requests.get(), "The empty feed must retain its idle delay");
+            assertEquals(2, requests.get(), "The scheduler bounds normal reads, including empty pages");
             long writes =
                     mockingDetails(observedSql).getInvocations().stream()
                             .filter(call ->
@@ -64,7 +106,7 @@ class ResultFeedTest extends PostgresTest {
         var server = source(requests, page, new AtomicInteger(200));
         try (var http = transport(server)) {
             var client = new HttpExternalExchangeClient(http, json, settings(server));
-            try (var worker = new ExchangeCoordinator(exchange, client)) {
+            try (var worker = new ExchangeCoordinator(exchange, client, 8)) {
                 worker.receive();
                 worker.receive();
                 assertEquals(1, requests.get(), "A bad cursor must pause the consumer");
@@ -76,7 +118,7 @@ class ResultFeedTest extends PostgresTest {
             }
             // A valid cursor with an invalid result is diagnosed and consumed, rather than poisoning the feed.
             page.set("[{\"cursor\":8,\"result\":null}]");
-            try (var restarted = new ExchangeCoordinator(exchange, client)) {
+            try (var restarted = new ExchangeCoordinator(exchange, client, 8)) {
                 restarted.receive();
                 assertEquals(2, requests.get());
                 assertEquals(8, exchange.cursor());
@@ -99,7 +141,7 @@ class ResultFeedTest extends PostgresTest {
         try (var http = transport(server);
                 var worker =
                         new ExchangeCoordinator(
-                                exchange, new HttpExternalExchangeClient(http, json, settings(server)))) {
+                                exchange, new HttpExternalExchangeClient(http, json, settings(server)), 8)) {
             worker.receive();
             worker.receive();
             assertEquals(1, requests.get());
@@ -126,7 +168,7 @@ class ResultFeedTest extends PostgresTest {
         try (var http = transport(server);
                 var worker =
                         new ExchangeCoordinator(
-                                exchange, new HttpExternalExchangeClient(http, json, settings(server)))) {
+                                exchange, new HttpExternalExchangeClient(http, json, settings(server)), 8)) {
             worker.receive();
             assertEquals(1, count("exchange_issues"));
             assertTrue(worker.diagnostics().paused());
@@ -172,7 +214,7 @@ class ResultFeedTest extends PostgresTest {
         try (var http = transport(server);
                 var worker =
                         new ExchangeCoordinator(
-                                exchange, new HttpExternalExchangeClient(http, json, settings(server)))) {
+                                exchange, new HttpExternalExchangeClient(http, json, settings(server)), 8)) {
             worker.receive();
             assertEquals(4, exchange.cursor());
             assertEquals(2, count("exchange_issues"));
@@ -254,7 +296,7 @@ class ResultFeedTest extends PostgresTest {
         try (var http = transport(server);
                 var worker =
                         new ExchangeCoordinator(
-                                exchange, new HttpExternalExchangeClient(http, json, settings(server)))) {
+                                exchange, new HttpExternalExchangeClient(http, json, settings(server)), 8)) {
             worker.receive();
             assertEquals(2, exchange.cursor());
             assertEquals(1, count("exchange_issues"));
