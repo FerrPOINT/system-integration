@@ -88,7 +88,8 @@ test('UI-09: counted pages preserve filters and filters apply without a submit b
     await expect(page.locator('[data-page-item]').first()).toBeVisible();
     return;
   }
-  await expect(page.getByText('Страница не найдена', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Страница не найдена', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Страницы', exact: true })).toContainText('Страница не найдена');
   await page.getByRole('button', { name: 'Страница 1', exact: true }).click();
   await expect(page).toHaveURL(/page=0/);
 });
