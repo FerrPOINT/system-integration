@@ -10,8 +10,6 @@ export interface NoticeProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title
   icon?: ReactNode;
   tone?: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
   appearance?: 'panel' | 'inline';
-  /** Separate an inline message from preceding content using the current density. */
-  separated?: boolean;
 }
 
 const icons = {
@@ -24,19 +22,12 @@ const icons = {
 
 /** Pure presentation: callers own messages, live-region urgency and all action side effects. */
 export const Notice = forwardRef<HTMLDivElement, NoticeProps>(function Notice(
-  { title, children, actions, icon, tone = 'neutral', appearance = 'panel', separated = false, className, ...props },
+  { title, children, actions, icon, tone = 'neutral', appearance = 'panel', className, ...props },
   ref,
 ) {
   const Icon = icons[tone];
   return (
-    <div
-      {...props}
-      ref={ref}
-      data-tone={tone}
-      data-appearance={appearance}
-      data-separated={appearance === 'inline' && separated ? 'true' : undefined}
-      className={cn('ui-notice', className)}
-    >
+    <div {...props} ref={ref} data-tone={tone} data-appearance={appearance} className={cn('ui-notice', className)}>
       <span aria-hidden="true" className="ui-notice-icon">
         {icon ?? <Icon />}
       </span>

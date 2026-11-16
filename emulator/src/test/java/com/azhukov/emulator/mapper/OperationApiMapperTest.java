@@ -3,6 +3,7 @@ package com.azhukov.emulator.mapper;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.azhukov.emulator.domain.*;
+import com.azhukov.integration.contract.external.model.FaultConfiguration;
 import com.azhukov.integration.contract.external.model.OperationInput;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -11,6 +12,22 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 class OperationApiMapperTest {
+    @Test
+    void generatedMapperMapsEveryExternallyConfigurableFaultWithoutExposingNone() {
+        try (var context = new AnnotationConfigApplicationContext("com.azhukov.emulator.mapper")) {
+            var mapper = context.getBean(OperationApiMapper.class);
+            var mapped = java.util.EnumSet.noneOf(FaultMode.class);
+            for (var mode : FaultConfiguration.ModeEnum.values()) {
+                var value = mapper.faultMode(mode);
+                assertEquals(mode.getValue(), value.name());
+                mapped.add(value);
+            }
+            var expected = java.util.EnumSet.allOf(FaultMode.class);
+            expected.remove(FaultMode.NONE);
+            assertEquals(expected, mapped);
+        }
+    }
+
     @Test
     void generatedSpringMapperKeepsAcknowledgementStateEventsAndOptionalResult() {
         try (var context = new AnnotationConfigApplicationContext("com.azhukov.emulator.mapper")) {

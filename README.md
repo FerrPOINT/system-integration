@@ -295,6 +295,7 @@ corepack pnpm --dir frontend generate:api
 ~~~sh
 corepack pnpm --dir frontend install --frozen-lockfile
 corepack pnpm --dir tests install --frozen-lockfile
+corepack pnpm --dir tests typecheck
 sh ./gradlew --no-daemon --max-workers=1 :backend:check :emulator:check :backend:bootJar :emulator:bootJar
 corepack pnpm --dir frontend build
 corepack pnpm --dir frontend test:api

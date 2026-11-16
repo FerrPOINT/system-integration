@@ -375,7 +375,10 @@ anchor прежней entry, в том числе после такого сбр
 командой сброса уже существующих pages/pageParams.
 
 StrictMode включён. Стандартные Hooks/Query rules, import boundaries и строгий
-TypeScript входят в build; отрицательные lint fixtures проверяют сами ограничения.
+TypeScript входят в build, включая браузерные fixtures без включения их в bundle.
+Playwright-конфигурации и сценарии проверяются отдельным tests/tsconfig.json
+с Node/DOM types перед запуском тестов. Отрицательные lint fixtures проверяют
+сами ограничения и не входят в общий TypeScript scope.
 Причины совместимости lint toolchain и выбор lazy описаны в
 [плане frontend](https://github.com/FerrPOINT/system-integration/blob/500461d1737b98524ba618bac717d09fc34f7127/docs/frontend-refactoring-plan.md).
 

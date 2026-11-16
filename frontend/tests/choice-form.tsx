@@ -2,6 +2,9 @@ import { StrictMode } from 'react';
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Select } from '../src/shared/ui/select';
+import '../src/shared/styles/design-tokens.css';
+import '../src/shared/styles/controls.css';
+import '../src/shared/styles/patterns.css';
 import '../src/shared/styles/layout.css';
 import '../src/app/shell/shell.css';
 

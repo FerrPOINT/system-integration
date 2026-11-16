@@ -14,7 +14,8 @@ export const titleInputProps = {
   maxLength: formRules.Title.maxLength * 2,
   pattern: '(?=[\\s\\S]{1,' + formRules.Title.maxLength + '}$)' + formRules.Title.pattern,
 };
-export const reasonMaxLength = formRules.ActionReason.maxLength * 2;
+export const reasonCodePointLimit = formRules.ActionReason.maxLength;
+export const reasonMaxLength = reasonCodePointLimit * 2;
 export const validReason = (value: string) => validText(value, formRules.ActionReason);
 export const referenceInputProps = { pattern: formRules.Reference.pattern };
 export const quantityInputProps = { min: formRules.Quantity.minimum, max: formRules.Quantity.maximum, step: 1 };
