@@ -546,7 +546,7 @@ Component fixtures находятся в tests/components и frontend/tests, в�
 | Связь | Проверка | Критерий |
 | --- | --- | --- |
 | TC-06 | DeliveryClaimConcurrencyTest, ParkedDeliveryMigrationTest | Пауза вне due, V10 сохраняет попытки/активные leases; resume начинает GET |
-| TC-02/15 | TaskTitleTest, IssueCommandsTest, UnicodeCommandTest | 160/500 emoji допустимы, 161/501 нет; NEL/BOM-only/NUL/surrogates запрещены, X+BOM сохранён; replay однократен |
+| TC-02/15 | TaskTitleTest, IssueCommandsTest, UnicodeCommandTest | 160/500 emoji допустимы, 161/501 нет; NEL-only/NUL/surrogates запрещены, BOM и X+BOM сохранены; старая запись читается и переименовывается; replay однократен |
 | TC-07/08/11 | OperationsWorkflowTest general/competing | Оператор закрывает общую проблему с автором и revision; инициатор не может; конкуренция не перезаписывает решение; task-сверку нельзя обойти |
 | TC-09 | Component command-outcome | Unicode title и general decision в реальных формах обоих размеров; нет вымышленного reconciliationId |
 | TC-11 | DatabaseSessionTest, ExchangeDiagnosticsTest | Idle-holder откатывается и освобождает writer; активный SQL дольше idle-порога проходит; диагностика закрыта и не пишет бизнес-данные |

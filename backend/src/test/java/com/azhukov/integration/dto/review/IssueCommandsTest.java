@@ -57,9 +57,13 @@ class IssueCommandsTest {
         var id = UUID.randomUUID();
         assertEquals("😀".repeat(500), new IssueCommands.Retry(1, "😀".repeat(500), id).reason());
         assertThrows(RuleViolation.class, () -> new IssueCommands.Retry(1, "😀".repeat(501), id));
-        for (String blank : new String[] {"\u0085", "\uFEFF"})
+        for (String blank : new String[] {"\u0085"})
             assertThrows(RuleViolation.class, () -> new IssueCommands.Retry(1, blank, id));
         assertEquals("X\uFEFF", new IssueCommands.Retry(1, "X\uFEFF", id).reason());
+        assertEquals("\uFEFF", new IssueCommands.Retry(1, "\uFEFF", id).reason());
+        assertEquals(
+                "\uFEFF",
+                new IssueCommands.Resolve(1, id, IssueResolution.Action.ACKNOWLEDGE_DIFFERENCE, "\uFEFF").reason());
     }
 
     @Test

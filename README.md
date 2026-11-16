@@ -408,7 +408,7 @@ V10 выводит сохранённые NEEDS_REVIEW из due-поиска б�
 Закрытие не чинит источник: после исправления invalid page нужен перезапуск
 backend worker с сохранённым курсором.
 
-Границы title/reason — 160/500 Unicode code points. White_Space/BOM, NUL
+Границы title/reason — 160/500 Unicode code points. Unicode White_Space, NUL
 и malformed UTF-16 согласованы в OpenAPI, Java и UI; outputs только в build.
 DataSource: TCP keepalive и idle transaction timeout 60s. Прямой запуск допускает
 SI_DB_IDLE_TRANSACTION_TIMEOUT / SI_EMULATOR_DB_IDLE_TRANSACTION_TIMEOUT

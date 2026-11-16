@@ -3,11 +3,11 @@ package com.azhukov.integration.domain;
 import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 
-/** Persisted command text: Unicode code points, White_Space plus BOM, no NUL or malformed UTF-16. */
+/** Persisted command text: Unicode code points, Unicode White_Space, no NUL or malformed UTF-16. */
 public final class TextRule {
     private static final Pattern NON_BLANK =
             Pattern.compile(
-                    "[^\\u0009-\\u000D\\u0020\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]");
+                    "[^\\u0009-\\u000D\\u0020\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]");
 
     private TextRule() {}
 

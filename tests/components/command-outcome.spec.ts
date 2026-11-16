@@ -599,7 +599,7 @@ test('general feed decision validates Unicode and submits no fabricated reconcil
   await selectChoice(page, 'Действие', 'Закрыть общую проблему');
   const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
   const submit = page.getByRole('button', { name: 'Закрыть общую проблему', exact: true });
-  await reason.fill('\uFEFF');
+  await reason.fill('\u0085');
   await expect(submit).toBeDisabled();
   await reason.fill('x'.repeat(501));
   await expect(submit).toBeDisabled();
@@ -626,11 +626,11 @@ test('title field accepts the full Unicode boundary and rejects a neighboring ex
   await page.goto('/tests/command-outcome.html');
   await page.getByRole('button', { name: 'Изменить название', exact: true }).click();
   const input = page.getByRole('textbox', { name: 'Новое название', exact: true });
-  for (const value of ['😀'.repeat(160), 'X\uFEFF']) {
+  for (const value of ['😀'.repeat(160), '\uFEFF', 'X\uFEFF']) {
     await input.fill(value);
     expect(await input.evaluate((element: HTMLInputElement) => element.checkValidity())).toBe(true);
   }
-  for (const value of ['x'.repeat(161), '\uFEFF', '\u0085']) {
+  for (const value of ['x'.repeat(161), '\u0085']) {
     await input.fill(value);
     expect(await input.evaluate((element: HTMLInputElement) => element.checkValidity())).toBe(false);
   }

@@ -642,11 +642,11 @@ components:
             $ref: '#/components/schemas/Problem'
   schemas:
     Title:
-      description: Длина в Unicode code points; корректный Unicode без NUL и одиночных surrogate-кодов. Строка не состоит только из Unicode White_Space и BOM.
+      description: Длина в Unicode code points; корректный Unicode без NUL и одиночных surrogate-кодов. Строка не состоит только из Unicode White_Space.
       type: string
       minLength: 1
       maxLength: 160
-      pattern: '^(?![\s\S]*\u0000)[\s\S]*[^\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF][\s\S]*$'
+      pattern: '^(?![\s\S]*\u0000)[\s\S]*[^\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000][\s\S]*$'
     Request:
       $ref: './external-exchange.openapi.yaml#/components/schemas/OperationInput'
     Problem:
@@ -1068,11 +1068,11 @@ components:
       type: string
       enum: [APPLY_EXTERNAL_RESULT, ACKNOWLEDGE_DIFFERENCE, ACKNOWLEDGE_FEED_ISSUE]
     ActionReason:
-      description: Длина в Unicode code points; корректный Unicode без NUL и одиночных surrogate-кодов. Не только Unicode White_Space и BOM.
+      description: Длина в Unicode code points; корректный Unicode без NUL и одиночных surrogate-кодов. Не только Unicode White_Space.
       type: string
       minLength: 1
       maxLength: 500
-      pattern: '^(?![\s\S]*\u0000)[\s\S]*[^\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF][\s\S]*$'
+      pattern: '^(?![\s\S]*\u0000)[\s\S]*[^\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000][\s\S]*$'
     ResolveIssueRequest:
       type: object
       additionalProperties: false

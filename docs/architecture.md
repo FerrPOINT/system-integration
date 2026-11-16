@@ -975,8 +975,9 @@ ExchangeService фиксирует расход лимита и захват д�
 историю и остальные очереди. Нового eligibility-флага нет.
 
 Title/ActionReason измеряются в Unicode code points без нормализации.
-Пробелы — явный набор Unicode White_Space плюс BOM; NUL и malformed UTF-16
-запрещены до fingerprint/replay. Domain TextRule и generated CodePointLength
+Пробелы — явный набор Unicode White_Space; NUL и malformed UTF-16
+запрещены до fingerprint/replay. BOM не входит в Unicode White_Space, как
+в прежнем backend: старые значения, чтение и replay не ломаются. Domain TextRule и generated CodePointLength
 соблюдают это правило. Единственный upstream partial находится в
 contracts/templates; arrays/numbers не изменены. Orval генерирует ограничения
 из той же схемы; shared/lib/text-rules адаптирует HTML maxlength (UTF-16)
