@@ -2,27 +2,12 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { GetSession200 } from '../../../../build/generated/openapi/client';
 import { ApiError } from '../../../shared/api/http.ts';
 import { clearFeedPositions } from '../../../shared/lib/collections/feed-position-storage.ts';
-
-export const sessionKey = ['session'] as const;
-
-const scopes = new WeakMap<QueryClient, { generation: number; commands: WeakMap<object, number> }>();
-function sessionScope(client: QueryClient) {
-  let scope = scopes.get(client);
-  if (!scope) {
-    scope = { generation: 0, commands: new WeakMap() };
-    scopes.set(client, scope);
-  }
-  return scope;
-}
-
-export function startSessionCommand(client: QueryClient, command: object) {
-  const scope = sessionScope(client);
-  scope.commands.set(command, scope.generation);
-}
-
-export function sessionGeneration(client: QueryClient) {
-  return sessionScope(client).generation;
-}
+import {
+  advanceSessionGeneration,
+  isCurrentSessionCommand,
+  sessionGeneration,
+  sessionKey,
+} from '../../../shared/api/session-scope.ts';
 
 function clearPrivateCache(client: QueryClient) {
   const owned = (query: { queryKey: readonly unknown[] }) => query.queryKey[0] !== sessionKey[0];
@@ -34,16 +19,15 @@ function clearPrivateCache(client: QueryClient) {
 }
 
 export async function clearSession(client: QueryClient, expectedGeneration = sessionGeneration(client)) {
-  const scope = sessionScope(client);
-  if (scope.generation !== expectedGeneration) return;
-  const clearingGeneration = ++scope.generation;
+  if (sessionGeneration(client) !== expectedGeneration) return;
+  const clearingGeneration = advanceSessionGeneration(client);
   const cancelled = Promise.all([
     client.cancelQueries({ queryKey: sessionKey, exact: true }),
     clearPrivateCache(client),
   ]);
   clearFeedPositions();
   await cancelled;
-  if (scope.generation !== clearingGeneration) return;
+  if (sessionGeneration(client) !== clearingGeneration) return;
   // Preserve the observed session query so the auth gate sees the identity change.
   client.setQueryData(sessionKey, null);
 }
@@ -51,7 +35,7 @@ export async function clearSession(client: QueryClient, expectedGeneration = ses
 export async function acceptSession(client: QueryClient, next: GetSession200) {
   const previous = client.getQueryData<GetSession200 | null>(sessionKey);
   if (previous?.userId !== next.userId || previous?.role !== next.role) {
-    sessionScope(client).generation++;
+    advanceSessionGeneration(client);
     if (previous) clearFeedPositions();
     await clearPrivateCache(client);
   }
@@ -59,8 +43,7 @@ export async function acceptSession(client: QueryClient, next: GetSession200) {
 }
 
 export function expireSession(client: QueryClient, error: Error, command?: object) {
-  const scope = sessionScope(client);
   // Removing a pending mutation from Query's cache does not stop its callbacks.
-  if (command && scope.commands.get(command) !== scope.generation) return;
+  if (command && !isCurrentSessionCommand(client, command)) return;
   if (error instanceof ApiError && error.status === 401) return clearSession(client);
 }

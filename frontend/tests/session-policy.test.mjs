@@ -1,13 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { QueryClient } from '@tanstack/react-query';
-import {
-  acceptSession,
-  clearSession,
-  expireSession,
-  sessionKey,
-  startSessionCommand,
-} from '../src/features/auth/model/session-policy.ts';
+import { acceptSession, clearSession, expireSession } from '../src/features/auth/model/session-policy.ts';
+import { startSessionCommand, sessionKey } from '../src/shared/api/session-scope.ts';
 import { ApiError } from '../src/shared/api/http.ts';
 
 const a = { userId: 'account-a', role: 'INITIATOR', username: 'alice' };

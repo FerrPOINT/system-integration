@@ -1,7 +1,8 @@
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { getSession } from '../../../../build/generated/openapi/client';
 import { data } from '../../../shared/api/http';
-import { acceptSession, sessionKey } from '../model/session-policy';
+import { acceptSession } from '../model/session-policy';
+import { sessionKey } from '../../../shared/api/session-scope';
 
 export const sessionOptions = queryOptions({
   queryKey: sessionKey,

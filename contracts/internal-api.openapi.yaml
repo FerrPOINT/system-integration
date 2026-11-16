@@ -12,7 +12,7 @@ paths:
       tags: [Session]
       security: []
       summary: Получить токен для следующего запроса, меняющего состояние
-      description: После входа и выхода клиент запрашивает новый токен.
+      description: После входа и выхода клиент запрашивает новый токен. Перед записью клиент сверяет userId владельца токена с пользователем, для которого подготовлена команда.
       responses:
         '200':
           description: Токен привязан к текущей сессии.
@@ -25,6 +25,10 @@ paths:
                 properties:
                   token:
                     type: string
+                  userId:
+                    type: [string, 'null']
+                    format: uuid
+                    description: ID владельца токена для аутентифицированной сессии. Отсутствие или null означает анонимную сессию.
   /api/login:
     post:
       operationId: logIn

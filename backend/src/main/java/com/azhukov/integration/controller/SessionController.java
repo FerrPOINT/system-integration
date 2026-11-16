@@ -7,6 +7,7 @@ import com.azhukov.integration.security.AppUser;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -19,7 +20,9 @@ public class SessionController implements SessionApi {
         var token =
                 (org.springframework.security.web.csrf.CsrfToken)
                         request.getAttribute(org.springframework.security.web.csrf.CsrfToken.class.getName());
-        return ResponseEntity.ok(new CsrfToken(token.getToken()));
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        var owner = authentication != null && authentication.getPrincipal() instanceof AppUser user ? user.id() : null;
+        return ResponseEntity.ok(new CsrfToken(token.getToken()).userId(owner));
     }
 
     @Override

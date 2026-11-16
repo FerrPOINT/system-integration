@@ -45,7 +45,17 @@ export function IssueList() {
   });
   const { query: issues, items: issuesItems, meta: issuesPage } = collection;
   const missingPage = Boolean(issuesPage && page >= issuesPage.totalPages && page > 0);
-  const { viewportRef: registryRef, restoring, positionNotice, loadNext, loadPrevious, refresh } = collection;
+  const {
+    viewportRef: registryRef,
+    restoring,
+    autoLoad,
+    nextError,
+    previousError,
+    positionNotice,
+    loadNext,
+    loadPrevious,
+    refresh,
+  } = collection;
   return (
     <>
       <div className="list-tools ui-page-stack">
@@ -84,8 +94,8 @@ export function IssueList() {
               hasPrevious={issues.hasPreviousPage}
               pending={issues.isFetchingPreviousPage}
               busy={issues.isFetching}
-              error={issues.isFetchPreviousPageError ? issues.error : null}
-              autoLoad={!restoring && !issues.isFetchPreviousPageError && !issues.isFetchNextPageError}
+              error={previousError}
+              autoLoad={autoLoad}
               onLoad={loadPrevious}
             />
           )}
@@ -237,8 +247,8 @@ export function IssueList() {
               pending={issues.isFetchingNextPage}
               busy={issues.isFetching}
               notice={positionNotice}
-              autoLoad={!restoring && !issues.isFetchPreviousPageError && !issues.isFetchNextPageError}
-              error={issues.isFetchNextPageError ? issues.error : null}
+              autoLoad={autoLoad}
+              error={nextError}
               onLoad={loadNext}
             />
           )

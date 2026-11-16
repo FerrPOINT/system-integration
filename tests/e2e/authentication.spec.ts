@@ -22,4 +22,11 @@ test('login enforces the generated HTML pattern and accepts a valid account', as
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
   expect(requests).toBe(1);
+  const sessionResponse = await page.request.get('/api/session');
+  const csrfResponse = await page.request.get('/api/csrf');
+  expect(sessionResponse.ok()).toBe(true);
+  expect(csrfResponse.ok()).toBe(true);
+  const session = await sessionResponse.json();
+  const csrf = await csrfResponse.json();
+  expect(csrf.userId).toBe(session.userId);
 });
