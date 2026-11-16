@@ -9,9 +9,30 @@
 ленты сохраняется до явного успешного повтора/refresh, независимо от poll.
 Повторный вход после неверного пароля и обновление той же identity сохранены.
 
-Дефекты воспроизведены RED-регрессиями; исправления прошли целевые проверки.
-Общая квалификация текущего кандидата и слияние ещё не завершены.
-Receipts: tests/results/frontend-merge-2026-11-17/.
+Дефекты воспроизведены RED-регрессиями. Прикладной кандидат 2fcdc18 прошёл
+общую квалификацию на локальном Windows workspace:
+
+- check и bootJar обоих Java-приложений: 127 backend + 21 emulator тест;
+- frontend build с Prettier, ESLint и строгим TypeScript, включая fixtures;
+- 69 unit/API и 2 проверки production-ассетов, TypeScript runner;
+- 217 component PASS на desktop/mobile, без flaky; один штатный mobile skip
+  сценария, проверяющего desktop-таблицу;
+- 12 production Nginx/CSP, 4 UI через настоящий API и 4 HTTP smoke.
+
+Три локальных образа имеют revision 2fcdc18, контейнеры healthy.
+Обслуживаемые JS/CSS сверены по SHA-256 с образами; nonce HTML совпадает с CSP.
+[Приложение](http://127.0.0.1:19673) обновлено без seed/reset.
+Контрольные суммы исходных 706 заданий, их истории, сверок и разборов,
+705 внешних операций/событий и всех 1526 квитанций сохранились.
+V11 не затронула задачи: подходящих прежних состояний нет. V12 удалила только
+http_status; ключи, fingerprints, тела и даты квитанций проверены отдельно.
+
+PostgreSQL-тесты с TRUNCATE на сохранённом стенде не запускались.
+Публичная установка не обновлялась. PR доставки —
+[#18](https://github.com/FerrPOINT/system-integration/pull/18).
+Receipts находятся в ignored tests/results/frontend-merge-2026-11-17/:
+gate.log, components.json, production.json, runtime-verification.json,
+protected-verified.json и receipts-verified.json.
 
 ## Предыдущая квалификация main
 
@@ -91,9 +112,10 @@ BUFFERS/WAL, проверки V10, 10 recovery и 6 demo. Подробности
 ## Соответствие ТЗ
 
 D01–D07, NF01–NF10 и D-NF01–D-NF03 связаны с проверками
-в [матрице требований](requirements.md). В этой итерации повторены Java,
-PostgreSQL, интерфейс и восстановление. NF08 остаётся результатом отдельного
-кандидата f638e93. [Исходное задание](original-specification.md) не изменялось.
+в [матрице требований](requirements.md). Текущая локальная итерация повторяет
+Java без PostgreSQL-tag, frontend и чтения настоящего API/UI. PostgreSQL,
+recovery, SQL и NF08 остаются результатами соответствующих предыдущих
+кандидатов. [Исходное задание](original-specification.md) не изменялось.
 
 ## Ограничения
 
