@@ -17,8 +17,9 @@ public class TaskResultReader {
     public TaskOutcome outcome(BusinessStatus status, String stored) {
         if (stored == null || !status.isTerminal()) return null;
         var result = json.readTree(stored);
-        return new TaskOutcome(BusinessStatus.valueOf(result.get("status").asString()),
-            OffsetDateTime.parse(result.get("completedAt").asString()),
-            result.has("rejectionCode") ? result.get("rejectionCode").asString() : null);
+        return new TaskOutcome(
+                BusinessStatus.valueOf(result.get("status").asString()),
+                OffsetDateTime.parse(result.get("completedAt").asString()),
+                result.has("rejectionCode") ? result.get("rejectionCode").asString() : null);
     }
 }

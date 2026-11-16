@@ -15,11 +15,31 @@ function ReconcileAction({ taskId }: { taskId: string }) {
   const navigate = useNavigate();
   const update = useExchangeRefresh();
   const reconcile = useReconcileTask(taskId);
-  const refreshSnapshot = (snapshot: Reconciliation) => update.mutate({ taskId, issueId: snapshot.issueId }, {
-    onSuccess: () => { reconcile.reset(); navigate('/tasks/' + taskId + '/reconciliations/' + snapshot.reconciliationId); },
-  });
-  return <div className="inline-action"><Button onClick={() => reconcile.mutate(undefined, { onSuccess: refreshSnapshot })} disabled={reconcile.isPending || reconcile.isSuccess}>
-    {reconcile.isPending ? 'Сверяем…' : 'Выполнить сверку'}</Button><ErrorMessage error={reconcile.error} />
-    <CommandRefresh message="Сверка сохранена." error={update.error} pending={update.isPending}
-      onRetry={() => reconcile.data && refreshSnapshot(reconcile.data)} /></div>;
+  const refreshSnapshot = (snapshot: Reconciliation) =>
+    update.mutate(
+      { taskId, issueId: snapshot.issueId },
+      {
+        onSuccess: () => {
+          reconcile.reset();
+          navigate('/tasks/' + taskId + '/reconciliations/' + snapshot.reconciliationId);
+        },
+      },
+    );
+  return (
+    <div className="inline-action">
+      <Button
+        onClick={() => reconcile.mutate(undefined, { onSuccess: refreshSnapshot })}
+        disabled={reconcile.isPending || reconcile.isSuccess}
+      >
+        {reconcile.isPending ? 'Сверяем…' : 'Выполнить сверку'}
+      </Button>
+      <ErrorMessage error={reconcile.error} />
+      <CommandRefresh
+        message="Сверка сохранена."
+        error={update.error}
+        pending={update.isPending}
+        onRetry={() => reconcile.data && refreshSnapshot(reconcile.data)}
+      />
+    </div>
+  );
 }

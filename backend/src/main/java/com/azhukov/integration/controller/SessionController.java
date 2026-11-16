@@ -16,8 +16,9 @@ public class SessionController implements SessionApi {
 
     @Override
     public ResponseEntity<CsrfToken> getCsrfToken() {
-        var token = (org.springframework.security.web.csrf.CsrfToken)
-            request.getAttribute(org.springframework.security.web.csrf.CsrfToken.class.getName());
+        var token =
+                (org.springframework.security.web.csrf.CsrfToken)
+                        request.getAttribute(org.springframework.security.web.csrf.CsrfToken.class.getName());
         return ResponseEntity.ok(new CsrfToken(token.getToken()));
     }
 

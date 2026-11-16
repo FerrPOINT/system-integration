@@ -13,7 +13,10 @@ test('URL owns filters, validation and independent pagination resets', () => {
   assert.equal(source.get('page'), '3');
   assert.equal(parseTaskSearch(new URLSearchParams('businessStatus=__proto__')).validParameters, false);
   assert.equal(parseTaskSearch(new URLSearchParams('createdFrom=invalid')).validParameters, false);
-  assert.equal(parseTaskSearch(new URLSearchParams('createdFrom=2026-11-14T00:00:00Z&createdTo=2026-11-14T00:00:00Z')).validPeriod, false);
+  assert.equal(
+    parseTaskSearch(new URLSearchParams('createdFrom=2026-11-14T00:00:00Z&createdTo=2026-11-14T00:00:00Z')).validPeriod,
+    false,
+  );
   assert.equal(parseTaskSearch(new URLSearchParams()).hasFilters, false);
 });
 

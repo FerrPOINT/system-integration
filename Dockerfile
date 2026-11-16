@@ -10,13 +10,13 @@ FROM java-build AS backend-build
 COPY contracts/internal-api.openapi.yaml contracts/external-exchange.openapi.yaml contracts/
 COPY backend/src backend/src
 RUN --mount=type=cache,target=/root/.gradle \
-    ./gradlew --no-daemon --max-workers=1 '-Dorg.gradle.jvmargs=-Xmx512m -XX:ActiveProcessorCount=2' :backend:bootJar
+    ./gradlew --no-daemon --max-workers=1 '-Dorg.gradle.jvmargs=-Xmx512m -XX:ActiveProcessorCount=2' :backend:spotlessCheck :backend:bootJar
 
 FROM java-build AS emulator-build
 COPY contracts/external-exchange.openapi.yaml contracts/
 COPY emulator/src emulator/src
 RUN --mount=type=cache,target=/root/.gradle \
-    ./gradlew --no-daemon --max-workers=1 '-Dorg.gradle.jvmargs=-Xmx512m -XX:ActiveProcessorCount=2' :emulator:bootJar
+    ./gradlew --no-daemon --max-workers=1 '-Dorg.gradle.jvmargs=-Xmx512m -XX:ActiveProcessorCount=2' :emulator:spotlessCheck :emulator:bootJar
 
 FROM eclipse-temurin:25.0.5_8-jre@sha256:a640968ae55027b322cedd5f8228b01a84baff0b9e9360e47601c6a111ba1699 AS runtime
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \

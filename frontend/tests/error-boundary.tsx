@@ -11,14 +11,47 @@ function Crash(): ReactNode {
   throw new Error('PRIVATE_DIAGNOSTIC');
 }
 const nested = new URLSearchParams(location.search).has('nested');
-const FailedChunk = lazy(async () => { throw new Error('PRIVATE_DIAGNOSTIC chunk'); });
-const router = createMemoryRouter([{
-  errorElement: <RootErrorBoundary />,
-  element: <><nav aria-label="Fixture shell">Shell</nav><Outlet /></>,
-  children: [
-    { path: '/tasks', element: <><h1>Working page</h1><Link to="/crash">Break page</Link><Link to="/chunk">Break chunk</Link></> },
-    { path: '/crash', element: <Crash />, ...(nested ? { errorElement: <RouteErrorBoundary /> } : {}) },
-    { path: '/chunk', element: <Suspense fallback={<p>Loading chunk</p>}><FailedChunk /></Suspense>, ...(nested ? { errorElement: <RouteErrorBoundary /> } : {}) },
+const FailedChunk = lazy(async () => {
+  throw new Error('PRIVATE_DIAGNOSTIC chunk');
+});
+const router = createMemoryRouter(
+  [
+    {
+      errorElement: <RootErrorBoundary />,
+      element: (
+        <>
+          <nav aria-label="Fixture shell">Shell</nav>
+          <Outlet />
+        </>
+      ),
+      children: [
+        {
+          path: '/tasks',
+          element: (
+            <>
+              <h1>Working page</h1>
+              <Link to="/crash">Break page</Link>
+              <Link to="/chunk">Break chunk</Link>
+            </>
+          ),
+        },
+        { path: '/crash', element: <Crash />, ...(nested ? { errorElement: <RouteErrorBoundary /> } : {}) },
+        {
+          path: '/chunk',
+          element: (
+            <Suspense fallback={<p>Loading chunk</p>}>
+              <FailedChunk />
+            </Suspense>
+          ),
+          ...(nested ? { errorElement: <RouteErrorBoundary /> } : {}),
+        },
+      ],
+    },
   ],
-}], { initialEntries: ['/tasks'] });
-createRoot(document.getElementById('root')!).render(<StrictMode><RouterProvider router={router} /></StrictMode>);
+  { initialEntries: ['/tasks'] },
+);
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <RouterProvider router={router} />
+  </StrictMode>,
+);

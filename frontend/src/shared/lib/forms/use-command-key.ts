@@ -8,6 +8,8 @@ export function useCommandKey() {
       if (command.current?.body !== body) command.current = { body, key: crypto.randomUUID() };
       return command.current.key;
     },
-    reset() { command.current = null; },
+    reset() {
+      command.current = null;
+    },
   };
 }

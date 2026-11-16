@@ -8,7 +8,8 @@ import java.util.UUID;
 public record CreateTask(String title, TaskInput request) {
     public CreateTask {
         Objects.requireNonNull(request);
-        new TaskTitle(title,1);
+        new TaskTitle(title, 1);
     }
+
     public record Result(UUID taskId) {}
 }

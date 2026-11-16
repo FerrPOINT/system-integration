@@ -7,14 +7,24 @@ export function useFormNavigationGuard({ dirty, pending }: { dirty: boolean; pen
   // permission is released synchronously by that event, never inferred from a timer.
   const released = useRef(false);
   const [localClose, setLocalClose] = useState<(() => void) | null>(null);
-  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
-    !released.current && (dirty || pending) && currentLocation.pathname !== nextLocation.pathname);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      !released.current && (dirty || pending) && currentLocation.pathname !== nextLocation.pathname,
+  );
   useEffect(() => {
     if (blocker.state === 'blocked' && pending) blocker.reset();
   }, [blocker, pending]);
-  useBeforeUnload(useCallback(event => {
-    if (!released.current && (dirty || pending)) { event.preventDefault(); event.returnValue = ''; }
-  }, [dirty, pending]));
+  useBeforeUnload(
+    useCallback(
+      (event) => {
+        if (!released.current && (dirty || pending)) {
+          event.preventDefault();
+          event.returnValue = '';
+        }
+      },
+      [dirty, pending],
+    ),
+  );
   return {
     open: !pending && (blocker.state === 'blocked' || localClose !== null),
     release() {
@@ -22,10 +32,13 @@ export function useFormNavigationGuard({ dirty, pending }: { dirty: boolean; pen
       if (blocker.state === 'blocked') blocker.reset();
       setLocalClose(null);
     },
-    protect() { released.current = false; },
+    protect() {
+      released.current = false;
+    },
     requestClose(close: () => void) {
       if (pending) return;
-      if (!released.current && dirty) setLocalClose(() => close); else close();
+      if (!released.current && dirty) setLocalClose(() => close);
+      else close();
     },
     cancel() {
       setLocalClose(null);
@@ -33,7 +46,8 @@ export function useFormNavigationGuard({ dirty, pending }: { dirty: boolean; pen
     },
     discard() {
       setLocalClose(null);
-      if (blocker.state === 'blocked') blocker.proceed(); else localClose?.();
+      if (blocker.state === 'blocked') blocker.proceed();
+      else localClose?.();
     },
   };
 }

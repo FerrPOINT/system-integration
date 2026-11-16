@@ -11,10 +11,10 @@
     "lint": "eslint src tests --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "generate:api": "orval",
-    "format": "prettier --ignore-path ../.prettierignore --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx,mjs,html}\" \"*.{ts,js,mjs,json,html}\" \"../tests/**/*.{ts,tsx,mjs,html}\" \"../.prettierrc.json\" \"../.vscode/*.json\"",
-    "format:check": "prettier --ignore-path ../.prettierignore --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx,mjs,html}\" \"*.{ts,js,mjs,json,html}\" \"../tests/**/*.{ts,tsx,mjs,html}\" \"../.prettierrc.json\" \"../.vscode/*.json\"",
+    "format": "prettier --ignore-path ../.prettierignore --write \"architecture-fixtures/**/*.{ts,tsx}\" \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx,mjs,html}\" \"*.{ts,js,mjs,json,html}\" \"../tests/**/*.{ts,tsx,mjs,html}\" \"../.prettierrc.json\" \"../.vscode/*.json\"",
+    "format:check": "prettier --ignore-path ../.prettierignore --check \"architecture-fixtures/**/*.{ts,tsx}\" \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx,mjs,html}\" \"*.{ts,js,mjs,json,html}\" \"../tests/**/*.{ts,tsx,mjs,html}\" \"../.prettierrc.json\" \"../.vscode/*.json\"",
     "dev": "orval && vite --host 127.0.0.1 --strictPort",
-    "build": "orval && eslint src tests --max-warnings=0 && tsc --noEmit && vite build",
+    "build": "pnpm format:check && orval && eslint src tests --max-warnings=0 && tsc --noEmit && vite build",
     "test:api": "node --test tests/*.test.mjs",
     "test:assets": "node --test tests/build-assets.mjs"
   },

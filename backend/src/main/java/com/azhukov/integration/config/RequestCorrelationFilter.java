@@ -19,19 +19,28 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class RequestCorrelationFilter extends OncePerRequestFilter {
     @Override
-    protected void doFilterInternal(HttpServletRequest request,HttpServletResponse response,FilterChain chain)
-        throws ServletException,IOException {
-        String id=UUID.randomUUID().toString();
-        response.setHeader("X-Request-ID",id);
-        try (var correlation=MDC.putCloseable("requestId",id)) {
-            try { chain.doFilter(request,response); }
-            catch (IOException | ServletException | RuntimeException failure) {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+        String id = UUID.randomUUID().toString();
+        response.setHeader("X-Request-ID", id);
+        try (var correlation = MDC.putCloseable("requestId", id)) {
+            try {
+                chain.doFilter(request, response);
+            } catch (IOException | ServletException | RuntimeException failure) {
                 // Exception messages may contain database values: keep only identity/category.
-                log.error("http failure method={} path={} exception={}",request.getMethod(),request.getRequestURI(),failure.getClass().getSimpleName());
+                log.error(
+                        "http failure method={} path={} exception={}",
+                        request.getMethod(),
+                        request.getRequestURI(),
+                        failure.getClass().getSimpleName());
                 throw failure;
             }
-            if (response.getStatus()>=400)
-                log.warn("http rejected method={} path={} status={}",request.getMethod(),request.getRequestURI(),response.getStatus());
+            if (response.getStatus() >= 400)
+                log.warn(
+                        "http rejected method={} path={} status={}",
+                        request.getMethod(),
+                        request.getRequestURI(),
+                        response.getStatus());
         }
     }
 }

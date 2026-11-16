@@ -33,7 +33,6 @@ test('frontend serves the built application and its JavaScript', async () => {
   assert.match(script.headers.get('content-type') ?? '', /javascript/);
 });
 
-
 test('frontend proxies protected API routes to the backend', async () => {
   const response = await fetch(new URL('/api/session', frontend), { signal: AbortSignal.timeout(5000) });
   assert.equal(response.status, 401);
@@ -44,14 +43,21 @@ function rawGet(value, encoding) {
   const url = new URL(value);
   assert.ok(['http:', 'https:'].includes(url.protocol));
   return new Promise((resolve, reject) => {
-    const request = (url.protocol === 'https:' ? httpsGet : httpGet)(url, {
-      headers: { 'Accept-Encoding': encoding }, signal: AbortSignal.timeout(5000),
-    }, response => {
-      const chunks = [];
-      response.on('data', chunk => chunks.push(chunk));
-      response.on('error', reject);
-      response.on('end', () => resolve({ status: response.statusCode, headers: response.headers, body: Buffer.concat(chunks) }));
-    });
+    const request = (url.protocol === 'https:' ? httpsGet : httpGet)(
+      url,
+      {
+        headers: { 'Accept-Encoding': encoding },
+        signal: AbortSignal.timeout(5000),
+      },
+      (response) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('error', reject);
+        response.on('end', () =>
+          resolve({ status: response.statusCode, headers: response.headers, body: Buffer.concat(chunks) }),
+        );
+      },
+    );
     request.on('error', reject);
   });
 }

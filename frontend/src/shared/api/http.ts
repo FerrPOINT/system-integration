@@ -11,10 +11,14 @@ const messages: Partial<Record<Problem['code'], string>> = {
 export class ApiError extends Error {
   readonly status: number;
   constructor(status: number, payload?: unknown) {
-    const problem = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+    const problem = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
     const codeMessage = typeof problem.code === 'string' ? messages[problem.code as Problem['code']] : undefined;
-    super(codeMessage || (typeof problem.detail === 'string' && problem.detail) ||
-      (typeof problem.title === 'string' && problem.title) || 'Не удалось выполнить запрос');
+    super(
+      codeMessage ||
+        (typeof problem.detail === 'string' && problem.detail) ||
+        (typeof problem.title === 'string' && problem.title) ||
+        'Не удалось выполнить запрос',
+    );
     this.name = 'ApiError';
     this.status = status;
   }

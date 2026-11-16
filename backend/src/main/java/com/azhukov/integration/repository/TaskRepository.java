@@ -21,9 +21,14 @@ public interface TaskRepository {
      * @return state against which the command is validated
      */
     Task get(UUID id, Actor user, boolean lock);
+
     Task insert(UUID owner, CreateTask input);
+
     void rename(UUID id, String title, long revision);
+
     void observe(Task task, UUID issue, OperationResult result, String summary);
+
     void history(Task task, UUID actorId, HistoryType type, String summary);
+
     void history(Task task, UUID actorId, HistoryType type, String summary, Object details);
 }

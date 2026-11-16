@@ -1,5 +1,6 @@
 /* Base PDLC design tokens; see README.md for source revision. */
-:root, [data-theme="dark"] {
+:root,
+[data-theme='dark'] {
   color-scheme: dark;
   --color-background: #09090b;
   --color-surface: #18181b;
@@ -34,7 +35,7 @@
   --color-destructive: #f87171;
   --color-popover: #18181b;
   --color-popover-foreground: #fafafa;
-  --base-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --base-font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --base-font-body: 0.875rem;
   --base-font-label: 0.75rem;
   --base-font-page-title: 1.5rem;
@@ -54,7 +55,7 @@
   --base-radius-dialog: 8px;
   --base-radius-menu: 6px;
 }
-[data-theme="gray"] {
+[data-theme='gray'] {
   color-scheme: dark;
   --color-background: #1f1f23;
   --color-surface: #2a2a2f;
@@ -89,7 +90,7 @@
   --color-destructive: #fca5a5;
   --color-popover: #2a2a2f;
   --color-popover-foreground: #f4f4f5;
-  --base-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --base-font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --base-font-body: 0.875rem;
   --base-font-label: 0.75rem;
   --base-font-page-title: 1.5rem;
@@ -109,7 +110,7 @@
   --base-radius-dialog: 8px;
   --base-radius-menu: 6px;
 }
-[data-theme="light"] {
+[data-theme='light'] {
   color-scheme: light;
   --color-background: #f4f4f5;
   --color-surface: #ffffff;
@@ -144,7 +145,7 @@
   --color-destructive: #b91c1c;
   --color-popover: #ffffff;
   --color-popover-foreground: #18181b;
-  --base-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --base-font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --base-font-body: 0.875rem;
   --base-font-label: 0.75rem;
   --base-font-page-title: 1.5rem;

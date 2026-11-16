@@ -14,10 +14,25 @@ export function useTaskList(mobile: boolean) {
   const filters = parseTaskSearch(search);
   const validParameters = pagination.valid && filters.validParameters;
   const valid = validParameters && filters.validPeriod;
-  const collection = useCollection({ key: taskKeys.taskList(filters.params), page: pagination.page, size: pagination.size, feed: mobile, enabled: valid, viewportRef: pagination.viewportRef,
-    read: (page, size, signal) => readTaskPage({ ...filters.params, page, size }, signal), identify: identifyTask });
-  return { search, pagination, filters, validParameters, valid, collection,
-    changeFilters: (changes: Record<string, string | undefined>) => setSearch(changeTaskFilters(search, changes), { replace: true }),
+  const collection = useCollection({
+    key: taskKeys.taskList(filters.params),
+    page: pagination.page,
+    size: pagination.size,
+    feed: mobile,
+    enabled: valid,
+    viewportRef: pagination.viewportRef,
+    read: (page, size, signal) => readTaskPage({ ...filters.params, page, size }, signal),
+    identify: identifyTask,
+  });
+  return {
+    search,
+    pagination,
+    filters,
+    validParameters,
+    valid,
+    collection,
+    changeFilters: (changes: Record<string, string | undefined>) =>
+      setSearch(changeTaskFilters(search, changes), { replace: true }),
     resetFilters: (replace = true) => setSearch({}, { replace }),
   };
 }

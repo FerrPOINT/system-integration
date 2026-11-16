@@ -60,7 +60,7 @@ def collect(roots):
     for root in roots:
         for path in sorted(Path(root).rglob('*.java')):
             source=path.read_text();code,owners=methods(source);counts={}
-            for match in re.finditer(r'\bjdbc\.(\w+)\(',code):
+            for match in re.finditer(r'\bjdbc\s*\.\s*(\w+)\s*\(',code):
                 if match.group(1) not in {'queryForObject','query','update','batchUpdate'}:
                     raise ValueError(f'Add SQL coverage for {path}: {match.group(1)}')
                 enclosing=[m for m in owners if m[0]<=match.start()<m[1]]

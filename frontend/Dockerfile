@@ -5,6 +5,9 @@ COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml 
 RUN corepack pnpm install --frozen-lockfile --reporter=append-only
 COPY contracts /work/contracts
 COPY frontend .
+COPY .prettierrc.json .prettierignore /work/
+COPY .vscode /work/.vscode
+COPY tests /work/tests
 RUN corepack pnpm build
 
 FROM nginx:1.30.6-alpine@sha256:901e593c95dc85f5a729f5765516321366ef4ac401821431d408897e95287d0a

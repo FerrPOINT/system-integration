@@ -4,7 +4,8 @@ import query from '@tanstack/eslint-plugin-query';
 import importX from 'eslint-plugin-import-x';
 
 const generatedClient = {
-  regex: '(?:^|/)build/generated/', allowTypeImports: true,
+  regex: '(?:^|/)build/generated/',
+  allowTypeImports: true,
   message: 'Use the feature API for requests; importing generated DTO types is allowed.',
 };
 
@@ -32,14 +33,31 @@ export default [
       '@tanstack/query/stable-query-client': 'error',
       '@tanstack/query/no-unstable-deps': 'error',
       'import-x/no-cycle': 'error',
-      'import-x/no-restricted-paths': ['error', { zones: [
-        { target: './src/shared', from: ['./src/app', './src/features'], message: 'Shared cannot depend on application composition or scenarios.' },
-        { target: './src/features', from: './src/app', message: 'Features own their behavior; app only composes them.' },
-        { target: './src/features/tasks', from: './src/features/operations', except: ['./reconciliation.ts'] },
-        { target: './src/features/operations', from: './src/features/tasks', except: ['./api/task-keys.ts', './model/task-labels.ts'] },
-        { target: './src/features/auth', from: ['./src/features/tasks', './src/features/operations'] },
-        { target: ['./src/features/tasks', './src/features/operations'], from: './src/features/auth' },
-      ] }],
+      'import-x/no-restricted-paths': [
+        'error',
+        {
+          zones: [
+            {
+              target: './src/shared',
+              from: ['./src/app', './src/features'],
+              message: 'Shared cannot depend on application composition or scenarios.',
+            },
+            {
+              target: './src/features',
+              from: './src/app',
+              message: 'Features own their behavior; app only composes them.',
+            },
+            { target: './src/features/tasks', from: './src/features/operations', except: ['./reconciliation.ts'] },
+            {
+              target: './src/features/operations',
+              from: './src/features/tasks',
+              except: ['./api/task-keys.ts', './model/task-labels.ts'],
+            },
+            { target: './src/features/auth', from: ['./src/features/tasks', './src/features/operations'] },
+            { target: ['./src/features/tasks', './src/features/operations'], from: './src/features/auth' },
+          ],
+        },
+      ],
     },
   },
   {
@@ -47,15 +65,20 @@ export default [
     ignores: ['src/shared/api/**'],
     rules: {
       'no-restricted-imports': ['error', { patterns: [generatedClient] }],
-      'no-restricted-syntax': ['error', {
-        selector: 'ImportExpression[source.value=/build\\/generated\\//]',
-        message: 'Dynamic generated requests also belong to the feature API.',
-      }],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ImportExpression[source.value=/build\\/generated\\//]',
+          message: 'Dynamic generated requests also belong to the feature API.',
+        },
+      ],
     },
   },
   {
     // The URL parser reads the canonical enum; it still cannot call generated APIs.
     files: ['src/features/tasks/model/task-search.ts'],
-    rules: { 'no-restricted-imports': ['error', { patterns: [{ ...generatedClient, allowImportNames: ['BusinessStatus'] }] }] },
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [{ ...generatedClient, allowImportNames: ['BusinessStatus'] }] }],
+    },
   },
 ];

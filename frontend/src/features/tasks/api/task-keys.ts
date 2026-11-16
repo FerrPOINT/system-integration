@@ -6,6 +6,10 @@ export const taskKeys = {
   taskLists: ['tasks', 'list'] as const,
   task: (id: string) => ['tasks', id] as const,
   history: (id: string) => ['tasks', id, 'history'] as const,
-  taskList: ({ businessStatus, createdFrom, createdTo }: Pick<ListTasksParams, 'businessStatus' | 'createdFrom' | 'createdTo'>) =>
+  taskList: ({
+    businessStatus,
+    createdFrom,
+    createdTo,
+  }: Pick<ListTasksParams, 'businessStatus' | 'createdFrom' | 'createdTo'>) =>
     ['tasks', 'list', { businessStatus, createdFrom, createdTo }] as const,
 };

@@ -7,18 +7,27 @@ async function clickCellEdge(cell: Locator, options: { modifiers?: ['Control']; 
   const link = cell.locator('..').getByRole('link');
   const origin = (await link.boundingBox())!;
   // Address the native link's extended hit area, outside its title box.
-  await link.click({ position: { x: box.x + box.width - 5 - origin.x, y: box.y + box.height / 2 - origin.y }, ...options });
+  await link.click({
+    position: { x: box.x + box.width - 5 - origin.x, y: box.y + box.height / 2 - origin.y },
+    ...options,
+  });
 }
 
 test('UI-18: whole table rows preserve native navigation, new tabs and keyboard access', async ({ page, context }) => {
   loadUiEnvironment();
   await page.setViewportSize({ width: 1280, height: 1000 });
   await login(page, 'operator');
-  for (const [route, caption] of [['/tasks', 'Реестр заданий'], ['/issues', 'Реестр разборов обмена']]) {
+  for (const [route, caption] of [
+    ['/tasks', 'Реестр заданий'],
+    ['/issues', 'Реестр разборов обмена'],
+  ]) {
     await page.goto(route);
     const table = page.getByRole('table', { name: caption, exact: true });
     await expect(table).toBeVisible();
-    for (const [index, width] of [[0, 900], [1, 1280]]) {
+    for (const [index, width] of [
+      [0, 900],
+      [1, 1280],
+    ]) {
       await page.setViewportSize({ width, height: 1000 });
       await waitForRegistry(page);
       const row = table.locator('tbody tr').nth(index);
@@ -47,7 +56,9 @@ test('UI-18: whole table rows preserve native navigation, new tabs and keyboard 
         await expect.poll(() => new URL(popup.url()).pathname).toBe(href);
         await expect(popup.locator('main h1')).toBeVisible();
         await expect(page).toHaveURL(listUrl);
-      } finally { await popup.close(); }
+      } finally {
+        await popup.close();
+      }
     }
     await link.focus();
     await expect(link).toBeFocused();

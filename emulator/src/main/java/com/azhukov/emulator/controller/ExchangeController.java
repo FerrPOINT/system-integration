@@ -18,21 +18,26 @@ public class ExchangeController implements ExchangeApi {
 
     @Override
     public ResponseEntity<Acknowledgement> acceptOperation(UUID id, OperationInput input) {
-        var accepted = service.accept(id,mapper.request(input));
+        var accepted = service.accept(id, mapper.request(input));
         if (accepted.dropResponse()) {
             // The commit is already visible to GET; only this first HTTP response is delayed.
-            try { Thread.sleep(5000); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
         }
         var operation = accepted.operation();
-        return ResponseEntity.status(accepted.created() ? 202 : 200)
-            .body(mapper.acknowledgement(operation));
+        return ResponseEntity.status(accepted.created() ? 202 : 200).body(mapper.acknowledgement(operation));
     }
 
     @Override
-    public ResponseEntity<OperationState> inspectOperation(UUID id) { return ResponseEntity.ok(mapper.operation(service.get(id))); }
+    public ResponseEntity<OperationState> inspectOperation(UUID id) {
+        return ResponseEntity.ok(mapper.operation(service.get(id)));
+    }
 
     @Override
     public ResponseEntity<List<ResultEvent>> listResultEvents(Long after, Integer limit) {
-        return ResponseEntity.ok(mapper.events(service.events(after,limit)));
+        return ResponseEntity.ok(mapper.events(service.events(after, limit)));
     }
 }

@@ -12,7 +12,10 @@ import org.springframework.web.bind.annotation.RestController;
 @Profile("test-faults")
 class FaultController implements TestFaultsApi {
     private final OperationService operations;
-    FaultController(OperationService operations) { this.operations = operations; }
+
+    FaultController(OperationService operations) {
+        this.operations = operations;
+    }
 
     @Override
     public ResponseEntity<Void> configureFault(String reference, FaultConfiguration input) {
