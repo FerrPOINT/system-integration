@@ -6,14 +6,15 @@ import { useExchangeRefresh } from '../api/invalidate-exchange';
 import { decisionActions, decisionBasis, isDecisionStale, type DecisionAction, type DecisionBasis } from './decision';
 
 /** A draft captures its original decision basis; refetch never silently rebases it. */
-export function useIssueDecision(issue: Issue) {
+export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean; unresolved: boolean }) {
   const [action, setAction] = useState<DecisionAction | ''>('');
   const [reason, setReason] = useState('');
   const [basis, setBasis] = useState<DecisionBasis | null>(null);
   const { command, resetCommand } = useDecisionCommand(issue.issueId);
   const update = useExchangeRefresh();
   const dirty = Boolean(action || reason);
-  const guard = useFormNavigationGuard({ dirty, pending: command.isPending });
+  const busy = command.isPending || otherCommand.pending;
+  const guard = useFormNavigationGuard({ dirty: dirty || otherCommand.unresolved, pending: busy });
   const actions = decisionActions(issue);
   const stale = isDecisionStale(basis, issue) || Boolean(action && !actions.includes(action));
   const clearDraft = () => {
@@ -32,16 +33,19 @@ export function useIssueDecision(issue: Issue) {
     reason,
     basis,
     dirty,
+    busy,
     stale,
     actions,
     command,
     update,
     guard,
     refresh,
-    visible: issue.status === 'OPEN' || dirty || command.isPending || (command.isSuccess && update.isError),
+    visible:
+      issue.status === 'OPEN' || dirty || busy || otherCommand.unresolved || (command.isSuccess && update.isError),
     canSubmit:
       !stale &&
-      !command.isPending &&
+      !busy &&
+      !otherCommand.unresolved &&
       !command.isSuccess &&
       Boolean(reason.trim() && action && actions.includes(action) && basis?.latestReconciliationId),
     changeAction(value: DecisionAction) {
@@ -61,7 +65,8 @@ export function useIssueDecision(issue: Issue) {
     submit() {
       if (
         stale ||
-        command.isPending ||
+        busy ||
+        otherCommand.unresolved ||
         command.isSuccess ||
         !reason.trim() ||
         !action ||

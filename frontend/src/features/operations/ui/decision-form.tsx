@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import type { RefObject } from 'react';
 import type { Issue } from '../../../../build/generated/openapi/client';
 import { Button } from '../../../shared/ui/button';
 import { Notice } from '../../../shared/ui/notice';
@@ -7,13 +7,19 @@ import { Select } from '../../../shared/ui/select';
 import { Textarea } from '../../../shared/ui/textarea';
 import { ErrorMessage } from '../../../shared/ui/error-message';
 import { CommandRefresh } from '../../../shared/ui/command-refresh';
-import { DiscardDialog } from '../../../shared/ui/dialog';
 import { actionLabels, type DecisionAction } from '../model/decision';
 import type { IssueDecisionModel } from '../model/use-issue-decision';
 
-export function DecisionForm({ issue, model }: { issue: Issue; model: IssueDecisionModel }) {
-  const reasonInput = useRef<HTMLTextAreaElement>(null);
-  const { action, reason, command, update, guard, actions } = model;
+export function DecisionForm({
+  issue,
+  model,
+  reasonInput,
+}: {
+  issue: Issue;
+  model: IssueDecisionModel;
+  reasonInput: RefObject<HTMLTextAreaElement | null>;
+}) {
+  const { action, reason, command, update, actions } = model;
   if (!actions.length && !model.dirty && !command.isPending && !command.isSuccess) return null;
   return (
     <>
@@ -35,7 +41,7 @@ export function DecisionForm({ issue, model }: { issue: Issue; model: IssueDecis
             )}
           </Notice>
         )}
-        <fieldset className="base-form-fieldset base-form" disabled={command.isPending || command.isSuccess}>
+        <fieldset className="base-form-fieldset base-form" disabled={model.busy || command.isSuccess}>
           <FormField id="decision-action" label="Действие" required>
             {(attrs) => (
               <Select
@@ -87,12 +93,11 @@ export function DecisionForm({ issue, model }: { issue: Issue; model: IssueDecis
           onRetry={model.refresh}
         />
         {model.dirty && (
-          <Button type="button" disabled={command.isPending} onClick={model.close}>
+          <Button type="button" disabled={model.busy} onClick={model.close}>
             {command.isSuccess ? 'Закрыть' : 'Закрыть черновик'}
           </Button>
         )}
       </form>
-      <DiscardDialog open={guard.open} returnFocusRef={reasonInput} onCancel={guard.cancel} onDiscard={guard.discard} />
     </>
   );
 }

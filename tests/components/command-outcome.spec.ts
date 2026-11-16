@@ -18,6 +18,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     logins: 0,
     logouts: 0,
     assigned: false,
+    decisionAvailable: true,
     resolved: false,
     revision: 1,
     latestSnapshot: snapshotId,
@@ -65,7 +66,11 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     assignedTo: state.assigned ? task().ownerId : undefined,
     allowedActions: state.resolved
       ? []
-      : [...(state.assigned ? [] : ['TAKE_OWNERSHIP']), 'RECONCILE', 'ACKNOWLEDGE_DIFFERENCE'],
+      : [
+          ...(state.assigned ? [] : ['TAKE_OWNERSHIP']),
+          'RECONCILE',
+          ...(state.decisionAvailable ? ['ACKNOWLEDGE_DIFFERENCE'] : []),
+        ],
     resolution: state.resolved
       ? {
           action: 'ACKNOWLEDGE_DIFFERENCE',
@@ -448,6 +453,96 @@ for (const receipt of [
     expect(state.commands[1]).toEqual(state.commands[0]);
   });
 }
+
+for (const screen of ['', 'issue', 'reconciliation']) {
+  test(
+    'reconciliation departure protects pending and uncertain commands on ' + (screen || 'task'),
+    async ({ page }) => {
+      const state = await mockApi(page, 'OPERATOR');
+      let release!: () => void;
+      state.holdWrite = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      state.badSnapshotReceipt = {};
+      await page.goto('/tests/command-outcome.html?screen=' + screen);
+      await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
+      await expect.poll(() => state.commands.length).toBe(1);
+      await page.getByRole('link', { name: 'Задания', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Все задания', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Сверяем…', exact: true })).toBeDisabled();
+      release();
+      await expect(page.getByRole('alert')).toContainText('Сверка могла сохраниться');
+      const nativeProtected = await page.evaluate(() => {
+        const event = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(event);
+        return event.defaultPrevented;
+      });
+      expect(nativeProtected).toBe(true);
+      await page.evaluate(() => (window as unknown as { fixtureBack: () => void }).fixtureBack());
+      await expect(page.getByRole('alertdialog', { name: 'Уйти без проверки сверки?' })).toBeVisible();
+      await page.getByRole('button', { name: 'Вернуться к проверке', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Проверить результат сверки', exact: true })).toBeFocused();
+      state.badSnapshotReceipt = undefined;
+      await page.getByRole('button', { name: 'Проверить результат сверки', exact: true }).click();
+      await expect(page.getByRole('alert').filter({ hasText: 'Сверка сохранена.' })).toBeVisible();
+      expect(state.commands).toHaveLength(2);
+      expect(state.commands[1]).toEqual(state.commands[0]);
+      state.failRead = false;
+      await page.getByRole('link', { name: 'Задания', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Все задания', exact: true })).toBeVisible();
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    },
+  );
+}
+
+test('an issue without decision fields still protects an uncertain reconciliation until explicit abandonment', async ({
+  page,
+}) => {
+  const state = await mockApi(page, 'OPERATOR');
+  state.decisionAvailable = false;
+  state.badSnapshotReceipt = {};
+  await page.goto('/tests/command-outcome.html?screen=issue');
+  await expect(page.getByRole('form', { name: 'Решение оператора' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Сверка могла сохраниться');
+  await page.getByRole('link', { name: 'Задания', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('потеряете возможность безопасно повторить');
+  await page.getByRole('button', { name: 'Уйти без проверки', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Все задания', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Original task', exact: true }).click();
+  await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Сверка могла сохраниться');
+  expect(state.commands).toHaveLength(2);
+  expect(state.commands[1].key).not.toBe(state.commands[0].key);
+});
+
+test('one issue guard preserves a decision draft while reconciliation is recovered', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  state.badSnapshotReceipt = {};
+  await page.goto('/tests/command-outcome.html?screen=issue');
+  await selectChoice(page, 'Действие', 'Завершить разбор');
+  const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
+  await reason.fill('Draft must survive reconciliation');
+  await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Сверка могла сохраниться');
+  await expect(page.getByRole('button', { name: 'Завершить разбор', exact: true })).toBeDisabled();
+  await page.getByRole('link', { name: 'Задания', exact: true }).click();
+  await page.getByRole('button', { name: 'Вернуться к проверке', exact: true }).click();
+  await expect(reason).toHaveValue('Draft must survive reconciliation');
+  state.badSnapshotReceipt = undefined;
+  await page.getByRole('button', { name: 'Проверить результат сверки', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Сверка сохранена.' })).toBeVisible();
+  state.failRead = false;
+  await page.getByRole('button', { name: 'Повторить обновление', exact: true }).click();
+  await expect(page.getByRole('alertdialog', { name: 'Закрыть форму?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
+  await expect(reason).toHaveValue('Draft must survive reconciliation');
+  await expect(reason).toBeFocused();
+  await page.getByRole('link', { name: 'Задания', exact: true }).click();
+  await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Все задания', exact: true })).toBeVisible();
+  expect(state.commands).toHaveLength(2);
+});
 
 test('a definitive reconciliation 404 remains a rejection', async ({ page }) => {
   const state = await mockApi(page, 'OPERATOR');

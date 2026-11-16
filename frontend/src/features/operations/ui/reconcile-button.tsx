@@ -3,35 +3,59 @@ import { ErrorMessage } from '../../../shared/ui/error-message';
 import { Button } from '../../../shared/ui/button';
 import { CommandRefresh } from '../../../shared/ui/command-refresh';
 import { Notice } from '../../../shared/ui/notice';
-import { useNavigate } from 'react-router-dom';
-import type { Reconciliation } from '../../../../build/generated/openapi/client';
-import { useReconcileTask } from '../api/exchange-commands';
-import { useExchangeRefresh } from '../api/invalidate-exchange';
+import { useRef, type RefObject } from 'react';
+import { DiscardDialog } from '../../../shared/ui/dialog';
+import { useFormNavigationGuard } from '../../../shared/lib/forms/use-form-navigation-guard';
+import { useReconciliation, type ReconciliationModel } from '../model/use-reconciliation';
 
 export function ReconcileButton({ taskId }: { taskId: string }) {
   return <ReconcileAction key={taskId} taskId={taskId} />;
 }
 
 function ReconcileAction({ taskId }: { taskId: string }) {
-  const navigate = useNavigate();
-  const update = useExchangeRefresh();
-  const { command: reconcile, unresolved } = useReconcileTask(taskId);
-  const refreshSnapshot = (snapshot: Reconciliation) =>
-    update.mutate(
-      { taskId, issueId: snapshot.issueId },
-      {
-        onSuccess: () => {
-          reconcile.reset();
-          navigate('/tasks/' + taskId + '/reconciliations/' + snapshot.reconciliationId);
-        },
-      },
-    );
+  const model = useReconciliation(taskId);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const guard = useFormNavigationGuard({ dirty: model.unresolved, pending: model.command.isPending });
+  return (
+    <>
+      <ReconcileControl
+        model={model}
+        trigger={trigger}
+        onStart={() => {
+          guard.protect();
+          model.run(guard.release);
+        }}
+      />
+      <DiscardDialog
+        open={guard.open}
+        returnFocusRef={trigger}
+        onCancel={guard.cancel}
+        onDiscard={guard.discard}
+        title="Уйти без проверки сверки?"
+        description="Сверка могла сохраниться. При уходе со страницы вы потеряете возможность безопасно повторить исходную команду."
+        discardLabel="Уйти без проверки"
+        cancelLabel="Вернуться к проверке"
+      />
+    </>
+  );
+}
+
+/** IssueActions supplies its existing page guard instead of registering a second blocker. */
+export function ReconcileControl({
+  model,
+  onStart,
+  trigger,
+  disabled,
+}: {
+  model: ReconciliationModel;
+  onStart: () => void;
+  trigger: RefObject<HTMLButtonElement | null>;
+  disabled?: boolean;
+}) {
+  const { command: reconcile, unresolved, update } = model;
   return (
     <div className="inline-action">
-      <Button
-        onClick={() => reconcile.mutate(undefined, { onSuccess: refreshSnapshot })}
-        disabled={reconcile.isPending || reconcile.isSuccess}
-      >
+      <Button ref={trigger} onClick={onStart} disabled={disabled || reconcile.isPending || reconcile.isSuccess}>
         {reconcile.isPending ? 'Сверяем…' : unresolved ? 'Проверить результат сверки' : 'Выполнить сверку'}
       </Button>
       {unresolved ? (
@@ -45,7 +69,7 @@ function ReconcileAction({ taskId }: { taskId: string }) {
         message="Сверка сохранена."
         error={update.error}
         pending={update.isPending}
-        onRetry={() => reconcile.data && refreshSnapshot(reconcile.data)}
+        onRetry={model.retryRefresh}
       />
     </div>
   );

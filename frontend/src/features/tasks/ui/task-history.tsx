@@ -44,7 +44,12 @@ export function History({
   const { viewportRef: registryRef, restoring, positionNotice, loadNext, loadPrevious, refresh } = collection;
   // Measure the available column, independent of the card's content height.
   return (
-    <div className="task-history-viewport" ref={registryRef} data-feed-viewport={mobile || undefined}>
+    <div
+      className="task-history-viewport"
+      ref={registryRef}
+      data-feed-viewport={mobile || undefined}
+      data-page-measurement={history.isError ? 'paused' : undefined}
+    >
       <Card asChild>
         <section className="history-panel" aria-labelledby="task-history-title">
           <CardContent className="paged-list base-page-stack" aria-busy={history.isFetching || restoring}>

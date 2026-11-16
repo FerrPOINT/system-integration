@@ -19,11 +19,12 @@ class UnknownReconciliationOutcome extends Error {
   }
 }
 
-export function useReconcileTask(taskId: string) {
+export function useReconcileTask(taskId: string | undefined) {
   const key = useCommandKey();
   const [unresolved, setUnresolved] = useState(false);
   const command = useMutation({
     mutationFn: async () => {
+      if (!taskId) throw new Error('Для сверки необходимо задание');
       const headers = { ...(await csrf()), 'Idempotency-Key': key.forInput({ taskId }) };
       try {
         const receipt = await data(reconcileTask(taskId, headers));

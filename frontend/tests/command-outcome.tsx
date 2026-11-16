@@ -22,14 +22,19 @@ const initial =
     ? '/tasks?size=10'
     : screen === 'issue'
       ? '/issues/' + taskId
-      : screen === 'new'
-        ? '/tasks/new?size=10'
-        : screen === 'missing'
-          ? '/missing'
-          : '/tasks/' + taskId + '?size=10';
-const router = createMemoryRouter(appRoutes, { initialEntries: [initial] });
-// Expose only lifecycle/key counts, never credentials or private payloads.
+      : screen === 'reconciliation'
+        ? '/tasks/' + taskId + '/reconciliations/00000000-0000-4000-8000-000000000010'
+        : screen === 'new'
+          ? '/tasks/new?size=10'
+          : screen === 'missing'
+            ? '/missing'
+            : '/tasks/' + taskId + '?size=10';
+const router = createMemoryRouter(appRoutes, { initialEntries: ['/tasks', initial] });
+// Fixture navigation/lifecycle controls expose no credentials or private payloads.
 Object.assign(window, {
+  fixtureBack: () => {
+    void router.navigate(-1);
+  },
   fixturePrivateKeyCount: () =>
     queryClient
       .getQueryCache()

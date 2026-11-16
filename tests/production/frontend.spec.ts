@@ -17,7 +17,12 @@ const task = {
   businessStatus: 'SUCCEEDED',
   result: { status: 'SUCCEEDED', completedAt: '2026-11-16T00:00:00Z' },
 };
-async function mockApi(page: Page, role = 'INITIATOR', historyCount = 0) {
+async function mockApi(
+  page: Page,
+  role = 'INITIATOR',
+  historyCount = 0,
+  control: { failTasks?: boolean; failHistory?: boolean; totalTasks?: number } = {},
+) {
   const reads: string[] = [];
   await page.route(
     (url) => url.pathname.startsWith('/api/'),
@@ -27,6 +32,7 @@ async function mockApi(page: Page, role = 'INITIATOR', historyCount = 0) {
       if (url.pathname === '/api/session')
         return route.fulfill({ json: { userId, username: 'production-fixture', role } });
       if (url.pathname === '/api/tasks') {
+        if (control.failTasks) return route.fulfill({ status: 502, json: { code: 'SERVICE_UNAVAILABLE' } });
         const size = Number(url.searchParams.get('size') ?? 20),
           pageNumber = Number(url.searchParams.get('page') ?? 0);
         const from = url.searchParams.get('createdFrom'),
@@ -37,7 +43,7 @@ async function mockApi(page: Page, role = 'INITIATOR', historyCount = 0) {
           (from && Date.parse(task.createdAt) < Date.parse(from)) ||
           (to && Date.parse(task.createdAt) >= Date.parse(to))
             ? 0
-            : 1000;
+            : (control.totalTasks ?? 1000);
         return route.fulfill({
           json: {
             items: Array.from({ length: Math.min(size, Math.max(0, total - pageNumber * size)) }, (_, n) => {
@@ -52,6 +58,7 @@ async function mockApi(page: Page, role = 'INITIATOR', historyCount = 0) {
         });
       }
       if (url.pathname.endsWith('/history')) {
+        if (control.failHistory) return route.fulfill({ status: 502, json: { code: 'SERVICE_UNAVAILABLE' } });
         const pageNumber = Number(url.searchParams.get('page') ?? 0),
           size = Number(url.searchParams.get('size') ?? 20);
         return route.fulfill({
@@ -128,6 +135,82 @@ async function mockApi(page: Page, role = 'INITIATOR', historyCount = 0) {
   );
   return reads;
 }
+
+test('failed task refetch retains the measured window and does not retry through size changes @desktop', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.clock.install();
+  const control = { failTasks: false };
+  const reads = await mockApi(page, 'INITIATOR', 0, control);
+  await page.goto('/tasks?businessStatus=SUCCEEDED');
+  await expect(page).toHaveURL(/size=3/);
+  const rows = page.locator('tbody tr');
+  await expect(rows).toHaveCount(3);
+  const originalRows = await rows.allTextContents();
+  const originalUrl = page.url();
+  const count = reads.filter((read) => read.startsWith('/api/tasks?')).length;
+  control.failTasks = true;
+  await page.getByRole('button', { name: 'Обновить', exact: true }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  // Let measurement frames run; no manual retry or focus event occurs in this interval.
+  await page.clock.runFor(1000);
+  expect(page.url()).toBe(originalUrl);
+  expect(await rows.allTextContents()).toEqual(originalRows);
+  expect(reads.filter((read) => read.startsWith('/api/tasks?'))).toHaveLength(count + 1);
+  control.failTasks = false;
+  await page.getByRole('button', { name: 'Повторить', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(rows).toHaveCount(3);
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeGreaterThan(3);
+  expect(new URL(page.url()).searchParams.get('businessStatus')).toBe('SUCCEEDED');
+});
+
+test('failed history polling retains its window and the next ordinary poll can recover @desktop', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.clock.install();
+  const control = { failHistory: false };
+  const reads = await mockApi(page, 'INITIATOR', 50, control);
+  await page.goto('/tasks/' + taskId);
+  const events = page.locator('[data-event-id]');
+  await expect.poll(() => events.count()).toBeGreaterThan(0);
+  await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeLessThan(20);
+  const originalUrl = page.url();
+  const originalEvents = await events.allTextContents();
+  const count = reads.filter((read) => read.includes('/history?')).length;
+  control.failHistory = true;
+  await page.clock.fastForward(10_000);
+  await expect(page.getByRole('alert')).toBeVisible();
+  await page.clock.runFor(1000);
+  expect(page.url()).toBe(originalUrl);
+  expect(await events.allTextContents()).toEqual(originalEvents);
+  expect(reads.filter((read) => read.includes('/history?'))).toHaveLength(count + 1);
+  control.failHistory = false;
+  await page.clock.fastForward(10_000);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  expect(await events.allTextContents()).toEqual(originalEvents);
+});
+
+test('out-of-range task pages differ from empty lists and empty filters @desktop', async ({ page }) => {
+  const control = { totalTasks: 1000 };
+  await mockApi(page, 'INITIATOR', 0, control);
+  await page.goto('/tasks?page=9999&size=20&businessStatus=SUCCEEDED');
+  await expect(page.getByRole('heading', { name: 'Страница не найдена', exact: true })).toBeVisible();
+  await expect(page.getByText('Создайте первое задание.', { exact: false })).toHaveCount(0);
+  await page.getByRole('button', { name: 'К первой странице', exact: true }).click();
+  await expect(page.locator('tbody tr').first()).toBeVisible();
+  expect(new URL(page.url()).searchParams.get('page')).toBe('0');
+  expect(new URL(page.url()).searchParams.get('businessStatus')).toBe('SUCCEEDED');
+  control.totalTasks = 0;
+  await page.goto('/tasks');
+  await expect(page.getByRole('heading', { name: 'Заданий пока нет', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'К первой странице', exact: true })).toHaveCount(0);
+  control.totalTasks = 1000;
+  await page.goto('/tasks?businessStatus=REJECTED');
+  await expect(page.getByRole('heading', { name: 'Ничего не найдено', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Сбросить фильтры', exact: true })).toBeVisible();
+});
 
 test('production CSP permits modal styles with a fresh document nonce', async ({ page, request }) => {
   await mockApi(page);

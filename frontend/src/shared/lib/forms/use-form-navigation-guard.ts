@@ -26,6 +26,7 @@ export function useFormNavigationGuard({ dirty, pending }: { dirty: boolean; pen
     ),
   );
   return {
+    navigating: blocker.state === 'blocked',
     open: !pending && (blocker.state === 'blocked' || localClose !== null),
     release() {
       released.current = true;

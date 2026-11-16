@@ -68,6 +68,7 @@ export function DiscardDialog({
   onCancel,
   onDiscard,
   returnFocusRef,
+  title = 'Закрыть форму?',
   description = 'Введённые данные будут потеряны.',
   discardLabel = 'Не сохранять',
   cancelLabel = 'Продолжить заполнение',
@@ -76,6 +77,7 @@ export function DiscardDialog({
   onCancel: () => void;
   onDiscard: () => void;
   returnFocusRef: RefObject<HTMLElement | null>;
+  title?: string;
   description?: string;
   discardLabel?: string;
   cancelLabel?: string;
@@ -99,7 +101,7 @@ export function DiscardDialog({
           }}
         >
           <div className="base-dialog-header">
-            <AlertDialogPrimitive.Title className="base-dialog-title">Закрыть форму?</AlertDialogPrimitive.Title>
+            <AlertDialogPrimitive.Title className="base-dialog-title">{title}</AlertDialogPrimitive.Title>
             <AlertDialogPrimitive.Description className="base-dialog-description">
               {description}
             </AlertDialogPrimitive.Description>
