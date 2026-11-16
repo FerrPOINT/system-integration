@@ -1859,7 +1859,8 @@ background work. EXPLAIN сохранены. Overload observer тоже имее
 Stock Compose, V1–V9, прежние 2 CPU/4096 МиБ включая frontend;
 PG 1 CPU, Hikari 8/4, in-flight 8, execution/publication batch 5/25.
 Три immutable source images собраны через git archive. Оба JAR и 28
-JS/CSS/HTML совпадают с 2a87cc3; application/build inputs не менялись.
+JS/CSS/HTML совпадают с 2a87cc3; код приложений/контрактов и Java build-конфигурация
+не менялись. Docker-контекст frontend включает изменённые tests; его сборка повторена.
 Повторный served-check охватил все 29 несжатых файлов, JS/CSS gzip
 декодируется побайтно в те же данные. Все четыре сервиса были healthy.
 
