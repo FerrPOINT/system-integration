@@ -1,5 +1,5 @@
 [Unit]
-Description=System Integration HTTPS origin tunnel to Koara
+Description=System Integration HTTPS origin tunnel
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service
