@@ -137,7 +137,9 @@ $env:SI_SOURCE_REF = git rev-parse HEAD
 В POSIX shell: `export SI_SOURCE_REF=$(git rev-parse HEAD)`.
 Соберите три тестовых образа с этим окружением:
 ~~~sh
-docker compose -p system-integration-load -f compose.yml -f compose.public.yml -f compose.load.yml --profile app build backend emulator frontend
+docker compose -p system-integration-load -f compose.yml -f compose.public.yml -f compose.load.yml --profile app build backend
+docker compose -p system-integration-load -f compose.yml -f compose.public.yml -f compose.load.yml --profile app build emulator
+docker compose -p system-integration-load -f compose.yml -f compose.public.yml -f compose.load.yml --profile app build frontend
 ~~~
 
 Метки всех трёх образов должны совпадать с коммитом кандидата.

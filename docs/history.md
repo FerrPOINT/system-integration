@@ -32,3 +32,9 @@ Frontend-аудит и интеграция PR #15: [аудит](https://github.
 Квалификация типизации и общего UI после PR #16 сохранена
 в [документе main 1125b7f](https://github.com/FerrPOINT/system-integration/blob/1125b7fd43cb57a71284be2586c544a16660e252/docs/current-stage.md).
 Актуальная стадия не дублирует результаты этих завершённых итераций.
+
+Полная квалификация b44bd01 и очистка C01–C06 (PR #17) сохранены
+в [стадии main 319fe59](https://github.com/FerrPOINT/system-integration/blob/319fe5928f826ab9253077e8379ca4cd9072d351/docs/current-stage.md).
+Слияние PR #18, локальная квалификация его кандидата 2fcdc18 и границы
+неповторённых проверок — в [стадии main 633bcbd](https://github.com/FerrPOINT/system-integration/blob/633bcbd6cb45cf65e2c07386e94df79650d4afae/docs/current-stage.md).
+Последующая подготовка к приёмке не переносит эти результаты на другой commit.
