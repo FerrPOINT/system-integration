@@ -21,7 +21,7 @@ public class OperationsController implements OperationsApi {
     @Override
     public ResponseEntity<Issue> getExchangeIssue(UUID id) {
         var result = operations.get(AppUser.current().actor(), id);
-        return ResponseEntity.ok(mapper.issue(result));
+        return ResponseEntity.ok(mapper.issueView(result));
     }
 
     @Override

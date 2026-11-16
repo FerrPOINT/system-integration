@@ -59,6 +59,13 @@ function IssueDetails({ id }: { id: string }) {
                 )}
               </ActionGroup>
             </div>
+            {item.taskId ? (
+              <p>
+                {item.requestReference} · {item.taskTitle}
+              </p>
+            ) : (
+              <p>Общая проблема ленты</p>
+            )}
             <p>{item.summary}</p>
             <dl className="issue-facts">
               <div>

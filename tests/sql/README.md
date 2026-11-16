@@ -46,13 +46,14 @@ tests/results/sql-baseline/report.json. Одиночный замер — не p
 объясняет конкурентное ожидание и не доказывает причину насыщения CPU.
 Под нагрузкой отдельно нужны частота SQL и время транзакций/блокировок.
 
-## Сгенерированные чтения Spring Data JDBC
+## SQL чтений Spring Data JDBC
 
 Перед plans.py выполнить адресный backend integrationTest
 с --tests '*SpringDataReadsTest' на выделенной тестовой БД.
 ReadSqlCapture наблюдает prepare/bind/executeQuery у test DataSource:
 сохраняет только SELECT tasks/task_history в явно включённом синтетическом
-сценарии, включая имена типов PostgreSQL. Это test-only код, без production
+сценарии, включая имена типов PostgreSQL. Bounded history @Query включает
+JOIN логина автора; этот запрос также наблюдается и входит в планы. Это test-only код, без production
 наблюдателя и без записи аутентификации/паролей.
 Файл tests/results/spring-data-read/generated-sql.json содержит запросы,
 параметры fixtures и SHA-256 исходников репозиториев.

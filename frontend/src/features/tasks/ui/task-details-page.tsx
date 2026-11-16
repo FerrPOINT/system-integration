@@ -5,7 +5,7 @@ import { ActionGroup } from '../../../shared/ui/action-group';
 import { Card, CardContent, CardTitle } from '../../../shared/ui/card';
 import { PageHeader } from '../../../shared/ui/page-header';
 import { Button } from '../../../shared/ui/button';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import type { GetSession200 } from '../../../../build/generated/openapi/client';
@@ -32,6 +32,18 @@ function TaskDetails({ id, user }: { id: string; user: GetSession200 }) {
   const returnTo = useListReturn('/tasks');
   const task = useQuery(taskOptions(id));
   const [editing, setEditing] = useState(false);
+  const editTrigger = useRef<HTMLButtonElement>(null);
+  const returnEditFocus = useRef(false);
+  useLayoutEffect(() => {
+    if (!editing && returnEditFocus.current) {
+      editTrigger.current?.focus();
+      returnEditFocus.current = false;
+    }
+  }, [editing]);
+  function closeEditor() {
+    returnEditFocus.current = true;
+    setEditing(false);
+  }
   if (task.isPending) return <Loading />;
   if (!task.data)
     return (
@@ -89,10 +101,14 @@ function TaskDetails({ id, user }: { id: string; user: GetSession200 }) {
                 )}
               </dl>
               {user.role === 'INITIATOR' && editing ? (
-                <RenameForm task={item} onClose={() => setEditing(false)} />
+                <RenameForm task={item} onClose={closeEditor} />
               ) : (
                 <ActionGroup align="start">
-                  {user.role === 'INITIATOR' && <Button onClick={() => setEditing(true)}>Изменить название</Button>}
+                  {user.role === 'INITIATOR' && (
+                    <Button ref={editTrigger} onClick={() => setEditing(true)}>
+                      Изменить название
+                    </Button>
+                  )}
                   {user.role === 'OPERATOR' && <ReconcileButton taskId={id} />}
                 </ActionGroup>
               )}

@@ -45,8 +45,8 @@ public class SpringDataTaskReadRepository implements TaskReadRepository {
         var criteria = Criteria.empty();
         if (!actor.isOperator()) criteria = criteria.and("ownerId").is(actor.id());
         if (status != null) criteria = criteria.and("businessStatus").is(status);
-        if (from != null) criteria = criteria.and("createdAt").greaterThanOrEquals(from);
-        if (to != null) criteria = criteria.and("createdAt").lessThan(to);
+        if (from != null) criteria = criteria.and("createdAt").greaterThanOrEquals(databaseBoundary(from));
+        if (to != null) criteria = criteria.and("createdAt").lessThan(databaseBoundary(to));
         var query = Query.query(criteria);
         var pagination = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id"));
         var rows = aggregates.findAll(query.with(pagination), TaskReadRow.class);
@@ -54,11 +54,20 @@ public class SpringDataTaskReadRepository implements TaskReadRepository {
         return new Page<>(rows.stream().map(row -> row.task(results)).toList(), page, size, total);
     }
 
+    /**
+     * PostgreSQL stores microseconds, while the API accepts nanoseconds. Ceiling both
+     * half-open bounds preserves comparisons against stored instants; driver rounding
+     * to the nearest microsecond would include/exclude a neighboring record.
+     */
+    private static OffsetDateTime databaseBoundary(OffsetDateTime value) {
+        int remainder = value.getNano() % 1000;
+        return remainder == 0 ? value : value.plusNanos(1000 - remainder);
+    }
+
     @Override
     public Page<HistoryEntry> history(Actor actor, UUID taskId, int page, int size) {
         get(taskId, actor);
-        var pagination = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "occurredAt", "id"));
-        var rows = history.findByTaskId(taskId, pagination);
+        var rows = history.findByTaskId(taskId, size, (long) page * size);
         long total = history.countByTaskId(taskId);
         return new Page<>(rows.stream().map(row -> row.entry(json)).toList(), page, size, total);
     }

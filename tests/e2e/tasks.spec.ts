@@ -236,10 +236,14 @@ test('TC-09: history follows automatic task updates without reopening the card',
     await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
     await expect(page.getByText('Задание принято и поставлено в очередь', { exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'История', exact: true })).toContainText('initiator.one');
     await expect(page.getByText('Ожидает исполнения', { exact: true })).toBeVisible();
     expect((await request.delete(`${external}/test/faults/${reference}`)).status()).toBe(204);
     await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
-    await expect(page.getByText('Принят внешний результат: SUCCEEDED', { exact: true })).toBeVisible();
+    const applied = page.locator('[data-event-id]').filter({ hasText: 'Принят внешний результат: SUCCEEDED' });
+    await expect(applied.getByText('Получен результат исполнителя', { exact: true })).toBeVisible();
+    await applied.getByText('Подробности обмена', { exact: true }).click();
+    await expect(applied.getByText('Принят внешний результат: SUCCEEDED', { exact: true })).toBeVisible();
   } finally {
     expect((await request.delete(`${external}/test/faults/${reference}`)).status()).toBe(204);
   }

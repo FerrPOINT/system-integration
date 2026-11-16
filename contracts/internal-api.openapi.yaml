@@ -146,7 +146,9 @@ paths:
                       $ref: '#/components/schemas/Task'
                   page:
                     type: integer
+                    format: int32
                     minimum: 0
+                    maximum: 2147483647
                   hasNext:
                     type: boolean
                   totalItems:
@@ -571,7 +573,9 @@ components:
       in: query
       schema:
         type: integer
+        format: int32
         minimum: 0
+        maximum: 2147483647
         default: 0
     Size:
       name: size
@@ -778,7 +782,9 @@ components:
             $ref: '#/components/schemas/HistoryEvent'
         page:
           type: integer
+          format: int32
           minimum: 0
+          maximum: 2147483647
         hasNext:
           type: boolean
         totalItems:
@@ -816,6 +822,9 @@ components:
           type: string
           format: uuid
           description: Идентификатор автора для событий USER. Для SYSTEM поле отсутствует.
+        actorUsername:
+          type: string
+          description: Логин автора для событий USER; читается вместе с историей, UUID остаётся технической ссылкой.
         type:
           type: string
           enum: [CREATED, RENAMED, DELIVERY_ATTEMPT, DELIVERY_ACKNOWLEDGED, DELIVERY_UNCERTAIN, RESULT_APPLIED, RESULT_IGNORED, ISSUE_OPENED, RETRY_QUEUED, RECONCILED, ISSUE_RESOLVED, RESPONSIBILITY_CHANGED]
@@ -849,7 +858,7 @@ components:
               actor:
                 const: USER
           then:
-            required: [actorUserId]
+            required: [actorUserId, actorUsername]
           else:
             not:
               required: [actorUserId]
@@ -879,7 +888,9 @@ components:
             $ref: '#/components/schemas/Issue'
         page:
           type: integer
+          format: int32
           minimum: 0
+          maximum: 2147483647
         hasNext:
           type: boolean
         totalItems:
@@ -906,6 +917,12 @@ components:
       type: object
       required: [issueId, issueRevision, kind, status, openedAt, summary, allowedActions]
       properties:
+        requestReference:
+          type: string
+          description: Номер заявки связанного задания в GET-выдаче; отсутствует у общей проблемы ленты и в сохранённом ответе команды.
+        taskTitle:
+          type: string
+          description: Текущее название связанного задания в GET-выдаче; не является снимком первого события.
         issueId:
           type: string
           format: uuid

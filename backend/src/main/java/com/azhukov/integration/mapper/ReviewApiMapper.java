@@ -13,7 +13,12 @@ import org.mapstruct.ValueMapping;
 
 @Mapper(config = MapStructConfig.class, uses = TaskApiMapper.class)
 public interface ReviewApiMapper {
+    @Mapping(target = "requestReference", ignore = true)
+    @Mapping(target = "taskTitle", ignore = true)
     Issue issue(com.azhukov.integration.domain.review.Issue value);
+
+    @Mapping(target = ".", source = "issue")
+    Issue issueView(com.azhukov.integration.dto.review.IssueView value);
 
     IssueResolution resolution(com.azhukov.integration.domain.review.IssueResolution value);
 
@@ -50,5 +55,5 @@ public interface ReviewApiMapper {
 
     @Mapping(target = "hasNext", expression = "java(value.hasNext())")
     @Mapping(target = "totalPages", expression = "java(value.totalPages())")
-    IssuePage issues(Page<com.azhukov.integration.domain.review.Issue> value);
+    IssuePage issues(Page<com.azhukov.integration.dto.review.IssueView> value);
 }

@@ -44,6 +44,12 @@ test('TC-03 / TC-07: lost reply, independent execution, reconciliation and opera
   await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Обнаружено расхождение', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Перейти к разбору и решению' }).click();
+  const issuePath = new URL(page.url()).pathname;
+  await page.getByRole('link', { name: 'Разбор обмена', exact: true }).click();
+  const row = page.locator('[data-record-id]').filter({ hasText: title });
+  await expect(row).toContainText(reference);
+  await row.getByRole('link').click();
+  await expect(page).toHaveURL(new RegExp(issuePath + '$'));
   const actions = page.getByRole('region', { name: 'Действия оператора', exact: true });
   const evidence = page.getByRole('region', { name: 'Диагностика первого события', exact: true });
   await expect(evidence).toContainText('Сохранённые данные на момент ошибки');

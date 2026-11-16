@@ -423,6 +423,39 @@ class TaskWorkflowTest extends PostgresTest {
     }
 
     @Test
+    void malformedUnicodeCannotAliasAnAlreadyCommittedRenameReceipt() throws Exception {
+        var owner = login("initiator.one");
+        var id = created(owner, UUID.randomUUID());
+        var key = UUID.randomUUID();
+        var saved = rename(owner, id, key, "before?after", 1);
+        status(200, saved);
+        for (String escape : List.of("\\uD800", "\\uDC00")) {
+            var invalid =
+                    mvc.perform(
+                                    patch("/api/tasks/" + id)
+                                            .session(owner.session())
+                                            .header("X-CSRF-TOKEN", owner.csrf())
+                                            .header("Idempotency-Key", key)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(
+                                                    "{\"title\":\"before"
+                                                            + escape
+                                                            + "after\",\"expectedTitleRevision\":1}"))
+                            .andReturn();
+            status(400, invalid);
+            assertEquals("VALIDATION_FAILED", body(invalid).get("code").asString());
+        }
+        var replay = rename(owner, id, key, "before?after", 1);
+        status(200, replay);
+        assertEquals(body(saved), body(replay));
+        status(409, rename(owner, id, key, "before#after", 1));
+        assertEquals(2, count("command_receipts"));
+        assertEquals(2, count("task_history"));
+        assertEquals("before?after", jdbc.queryForObject("SELECT title FROM tasks WHERE id=?", String.class, id));
+        status(200, rename(owner, id, UUID.randomUUID(), "Допустимый Unicode 😀", 2));
+    }
+
+    @Test
     void utcFiltersRejectUnsupportedCalendarYearsBeforeJdbc() throws Exception {
         var owner = login("initiator.one");
         created(owner, UUID.randomUUID());

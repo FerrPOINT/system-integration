@@ -46,6 +46,23 @@ class PaginationWorkflowTest extends PostgresTest {
     }
 
     @Test
+    void everyCollectionUsesTheSameInt32PageBoundary() throws Exception {
+        var owner = login("initiator.one");
+        var task = created(owner, UUID.randomUUID());
+        var operator = login("operator");
+        for (String path : new String[] {"/api/tasks", "/api/tasks/" + task + "/history", "/api/exchange/issues"}) {
+            for (String invalid : new String[] {"-1", "0.5", "2147483648", "9007199254740991"})
+                status(400, mvc.perform(get(path).session(operator.session()).param("page", invalid)).andReturn());
+            var last = mvc.perform(get(path).session(operator.session()).param("page", "2147483647")).andReturn();
+            status(200, last);
+            assertEquals(2147483647, body(last).get("page").asInt());
+            assertTrue(body(last).get("items").isEmpty());
+            assertFalse(body(last).get("hasNext").asBoolean());
+        }
+        status(403, mvc.perform(get("/api/exchange/issues").session(owner.session()).param("page", "1")).andReturn());
+    }
+
+    @Test
     void historySizePreservesAllEventsAndAccessChecks() throws Exception {
         var owner = login("initiator.one");
         var id = created(owner, UUID.randomUUID());

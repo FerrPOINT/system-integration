@@ -1,3 +1,5 @@
+import { Disclosure } from '../../../shared/ui/disclosure';
+import { technicalHistoryLabels } from '../model/task-labels';
 import { ErrorMessage } from '../../../shared/ui/error-message';
 import { Notice } from '../../../shared/ui/notice';
 import { Timeline, TimelineItem, TimelineMarker, TimelineContent } from '../../../shared/ui/timeline';
@@ -86,17 +88,21 @@ export function History({
                       >
                         <TimelineMarker />
                         <TimelineContent>
-                          <p className="base-truncate" title={event.summary}>
-                            {event.summary}
-                          </p>
+                          {technicalHistoryLabels[event.type] ? (
+                            <>
+                              <p>{technicalHistoryLabels[event.type]}</p>
+                              <Disclosure summary="Подробности обмена" size="sm" tone="muted">
+                                <p>{event.summary}</p>
+                              </Disclosure>
+                            </>
+                          ) : (
+                            <p>{event.summary}</p>
+                          )}
                           <small title={event.actorUserId}>
                             <time dateTime={event.occurredAt} title={timestamp(event.occurredAt)}>
                               {timestamp(event.occurredAt, { compact: mobile, showZone: !mobile })}
                             </time>{' '}
-                            ·
-                            {event.actor === 'SYSTEM'
-                              ? ' Система'
-                              : ` Пользователь ${mobile ? event.actorUserId?.slice(0, 8) : event.actorUserId}`}
+                            ·{event.actor === 'SYSTEM' ? ' Система' : ` ${event.actorUsername}`}
                           </small>
                           {canReview && event.reconciliationId && (
                             <Link to={'/tasks/' + id + '/reconciliations/' + event.reconciliationId}>

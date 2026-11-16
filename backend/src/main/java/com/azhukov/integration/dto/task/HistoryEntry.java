@@ -18,7 +18,8 @@ public record HistoryEntry(
         UUID issueId,
         UUID reconciliationId,
         UUID previousAssigneeId,
-        UUID assignedTo) {
+        UUID assignedTo,
+        String actorUsername) {
     public enum Actor {
         USER,
         SYSTEM

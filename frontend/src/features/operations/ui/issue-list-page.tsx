@@ -122,6 +122,13 @@ export function IssueList() {
                               <h2 className="base-card-title base-truncate">{kinds[issue.kind]}</h2>
                               <ChevronRight size={18} aria-hidden="true" />
                             </div>
+                            {issue.taskId ? (
+                              <p className="base-truncate" title={issue.taskTitle}>
+                                {issue.requestReference} · {issue.taskTitle}
+                              </p>
+                            ) : (
+                              <p>Общая проблема ленты</p>
+                            )}
                             <p className="base-truncate" title={issue.summary}>
                               {issue.summary}
                             </p>
@@ -169,6 +176,13 @@ export function IssueList() {
                             >
                               {kinds[issue.kind]}
                             </Link>
+                            {issue.taskId ? (
+                              <small className="base-truncate" title={issue.taskTitle}>
+                                {issue.requestReference} · {issue.taskTitle}
+                              </small>
+                            ) : (
+                              <small>Общая проблема ленты</small>
+                            )}
                             <small className="base-truncate" title={issue.summary}>
                               {issue.summary}
                             </small>

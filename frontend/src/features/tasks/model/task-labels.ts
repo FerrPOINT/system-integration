@@ -2,7 +2,18 @@ import type {
   BusinessStatus,
   DeliveryStatus,
   TaskResultRejectionCode,
+  HistoryEventType,
 } from '../../../../build/generated/openapi/client';
+
+/** Protocol details remain verbatim inside a disclosure, apart from the readable event title. */
+export const technicalHistoryLabels: Partial<Record<HistoryEventType, string>> = {
+  DELIVERY_ATTEMPT: 'Попытка доставки',
+  DELIVERY_UNCERTAIN: 'Доставка требует уточнения',
+  DELIVERY_ACKNOWLEDGED: 'Исполнитель подтвердил получение',
+  RESULT_APPLIED: 'Получен результат исполнителя',
+  RESULT_IGNORED: 'Сохранено наблюдение об исполнении',
+  RECONCILED: 'Выполнена сверка с исполнителем',
+};
 
 export const businessLabels: Record<BusinessStatus, string> = {
   PENDING: 'Ожидает исполнения',
