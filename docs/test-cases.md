@@ -538,7 +538,7 @@ UI-сценарии и добавляют проверки границ сост
 | Architecture gates | Positive/negative lint fixtures, StrictMode, strict TS | Неверные imports/cycles/generated calls отклоняются; lifecycle исправлен без отключения правил. |
 
 Component fixtures находятся в tests/components и frontend/tests, выполняются
-без БД через перехват API; 74 интеграционных UI-сценария используют отдельный
+без БД через перехват API; 76 интеграционных UI-сценариев используют отдельный
 локальный Compose. Их результаты и IAB-приёмка фиксируются раздельно в current-stage.
 
 ### Регрессии frontend-аудита 16 ноября
