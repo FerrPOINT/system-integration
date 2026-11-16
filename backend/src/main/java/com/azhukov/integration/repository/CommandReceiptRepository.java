@@ -15,7 +15,7 @@ public interface CommandReceiptRepository {
 
     Optional<Receipt> find(UUID actor, CommandType command, UUID key);
 
-    void insert(UUID actor, CommandType command, UUID key, String fingerprint, int status, String body);
+    void insert(UUID actor, CommandType command, UUID key, String fingerprint, String body);
 
     record Receipt(String fingerprint, String body) {}
 }

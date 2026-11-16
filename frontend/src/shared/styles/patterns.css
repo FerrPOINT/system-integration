@@ -107,11 +107,6 @@
   background: color-mix(in srgb, var(--ui-icon-mark-color) 12%, var(--color-surface));
   color: var(--color-text-primary);
 }
-.ui-icon-mark[data-size='sm'] {
-  --ui-icon-mark-size: calc(var(--ui-font-body) + 14px);
-  --ui-icon-mark-glyph-size: calc(var(--ui-font-body) + 3px);
-  border-radius: var(--radius-md);
-}
 .ui-icon-mark > svg {
   width: var(--ui-icon-mark-glyph-size);
   height: var(--ui-icon-mark-glyph-size);
@@ -189,13 +184,6 @@
 .ui-notice-title {
   margin-bottom: 4px;
   font-weight: 600;
-}
-.ui-notice-actions {
-  margin-top: 12px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
 }
 .ui-card {
   display: block;
@@ -296,15 +284,6 @@
   background: var(--color-surface);
   font-size: var(--ui-font-body);
   line-height: var(--ui-line-body);
-}
-.ui-disclosure[data-tone='muted'] {
-  color: var(--color-text-muted);
-}
-.ui-disclosure[data-tone='danger'] {
-  color: var(--color-danger);
-}
-.ui-disclosure[data-size='sm'] {
-  font-size: var(--ui-font-label);
 }
 .ui-disclosure > summary {
   cursor: pointer;

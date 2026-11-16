@@ -37,17 +37,16 @@ public class JdbcCommandReceiptRepository implements CommandReceiptRepository {
     }
 
     @Override
-    public void insert(UUID actor, CommandType command, UUID key, String fingerprint, int status, String body) {
+    public void insert(UUID actor, CommandType command, UUID key, String fingerprint, String body) {
         jdbc.update(
                 """
-                INSERT INTO command_receipts (actor_id,command_type,idempotency_key,fingerprint,http_status,response_body)
-                VALUES (?,?,?,?,?,?::jsonb)
+                INSERT INTO command_receipts (actor_id,command_type,idempotency_key,fingerprint,response_body)
+                VALUES (?,?,?,?,?::jsonb)
                 """,
                 actor,
                 command.name(),
                 key,
                 fingerprint,
-                status,
                 body);
     }
 }

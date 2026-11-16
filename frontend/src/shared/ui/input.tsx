@@ -1,23 +1,10 @@
 import * as React from 'react';
 import { cn } from './utils';
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  variant?: 'default' | 'heading';
-  appearance?: 'default' | 'inline';
-}
-const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, variant = 'default', appearance = 'default', ...props }, ref) => {
-    return (
-      <input
-        type={type}
-        data-variant={variant}
-        data-appearance={appearance}
-        className={cn('ui-control ui-input', className)}
-        ref={ref}
-        {...props}
-      />
-    );
-  },
+const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  ({ className, type, ...props }, ref) => (
+    <input type={type} className={cn('ui-control ui-input', className)} ref={ref} {...props} />
+  ),
 );
 Input.displayName = 'Input';
 

@@ -107,7 +107,7 @@ class HistoricalReviewTest extends PostgresTest {
                                 MessageDigest.getInstance("SHA-256")
                                         .digest(canonical.getBytes(StandardCharsets.UTF_8)));
         jdbc.update(
-                "INSERT INTO command_receipts(actor_id,command_type,idempotency_key,fingerprint,http_status,response_body) VALUES (?,?,?,?,200,?::jsonb)",
+                "INSERT INTO command_receipts(actor_id,command_type,idempotency_key,fingerprint,response_body) VALUES (?,?,?,?,?::jsonb)",
                 operator,
                 command,
                 key,

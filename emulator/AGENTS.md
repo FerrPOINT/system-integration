@@ -10,3 +10,7 @@
 PostgreSQL-тесты используют только выделенную si_emulator_test на 19632.
 MapStructConfig и OperationApiMapper принадлежат этому приложению; generated и
 annotation processors следуют правилам backend. Публикация событий, счётчик курсора и исполнение остаются атомарными.
+Worker создаётся штатным @Bean в scheduler/EmulatorWorkerConfiguration.
+Конфигурация проверяет worker.enabled даже при отключённом worker: отсутствие
+означает true, допустимы только true/false без учёта регистра; иные значения
+прерывают запуск. Не добавляйте молчаливое отключение по неверной строке.

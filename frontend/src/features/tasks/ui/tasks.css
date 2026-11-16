@@ -53,16 +53,10 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
-  .filter-actions {
-    align-self: end;
-  }
 }
 @media (max-width: 760px) {
   .filters {
     grid-template-columns: 1fr;
-  }
-  .filter-actions > button {
-    flex: 1;
   }
 }
 .mobile-filter-trigger[data-active] {

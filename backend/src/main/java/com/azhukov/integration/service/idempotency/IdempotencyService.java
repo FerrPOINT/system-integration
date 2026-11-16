@@ -33,7 +33,7 @@ public class IdempotencyService {
         var stored = receipts.find(actor, command, key);
         if (stored.isPresent()) return decode(stored.get(), fingerprint, type);
         T result = operation.get();
-        receipts.insert(actor, command, key, fingerprint, responseStatus(command), json.writeValueAsString(result));
+        receipts.insert(actor, command, key, fingerprint, json.writeValueAsString(result));
         return result;
     }
 
@@ -46,12 +46,5 @@ public class IdempotencyService {
         if (!receipt.fingerprint().equals(fingerprint))
             throw new RuleViolation(RuleViolation.Code.IDEMPOTENCY_CONFLICT, "Ключ уже использован для другой команды");
         return json.readValue(receipt.body(), type);
-    }
-
-    private static int responseStatus(CommandType command) {
-        return switch (command) {
-            case CREATE_TASK -> 201;
-            case RENAME_TASK, RECONCILE, TAKE_ISSUE, RETRY_EXCHANGE, RESOLVE_ISSUE -> 200;
-        };
     }
 }
