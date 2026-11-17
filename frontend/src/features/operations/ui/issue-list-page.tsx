@@ -180,7 +180,7 @@ export function IssueList() {
                             <Link
                               data-issue-link
                               className="ui-truncate"
-                              title={kinds[issue.kind]}
+                              title={issue.summary}
                               to={'/issues/' + issue.issueId}
                             >
                               {kinds[issue.kind]}
@@ -190,11 +190,10 @@ export function IssueList() {
                                 {issue.requestReference} · {issue.taskTitle}
                               </small>
                             ) : (
-                              <small>Общая проблема ленты</small>
+                              <small className="ui-truncate" title={issue.summary}>
+                                Лента · {issue.summary}
+                              </small>
                             )}
-                            <small className="ui-truncate" title={issue.summary}>
-                              {issue.summary}
-                            </small>
                           </td>
                           <td>
                             <span
@@ -205,7 +204,9 @@ export function IssueList() {
                             </span>
                           </td>
                           <td>
-                            <time dateTime={issue.openedAt}>{timestamp(issue.openedAt, { showZone: false })}</time>
+                            <time dateTime={issue.openedAt} title={timestamp(issue.openedAt)}>
+                              {timestamp(issue.openedAt, { showZone: false, compact: true })}
+                            </time>
                             {issue.nextAttemptAt && (
                               <small
                                 className="ui-truncate"
@@ -213,7 +214,7 @@ export function IssueList() {
                               >
                                 Повтор:{' '}
                                 <time dateTime={issue.nextAttemptAt}>
-                                  {timestamp(issue.nextAttemptAt, { showZone: false })}
+                                  {timestamp(issue.nextAttemptAt, { showZone: false, compact: true })}
                                 </time>
                               </small>
                             )}

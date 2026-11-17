@@ -555,6 +555,66 @@ test('exact filter bounds remain visible and unchanged until edited', async ({ p
   expect(new URL(page.url()).searchParams.get('createdTo')).toBe(to);
 });
 
+test('issue registry uses two lines on desktop and keeps diagnostics in mobile cards', async ({ page }, info) => {
+  await mockApi(page, 'OPERATOR');
+  const title = 'Резервирование крепежа для склада · ' + 'Подробное название заявки '.repeat(4);
+  const summary = 'ID операции занят запросом с другим номером заявки';
+  const feedSummary = 'Неверный формат страницы ленты результатов';
+  const issue = { issueId: taskId, kind: 'PROTOCOL_ERROR', status: 'OPEN', openedAt: task.createdAt, summary };
+  await page.route(
+    (url) => url.pathname === '/api/exchange/issues',
+    (route) =>
+      route.fulfill({
+        json: {
+          items: [
+            { ...issue, taskId, requestReference: input.reference, taskTitle: title, nextAttemptAt: task.createdAt },
+            { ...issue, issueId: snapshotId, summary: feedSummary },
+          ],
+          page: 0,
+          totalItems: 2,
+          totalPages: 1,
+          hasNext: false,
+        },
+      }),
+  );
+  await page.goto('/issues');
+  await expect(page.getByRole('heading', { name: 'Разбор обмена', exact: true })).toBeVisible();
+  if (info.project.name === 'mobile') {
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expect(page.getByRole('table')).toHaveCount(0);
+      const cards = page.locator('.issue-cards > li');
+      await expect(cards).toHaveCount(2);
+      await expect(cards.first()).toContainText(input.reference + ' · ' + title);
+      await expect(cards.first()).toContainText(summary);
+      await expect(cards.last()).toContainText('Общая проблема ленты');
+      await expect(cards.last()).toContainText(feedSummary);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+      ).toBe(true);
+    }
+    return;
+  }
+
+  const rows = page.getByRole('table', { name: 'Реестр разборов обмена' }).locator('tbody tr');
+  for (const width of [1440, 1024, 761]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect(rows).toHaveCount(2);
+    const cells = rows.first().getByRole('cell');
+    const problem = cells.first();
+    await expect(problem.getByRole('link')).toHaveAttribute('title', summary);
+    await expect(problem).toContainText(input.reference + ' · ' + title);
+    await expect(problem.locator('small')).toHaveCount(1);
+    await expect(cells.last().locator('time').first()).toHaveAttribute('title', /00:00:00 UTC/);
+    await expect(cells.last().locator('time')).toHaveCount(2);
+    await expect(rows.last().getByRole('cell').first()).toContainText('Лента · ' + feedSummary);
+    expect((await rows.first().boundingBox())!.height).toBeLessThanOrEqual(64);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+    ).toBe(true);
+  }
+});
+
 test('open reconciliation can navigate after the deployed asset set changes', async ({ page }) => {
   await mockApi(page, 'OPERATOR', 8, { reconciliationIssueId: taskId });
   await page.goto('/tasks/' + taskId + '/reconciliations/' + snapshotId);
