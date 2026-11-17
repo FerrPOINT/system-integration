@@ -25,6 +25,6 @@ Frontend проверяет владельца и поколение сесси�
 Строковые minLength/maxLength означают Unicode code points. Partial
 templates/java/beanValidationCore.mustache заменяет только string Size,
 arrays/numbers остаются upstream. При upgrade сравнивайте partial с upstream.
-Orval генерирует ограничения полей UI: название, причина, номер заявки, количество и логин. reconciliationId обязателен
+Orval генерирует ограничения полей UI: название, причина, количество и логин. reconciliationId обязателен
 для решений задания и запрещён для ACKNOWLEDGE_FEED_ISSUE; IssueCommands
 проверяет это условие на сервере.

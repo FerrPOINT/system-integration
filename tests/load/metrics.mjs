@@ -242,7 +242,7 @@ export async function loadIntegrity(resources) {
       'si_test',
       `
       SELECT json_build_object(
-        'records',count(*),'pending',count(*) FILTER (WHERE business_status NOT IN ('SUCCEEDED','REJECTED')),
+        'records',count(*),'numbered',count(DISTINCT task_number),'pending',count(*) FILTER (WHERE business_status NOT IN ('SUCCEEDED','REJECTED')),
         'badLocalState',count(*) FILTER (WHERE delivery_status IS DISTINCT FROM 'ACKNOWLEDGED'
           OR business_status IS DISTINCT FROM accepted_result->>'status'
           OR accepted_result->>'version' IS DISTINCT FROM '2'),
@@ -257,7 +257,7 @@ export async function loadIntegrity(resources) {
             AND (h.actor<>'USER' OR h.actor_user_id IS DISTINCT FROM t.owner_id))),
         'lastCursor',(SELECT last_cursor FROM incoming_position WHERE id=1),
         'ids',md5(string_agg(operation_id::text,',' ORDER BY operation_id)),
-        'requests',md5(string_agg(concat_ws('|',operation_id,request_reference,request_quantity),',' ORDER BY operation_id)),
+        'requests',md5(string_agg(concat_ws('|',operation_id,request_quantity),',' ORDER BY operation_id)),
         'results',md5(string_agg(concat_ws('|',operation_id,accepted_result::text),',' ORDER BY operation_id))
       ) FROM tasks;
     `,
@@ -270,7 +270,7 @@ export async function loadIntegrity(resources) {
         'accepted',count(*),'executed',count(*) FILTER (WHERE executions=1),'duplicateExecutions',count(*) FILTER (WHERE executions>1),
         'unpublished',(SELECT count(*) FROM result_events WHERE cursor IS NULL),'lastCursor',(SELECT last_cursor FROM feed_position WHERE id=1),
         'ids',md5(string_agg(id::text,',' ORDER BY id)),
-        'requests',md5(string_agg(concat_ws('|',id,reference,quantity),',' ORDER BY id)),
+        'requests',md5(string_agg(concat_ws('|',id,quantity),',' ORDER BY id)),
         'results',md5(string_agg(concat_ws('|',id,result::text),',' ORDER BY id))
       ) FROM operations;
     `,

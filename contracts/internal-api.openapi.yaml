@@ -186,12 +186,12 @@ paths:
               title: CreateTaskRequest
               type: object
               additionalProperties: false
-              required: [title, request]
+              required: [title, quantity]
               properties:
                 title:
                   $ref: '#/components/schemas/Title'
-                request:
-                  $ref: '#/components/schemas/Request'
+                quantity:
+                  $ref: '#/components/schemas/Quantity'
       responses:
         '503':
           $ref: '#/components/responses/Unavailable'
@@ -653,6 +653,12 @@ components:
       pattern: '^(?![\s\S]*\u0000)[\s\S]*[^\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000][\s\S]*$'
     Request:
       $ref: './external-exchange.openapi.yaml#/components/schemas/OperationInput'
+    Quantity:
+      $ref: './external-exchange.openapi.yaml#/components/schemas/Quantity'
+    TaskNumber:
+      type: string
+      pattern: '^[1-9][0-9]{0,18}$'
+      description: Неизменяемый номер задания. Выдаётся PostgreSQL при создании.
     Problem:
       type: object
       required: [title, status, code]
@@ -688,11 +694,13 @@ components:
       enum: [PENDING, RUNNING, SUCCEEDED, REJECTED]
     Task:
       type: object
-      required: [taskId, operationId, ownerId, title, titleRevision, request, deliveryStatus, businessStatus, createdAt]
+      required: [taskId, taskNumber, operationId, ownerId, title, titleRevision, request, deliveryStatus, businessStatus, createdAt]
       properties:
         taskId:
           type: string
           format: uuid
+        taskNumber:
+          $ref: '#/components/schemas/TaskNumber'
         operationId:
           type: string
           format: uuid
@@ -921,9 +929,9 @@ components:
       type: object
       required: [issueId, issueRevision, kind, status, openedAt, summary, allowedActions]
       properties:
-        requestReference:
-          type: string
-          description: Номер заявки связанного задания в GET-выдаче; отсутствует у общей проблемы ленты и в сохранённом ответе команды.
+        taskNumber:
+          $ref: '#/components/schemas/TaskNumber'
+          description: Номер связанного задания в GET-выдаче; отсутствует у общей проблемы ленты и в сохранённом ответе команды.
         taskTitle:
           type: string
           description: Текущее название связанного задания в GET-выдаче; не является снимком первого события.
@@ -1025,6 +1033,9 @@ components:
         issueId:
           type: string
           format: uuid
+        diagnostic:
+          type: string
+          description: Зафиксированная диагностика входных данных на момент сверки.
       allOf:
         - if:
             properties:

@@ -10,8 +10,7 @@ import org.junit.jupiter.api.Test;
 
 class DeliveryAttemptTest {
     private DeliveryAttempt attempt(String step, int number) {
-        return new DeliveryAttempt(
-                UUID.randomUUID(), UUID.randomUUID(), step, number, number, new TaskInput("REQ-000001", 25));
+        return new DeliveryAttempt(UUID.randomUUID(), UUID.randomUUID(), step, number, number, new TaskInput(25));
     }
 
     @Test
@@ -55,9 +54,7 @@ class DeliveryAttemptTest {
 
     @Test
     void aNewSeriesUsesItsOwnCounterWithoutRenumberingHistory() {
-        var next =
-                new DeliveryAttempt(
-                        UUID.randomUUID(), UUID.randomUUID(), "GET", 201, 1, new TaskInput("REQ-000001", 25));
+        var next = new DeliveryAttempt(UUID.randomUUID(), UUID.randomUUID(), "GET", 201, 1, new TaskInput(25));
         assertEquals(2, next.decide(TEMPORARY_FAILURE).delaySeconds());
         assertFalse(next.decide(TEMPORARY_FAILURE).limitReached());
         assertTrue(DeliveryAttempt.exhausted(5));

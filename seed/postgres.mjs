@@ -4,7 +4,7 @@ import { loadEnvironment } from '../tests/load/environment.mjs';
 // Column types belong to the persisted schema; no runtime DDL or schema defaults are changed.
 const tables = {
   tasks:
-    'id uuid,owner_id uuid,operation_id uuid,title text,title_revision bigint,request_reference text,request_quantity integer,delivery_status text,business_status text,created_at timestamptz,exchange_version bigint,accepted_result jsonb',
+    'id uuid,owner_id uuid,operation_id uuid,title text,title_revision bigint,request_quantity integer,delivery_status text,business_status text,created_at timestamptz,exchange_version bigint,accepted_result jsonb',
   task_history:
     'id uuid,task_id uuid,operation_id uuid,occurred_at timestamptz,actor text,actor_user_id uuid,event_type text,summary text,details jsonb,observed_result jsonb,observation_fingerprint text',
   delivery_attempts:
@@ -15,10 +15,10 @@ const tables = {
   exchange_issues:
     'id uuid,task_id uuid,operation_id uuid,scope text,fingerprint text,issue_revision bigint,kind text,status text,opened_at timestamptz,summary text,evidence jsonb,assigned_to uuid,latest_reconciliation_id uuid,resolution jsonb',
   operations:
-    'id uuid,reference text,quantity integer,accepted_at timestamptz,executions integer,result jsonb,completed_at timestamptz',
+    'id uuid,quantity integer,accepted_at timestamptz,executions integer,result jsonb,completed_at timestamptz',
   result_events:
     'operation_id uuid,version integer,copy_number integer,payload jsonb,publish_after timestamptz,created_at timestamptz',
-  faults: 'reference text,mode text,bound_operation_id uuid',
+  faults: 'operation_id uuid,mode text',
 };
 
 export const literal = (value) => "'" + String(value).replaceAll("'", "''") + "'";
@@ -60,9 +60,14 @@ export function postgres(target = process.env.SI_SEED_TARGET ?? 'load') {
   const read = (database, sql) => JSON.parse(query(database, `BEGIN READ ONLY; ${sql} COMMIT;`));
   const version = read(
     'app',
-    "SELECT coalesce(jsonb_agg(version),'[]') FROM flyway_schema_history WHERE success AND version='12';",
+    "SELECT coalesce(jsonb_agg(version),'[]') FROM flyway_schema_history WHERE success AND version='15';",
   );
-  if (!version.includes('12')) throw new Error('Apply the current application migrations before seeding');
+  const emulatorVersion = read(
+    'emulator',
+    "SELECT coalesce(jsonb_agg(version),'[]') FROM flyway_schema_history WHERE success AND version='3';",
+  );
+  if (!version.includes('15') || !emulatorVersion.includes('3'))
+    throw new Error('Apply the current application and emulator migrations before seeding');
   return {
     query,
     read,
@@ -102,10 +107,8 @@ export function insertDataset(db, model, existing) {
           return ownedOperations.has(row.operation_id) && !operationIds.has(row.operation_id);
         if (table === 'faults')
           return (
-            !existing.faults.some((fault) => fault.reference === row.reference) &&
-            (row.bound_operation_id
-              ? ownedOperations.has(row.bound_operation_id)
-              : newTasks.some((task) => task.request_reference === row.reference))
+            ownedOperations.has(row.operation_id) &&
+            !existing.faults.some((fault) => fault.operation_id === row.operation_id)
           );
         if (table === 'exchange_issues') return row.task_id ? ownedTasks.has(row.task_id) : !issueIds.has(row.id);
         return row.task_id ? ownedTasks.has(row.task_id) : ownedOperations.has(row.operation_id);
@@ -126,18 +129,13 @@ export function insertDataset(db, model, existing) {
 
 export function existingDataset(db, model) {
   const ids = (rows) => rows.map((row) => literal(row.id)).join(',');
-  const conflicts = db.read(
-    'app',
-    `SELECT to_jsonb(count(*)) FROM tasks WHERE request_reference IN (${model.rows.tasks.map((task) => literal(task.request_reference)).join(',')}) AND id NOT IN (${ids(model.rows.tasks)});`,
-  );
-  if (conflicts) throw new Error('Reserved demo references are already used by another dataset');
   const tasks = db.read(
     'app',
-    `SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'owner',owner_id,'reference',request_reference,'quantity',request_quantity,'title',title)),'[]') FROM tasks WHERE id IN (${ids(model.rows.tasks)});`,
+    `SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'owner',owner_id,'operationId',operation_id,'taskNumber',task_number::text,'quantity',request_quantity,'title',title)),'[]') FROM tasks WHERE id IN (${ids(model.rows.tasks)});`,
   );
   const operations = db.read(
     'emulator',
-    `SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'reference',reference,'quantity',quantity)),'[]') FROM operations WHERE id IN (${ids(model.rows.operations)});`,
+    `SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'quantity',quantity)),'[]') FROM operations WHERE id IN (${ids(model.rows.operations)});`,
   );
   const issues = db.read(
     'app',
@@ -145,26 +143,23 @@ export function existingDataset(db, model) {
   );
   const faults = db.read(
     'emulator',
-    `SELECT coalesce(jsonb_agg(jsonb_build_object('reference',reference,'operationId',bound_operation_id)),'[]') FROM faults WHERE reference IN (${model.rows.faults.map((row) => literal(row.reference)).join(',')});`,
+    `SELECT coalesce(jsonb_agg(jsonb_build_object('operation_id',operation_id)),'[]') FROM faults WHERE operation_id IN (${model.rows.faults.map((row) => literal(row.operation_id)).join(',')});`,
   );
   for (const row of tasks) {
     const expected = model.rows.tasks.find((task) => task.id === row.id);
     if (
-      row.reference !== expected.request_reference ||
+      row.operationId !== expected.operation_id ||
       row.quantity !== expected.request_quantity ||
       row.owner !== expected.owner_id
     )
       throw new Error('Seed task ID collides with another dataset');
   }
+  const existingTaskOperations = new Set(tasks.map((task) => task.operationId));
   for (const row of operations) {
+    // The first stage may have committed before the related task was inserted.
     const expected = model.rows.operations.find((operation) => operation.id === row.id);
-    if (row.reference !== expected.reference || row.quantity !== expected.quantity)
+    if (!existingTaskOperations.has(row.id) && row.quantity !== expected.quantity)
       throw new Error('Seed operation ID collides with another dataset');
-  }
-  for (const row of faults) {
-    const expected = model.rows.faults.find((fault) => fault.reference === row.reference);
-    if (row.operationId !== expected.bound_operation_id)
-      throw new Error('Seed fault reference is already used by another operation');
   }
   return { tasks, operations, issues, faults };
 }
@@ -173,7 +168,7 @@ export function protectedData(db, model) {
   const tasks = model.rows.tasks.map((row) => literal(row.id)).join(',');
   const operations = model.rows.tasks.map((row) => literal(row.operation_id)).join(',');
   const issues = model.rows.exchange_issues.map((row) => literal(row.id)).join(',');
-  const faults = model.rows.faults.map((row) => literal(row.reference)).join(',');
+  const faults = model.rows.faults.map((row) => literal(row.operation_id)).join(',');
   const result = {};
   for (const [table, condition, database] of [
     ['tasks', `id NOT IN (${tasks})`, 'app'],
@@ -185,7 +180,7 @@ export function protectedData(db, model) {
     ['command_receipts', 'true', 'app'],
     ['operations', `id NOT IN (${operations})`, 'emulator'],
     ['result_events', `operation_id NOT IN (${operations})`, 'emulator'],
-    ['faults', `reference NOT IN (${faults})`, 'emulator'],
+    ['faults', `operation_id NOT IN (${faults})`, 'emulator'],
   ])
     result[table] = db.read(
       database,

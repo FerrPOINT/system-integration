@@ -13,7 +13,7 @@ import org.mapstruct.ValueMapping;
 
 @Mapper(config = MapStructConfig.class, uses = TaskApiMapper.class)
 public interface ReviewApiMapper {
-    @Mapping(target = "requestReference", ignore = true)
+    @Mapping(target = "taskNumber", ignore = true)
     @Mapping(target = "taskTitle", ignore = true)
     Issue issue(com.azhukov.integration.domain.review.Issue value);
 

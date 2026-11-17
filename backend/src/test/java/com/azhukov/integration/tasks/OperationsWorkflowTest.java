@@ -198,11 +198,11 @@ class OperationsWorkflowTest extends PostgresTest {
                         jdbc.queryForObject("SELECT title FROM tasks WHERE id=?", String.class, taskId),
                         row.get("taskTitle").asString());
                 assertEquals(
-                        jdbc.queryForObject("SELECT request_reference FROM tasks WHERE id=?", String.class, taskId),
-                        row.get("requestReference").asString());
+                        jdbc.queryForObject("SELECT task_number::text FROM tasks WHERE id=?", String.class, taskId),
+                        row.get("taskNumber").asString());
             } else {
                 assertFalse(row.has("taskTitle"));
-                assertFalse(row.has("requestReference"));
+                assertFalse(row.has("taskNumber"));
             }
         }
         var empty = mvc.perform(get("/api/exchange/issues").param("page", "1").session(op.session())).andReturn();
@@ -1054,10 +1054,7 @@ class OperationsWorkflowTest extends PostgresTest {
     }
 
     private ExchangeReply external(DeliveryAttempt claim, boolean completed, int quantity) {
-        var request =
-                json.valueToTree(
-                        new com.azhukov.integration.contract.external.model.OperationInput(
-                                claim.request().reference(), quantity));
+        var request = json.valueToTree(new com.azhukov.integration.contract.external.model.OperationInput(quantity));
         var body =
                 json.createObjectNode()
                         .put("operationId", claim.operationId().toString())

@@ -184,11 +184,10 @@ public final class ExchangeProtocol {
             throw invalid("INVALID_UUID", "operationId");
         }
         var request = body.get("request");
-        object(request, Set.of("reference", "quantity"));
-        String reference = text(request, "reference");
+        object(request, Set.of("quantity"));
         int quantity = integer(request, "quantity");
         try {
-            return new OperationIdentity(id, new TaskInput(reference, quantity));
+            return new OperationIdentity(id, new TaskInput(quantity));
         } catch (RuleViolation malformed) {
             throw invalid();
         }

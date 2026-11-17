@@ -33,7 +33,7 @@ public class JdbcOperationRepository implements OperationRepository {
     private Operation mapOperation(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
         return new Operation(
                 rs.getObject("id", UUID.class),
-                new OperationRequest(rs.getString("reference"), rs.getInt("quantity")),
+                new OperationRequest(rs.getInt("quantity")),
                 rs.getObject("accepted_at", OffsetDateTime.class),
                 rs.getInt("executions"),
                 rs.getString("result") == null ? null : json.readValue(rs.getString("result"), OperationResult.class));
@@ -69,9 +69,9 @@ public class JdbcOperationRepository implements OperationRepository {
         var modes = new HashMap<UUID, FaultMode>();
         var placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
         jdbc.query(
-                "SELECT bound_operation_id,mode FROM faults WHERE bound_operation_id IN ("
+                "SELECT operation_id,mode FROM faults WHERE operation_id IN ("
                         + placeholders
-                        + ") ORDER BY reference FOR UPDATE",
+                        + ") ORDER BY operation_id FOR UPDATE",
                 rs -> {
                     modes.put(rs.getObject(1, UUID.class), FaultMode.valueOf(rs.getString(2)));
                 },
@@ -96,12 +96,12 @@ public class JdbcOperationRepository implements OperationRepository {
         jdbc.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))", rs -> {}, id.toString());
     }
 
-    public Fault lockFault(String reference) {
+    public FaultMode lockFault(UUID id) {
         return jdbc
                 .query(
-                        "SELECT mode,bound_operation_id FROM faults WHERE reference = ? FOR UPDATE",
-                        (rs, n) -> new Fault(FaultMode.valueOf(rs.getString(1)), rs.getObject(2, UUID.class)),
-                        reference)
+                        "SELECT mode FROM faults WHERE operation_id = ? FOR UPDATE",
+                        (rs, n) -> FaultMode.valueOf(rs.getString(1)),
+                        id)
                 .stream()
                 .findFirst()
                 .orElse(null);
@@ -110,16 +110,11 @@ public class JdbcOperationRepository implements OperationRepository {
     /** INSERT RETURNING avoids a second read while preserving the database timestamp. */
     public Operation insert(UUID id, OperationRequest input) {
         return jdbc.query(
-                        "INSERT INTO operations(id,reference,quantity) VALUES (?,?,?) RETURNING *",
+                        "INSERT INTO operations(id,quantity) VALUES (?,?) RETURNING *",
                         operationRow,
                         id,
-                        input.reference(),
                         input.quantity())
                 .getFirst();
-    }
-
-    public void bindFault(String reference, UUID id) {
-        jdbc.update("UPDATE faults SET bound_operation_id = ? WHERE reference = ?", id, reference);
     }
 
     public void complete(OperationResult result) {
@@ -145,7 +140,7 @@ public class JdbcOperationRepository implements OperationRepository {
                         WITH candidates AS MATERIALIZED (
                             SELECT e.operation_id,e.version,e.copy_number,e.created_at FROM result_events e
                             WHERE e.cursor IS NULL AND (e.publish_after <= clock_timestamp() OR
-                                (e.version = 1 AND EXISTS (SELECT 1 FROM faults f WHERE f.bound_operation_id = e.operation_id AND f.mode = 'DELAY_RESULT')
+                                (e.version = 1 AND EXISTS (SELECT 1 FROM faults f WHERE f.operation_id = e.operation_id AND f.mode = 'DELAY_RESULT')
                                 AND EXISTS (SELECT 1 FROM result_events terminal WHERE terminal.operation_id = e.operation_id AND terminal.version = 2 AND terminal.cursor IS NOT NULL)))
                             ORDER BY e.created_at,e.version,e.copy_number,e.operation_id LIMIT ?
                         )
@@ -187,14 +182,10 @@ public class JdbcOperationRepository implements OperationRepository {
         return events.size();
     }
 
-    public void lockFaultConfiguration(String reference) {
-        jdbc.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))", rs -> {}, "fault:" + reference);
-    }
-
-    public void configure(String reference, FaultMode mode) {
+    public void configure(UUID id, FaultMode mode) {
         jdbc.update(
-                "INSERT INTO faults(reference,mode) VALUES (?,?) ON CONFLICT(reference) DO UPDATE SET mode = excluded.mode",
-                reference,
+                "INSERT INTO faults(operation_id,mode) VALUES (?,?) ON CONFLICT(operation_id) DO UPDATE SET mode = excluded.mode",
+                id,
                 mode.name());
     }
 
@@ -209,8 +200,8 @@ public class JdbcOperationRepository implements OperationRepository {
                 operation);
     }
 
-    public void clearFault(String reference) {
-        jdbc.update("DELETE FROM faults WHERE reference = ?", reference);
+    public void clearFault(UUID id) {
+        jdbc.update("DELETE FROM faults WHERE operation_id = ?", id);
     }
 
     private record EventKey(UUID id, int version, int copy, OffsetDateTime createdAt) {}

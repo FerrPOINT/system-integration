@@ -1,15 +1,15 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { randomInt, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { ApiSession, localOrigin } from './support/http.mjs';
+import { createHeldDelivery, releaseHeldDelivery, operationUuid } from './support/held-delivery.mjs';
 
 const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19680');
 const external = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19681');
-const [command, reference, mode] = process.argv.slice(2);
+const [command, operationId, mode] = process.argv.slice(2);
 const faultModes = ['UNAVAILABLE', 'DROP_RESPONSE_AFTER_EXECUTION', 'DUPLICATE_RESULT', 'DELAY_RESULT'];
 
 async function fault(method, ref, value) {
-  if (!/^REQ-[0-9]{6}$/.test(ref)) throw new Error('Expected REQ- and six digits');
-  const response = await fetch(external + '/test/faults/' + ref, {
+  const response = await fetch(external + '/test/faults/' + operationUuid(ref), {
     method,
     signal: AbortSignal.timeout(10_000),
     headers: { 'Content-Type': 'application/json' },
@@ -29,32 +29,18 @@ if (command === 'seed' || command === 'verify-seed') {
   await import('../seed/run.mjs');
 } else if (command === 'fault') {
   if (!faultModes.includes(mode)) throw new Error('Unknown fault mode');
-  await fault('PUT', reference, mode);
+  await fault('PUT', operationId, mode);
 } else if (command === 'clear') {
-  await fault('DELETE', reference);
+  await fault('DELETE', operationId);
 } else if (command === 'inspect') {
-  if (!/^[0-9a-f-]{36}$/i.test(reference || '')) throw new Error('Expected an operation UUID');
-  const response = await fetch(external + '/operations/' + reference, { signal: AbortSignal.timeout(10_000) });
+  const response = await fetch(external + '/operations/' + operationUuid(operationId), {
+    signal: AbortSignal.timeout(10_000),
+  });
   if (!response.ok) throw new Error(`External state: HTTP ${response.status}`);
   console.log(JSON.stringify(await response.json(), null, 2));
 } else if (command === 'scenarios') {
   const { postgres } = await import('../seed/postgres.mjs');
   const db = postgres('load');
-  const firstReference = randomInt(700000, 789994);
-  const occupied =
-    db.read(
-      'app',
-      `SELECT to_jsonb(count(*)) FROM tasks WHERE request_reference BETWEEN 'REQ-${firstReference}' AND 'REQ-${firstReference + 5}';`,
-    ) +
-    db.read(
-      'emulator',
-      `SELECT to_jsonb(count(*)) FROM faults WHERE reference BETWEEN 'REQ-${firstReference}' AND 'REQ-${firstReference + 5}';`,
-    ) +
-    db.read(
-      'emulator',
-      `SELECT to_jsonb(count(*)) FROM operations WHERE reference BETWEEN 'REQ-${firstReference}' AND 'REQ-${firstReference + 5}';`,
-    );
-  if (occupied) throw new Error('Live scenario reference range is occupied; start a new run');
   const initiators = await Promise.all(['initiator.one', 'initiator.two'].map(login));
   const operator = await login('operator');
   const cases = [
@@ -66,24 +52,25 @@ if (command === 'seed' || command === 'verify-seed') {
     { title: 'Демо: запоздалый промежуточный снимок', quantity: 25, fault: 'DELAY_RESULT' },
   ];
   for (const [index, item] of cases.entries()) {
-    item.reference = `REQ-${firstReference + index}`;
     item.owner = index % 2;
-    if (item.fault) await fault('PUT', item.reference, item.fault);
-    const key = randomUUID();
-    item.createKey = key;
-    item.taskId = (
-      await initiators[item.owner].command(
+    const owner = initiators[item.owner];
+    item.createKey = randomUUID();
+    const create = async () => {
+      const { taskId } = await owner.command(
         'POST',
         '/api/tasks',
-        {
-          title: item.title,
-          request: { reference: item.reference, quantity: item.quantity },
-        },
-        key,
-      )
-    ).taskId;
+        { title: item.title, quantity: item.quantity },
+        item.createKey,
+      );
+      return owner.get('/api/tasks/' + taskId);
+    };
+    const created = item.fault ? await createHeldDelivery(create) : await create();
+    if (item.fault) {
+      await fault('PUT', created.operationId, item.fault);
+      releaseHeldDelivery(created.operationId);
+    }
+    item.taskId = created.taskId;
     item.observedStates = [];
-    const created = await initiators[item.owner].get('/api/tasks/' + item.taskId);
     item.observedStates.push(created.deliveryStatus + '/' + created.businessStatus);
   }
   // Five calls plus 82 seconds of backoff and HTTP deadlines.
@@ -126,7 +113,7 @@ if (command === 'seed' || command === 'verify-seed') {
   );
   if (duplicate.publishedCopies !== 2) throw new Error('Expected both publications of the duplicated result');
   const delayed = cases.find((item) => item.fault === 'DELAY_RESULT');
-  await fault('DELETE', delayed.reference);
+  await fault('DELETE', delayed.task.operationId);
   const releaseDeadline = Date.now() + 10_000;
   while (true) {
     const history = await initiators[delayed.owner].get('/api/tasks/' + delayed.taskId + '/history?size=100');
@@ -158,6 +145,6 @@ if (command === 'seed' || command === 'verify-seed') {
   );
 } else {
   throw new Error(
-    'Usage: node tests/demo.mjs seed | verify-seed | scenarios | fault REQ-900003 UNAVAILABLE | clear REQ-900003 | inspect <operation-id>',
+    'Usage: node tests/demo.mjs seed | verify-seed | scenarios | fault <operation-id> UNAVAILABLE | clear <operation-id> | inspect <operation-id>',
   );
 }

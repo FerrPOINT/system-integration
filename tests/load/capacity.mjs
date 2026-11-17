@@ -39,7 +39,6 @@ const p95 = (values) => {
 const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const stages = [],
   integrityErrors = [];
-let serial = 300000;
 
 async function clientsFor(count) {
   const clients = new Array(count);
@@ -117,15 +116,13 @@ async function stage(mode, count) {
                 throw new ApiFailure(200, 'INVALID_TASK_STATE');
               client.task = result;
             } else if (action === 2) {
-              if (serial > 999999) throw new Error('REFERENCE_RANGE_EXHAUSTED');
-              const reference = 'REQ-' + serial++;
               const title = 'Capacity client ' + client.index + ' create ' + client.counter;
               const result = await client.session.command('POST', '/api/tasks', {
                 title,
                 request: { reference, quantity: 25 },
               });
               if (typeof result?.taskId !== 'string') throw new ApiFailure(201, 'INVALID_CREATE_RESULT');
-              created.push({ taskId: result.taskId, client: client.index, ownerId: client.userId, title, reference });
+              created.push({ taskId: result.taskId, client: client.index, ownerId: client.userId, title });
             } else {
               const input = {
                 title: 'Capacity client ' + client.index + ' rename ' + client.counter,
@@ -188,7 +185,7 @@ async function stage(mode, count) {
       } catch (error) {
         if (!(error instanceof ApiFailure) || error.status !== 404) throw error;
       }
-      const input = { title: 'Capacity replay', request: { reference: 'REQ-999990', quantity: 25 } },
+      const input = { title: 'Capacity replay', quantity: 25 },
         key = crypto.randomUUID();
       const first = await clients[0].session.command('POST', '/api/tasks', input, key);
       const replay = await clients[0].session.command('POST', '/api/tasks', input, key);
@@ -209,7 +206,6 @@ async function stage(mode, count) {
             client: 0,
             ownerId: clients[0].userId,
             title: input.title,
-            reference: input.request.reference,
           },
         ],
         clients,

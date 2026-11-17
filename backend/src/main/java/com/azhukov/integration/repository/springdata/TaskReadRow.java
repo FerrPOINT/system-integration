@@ -12,11 +12,11 @@ import org.springframework.data.relational.core.mapping.Table;
 @Table("tasks")
 record TaskReadRow(
         @Id UUID id,
+        @Column("task_number") long taskNumber,
         @Column("operation_id") UUID operationId,
         @Column("owner_id") UUID ownerId,
         String title,
         @Column("title_revision") long titleRevision,
-        @Column("request_reference") String requestReference,
         @Column("request_quantity") int requestQuantity,
         @Column("delivery_status") DeliveryStatus deliveryStatus,
         @Column("business_status") BusinessStatus businessStatus,
@@ -25,10 +25,11 @@ record TaskReadRow(
     Task task(TaskResultReader results) {
         return new Task(
                 id,
+                taskNumber,
                 operationId,
                 ownerId,
                 new TaskTitle(title, titleRevision),
-                new TaskInput(requestReference, requestQuantity),
+                new TaskInput(requestQuantity),
                 deliveryStatus,
                 businessStatus,
                 createdAt,

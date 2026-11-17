@@ -11,7 +11,8 @@ export function verifyCreatedOperation(expected, task, status, external, complet
     task.taskId !== expected.taskId ||
     task.ownerId !== expected.ownerId ||
     task.title !== expected.title ||
-    task.request?.reference !== expected.reference ||
+    typeof task.taskNumber !== 'string' ||
+    !/^[1-9][0-9]*$/.test(task.taskNumber) ||
     task.request?.quantity !== 25
   )
     reject('SAVED_REQUEST_CHANGED');
@@ -33,11 +34,7 @@ export function verifyCreatedOperation(expected, task, status, external, complet
     return { pending: true, notAccepted: true };
   }
   if (status !== 200) throw new ApiFailure(status, 'EXTERNAL_STATE_READ_FAILED');
-  if (
-    external?.operationId !== task.operationId ||
-    external.request?.reference !== expected.reference ||
-    external.request?.quantity !== 25
-  )
+  if (external?.operationId !== task.operationId || external.request?.quantity !== 25)
     reject('EXTERNAL_IDENTITY_CONFLICT');
   if (external.executions === 0) {
     if (complete || external.result !== null || task.businessStatus !== 'PENDING')
@@ -51,7 +48,6 @@ export function verifyCreatedOperation(expected, task, status, external, complet
     result.status !== 'SUCCEEDED' ||
     result.rejectionCode !== undefined ||
     result.operationId !== task.operationId ||
-    result.request?.reference !== expected.reference ||
     result.request?.quantity !== 25
   )
     reject('EXTERNAL_RESULT_OR_EXECUTION_CONFLICT');
@@ -139,6 +135,7 @@ export function verifyFinishedSnapshot({ app, emulator }, expectedRecords) {
   if (
     !(app.records > 0) ||
     (expectedRecords !== undefined && app.records !== expectedRecords) ||
+    app.records !== app.numbered ||
     app.records !== emulator.accepted ||
     app.records !== emulator.executed ||
     app.pending !== 0 ||

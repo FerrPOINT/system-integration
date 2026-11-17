@@ -19,9 +19,10 @@ async function server(page: Page, total: number, history = false) {
     fail: undefined as number | undefined,
   };
   function task(sequence: number) {
-    const request = { reference: 'REQ-' + String(sequence % 1_000_000).padStart(6, '0'), quantity: 25 };
+    const request = { quantity: 25 };
     return {
       taskId: id(sequence),
+      taskNumber: String(sequence),
       operationId: id(sequence),
       ownerId: owner,
       title: 'Запись №' + sequence,

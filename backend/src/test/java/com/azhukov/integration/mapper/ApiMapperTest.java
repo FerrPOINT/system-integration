@@ -22,7 +22,7 @@ class ApiMapperTest {
     private final UUID operation = UUID.fromString("00000000-0000-4000-8000-000000000002");
     private final UUID owner = UUID.fromString("00000000-0000-4000-8000-000000000003");
     private final OffsetDateTime time = OffsetDateTime.parse("2026-01-02T03:04:05Z");
-    private final TaskInput request = new TaskInput("REQ-000001", 125);
+    private final TaskInput request = new TaskInput(125);
 
     private AnnotationConfigApplicationContext context() {
         return new AnnotationConfigApplicationContext("com.azhukov.integration.mapper");
@@ -45,6 +45,7 @@ class ApiMapperTest {
                 var task =
                         new com.azhukov.integration.domain.task.Task(
                                 id,
+                                1,
                                 operation,
                                 owner,
                                 new TaskTitle("Задание", 7),
@@ -61,7 +62,7 @@ class ApiMapperTest {
                         () -> assertEquals("Задание", value.getTitle()),
                         () -> assertEquals(7L, value.getTitleRevision()),
                         () -> assertEquals(time, value.getCreatedAt()),
-                        () -> assertEquals("REQ-000001", value.getRequest().getReference()),
+                        () -> assertEquals("1", value.getTaskNumber()),
                         () -> assertEquals(125, value.getRequest().getQuantity()),
                         () -> assertEquals("ACKNOWLEDGED", value.getDeliveryStatus().name()),
                         () -> assertEquals(status.name(), value.getBusinessStatus().name()));
@@ -158,9 +159,9 @@ class ApiMapperTest {
             var empty = mapper.history(new Page<HistoryEntry>(List.of(), 0, 10, 0));
             assertEquals(0L, empty.getTotalPages());
             assertFalse(empty.getHasNext());
-            var create = mapper.create(new CreateTaskRequest("Новое", new Request("REQ-000001", 125)));
+            var create = mapper.create(new CreateTaskRequest("Новое", 125));
             assertEquals("Новое", create.title());
-            assertEquals(request, create.request());
+            assertEquals(125, create.quantity());
             var rename = mapper.rename(new RenameTaskRequest("Название", 9007199254740990L));
             assertEquals("Название", rename.title());
             assertEquals(9007199254740990L, rename.expectedTitleRevision());
@@ -215,10 +216,9 @@ class ApiMapperTest {
                             resolution);
             var value = mapper.issue(issue);
             assertNull(value.getTaskTitle());
-            assertNull(value.getRequestReference());
-            var enriched =
-                    mapper.issueView(new com.azhukov.integration.dto.review.IssueView(issue, "REQ-000001", "Задание"));
-            assertEquals("REQ-000001", enriched.getRequestReference());
+            assertNull(value.getTaskNumber());
+            var enriched = mapper.issueView(new com.azhukov.integration.dto.review.IssueView(issue, 1L, "Задание"));
+            assertEquals("1", enriched.getTaskNumber());
             assertEquals("Задание", enriched.getTaskTitle());
             assertEquals(value.getAllowedActions(), enriched.getAllowedActions());
             assertEquals(value.getIssueId(), enriched.getIssueId());
@@ -240,7 +240,7 @@ class ApiMapperTest {
             assertEquals(time, value.getEvidence().getLocal().getResult().getCompletedAt());
             assertEquals("QUANTITY_LIMIT_EXCEEDED", value.getEvidence().getReceived().getRejectionCode());
             assertEquals(operation, value.getEvidence().getReceived().getOperationId());
-            assertEquals("REQ-000001", value.getEvidence().getReceived().getRequest().getReference());
+            assertEquals(125, value.getEvidence().getReceived().getRequest().getQuantity());
             assertEquals(owner, value.getResolution().getDecidedBy());
             assertEquals("Проверено", value.getResolution().getReason());
             assertEquals(operation, value.getResolution().getReconciliationId());
@@ -261,8 +261,7 @@ class ApiMapperTest {
         new com.azhukov.integration.config.DocumentJsonConfiguration().documents().customize(builder);
         var json = builder.build();
         var protocol = new com.azhukov.integration.client.http.ExchangeProtocol();
-        var identity =
-                "\"operationId\":\"" + operation + "\",\"request\":{\"reference\":\"REQ-000001\",\"quantity\":25}";
+        var identity = "\"operationId\":\"" + operation + "\",\"request\":{\"quantity\":25}";
         try (var context = context()) {
             var mapper = context.getBean(ReviewApiMapper.class);
             for (var result :
@@ -316,7 +315,8 @@ class ApiMapperTest {
                                     null),
                             com.azhukov.integration.domain.review.Reconciliation.Availability.PRESENT,
                             external,
-                            id);
+                            id,
+                            "Диагностика сверки");
             var value = mapper.reconciliation(source);
             assertEquals(external.operationId(), value.getExternal().getOperationId());
             assertNull(value.getExternal().getResult());
@@ -327,6 +327,7 @@ class ApiMapperTest {
             assertEquals(time, value.getCheckedAt());
             assertEquals(owner, value.getCheckedBy());
             assertEquals(id, value.getIssueId());
+            assertEquals("Диагностика сверки", value.getDiagnostic());
             assertEquals("DIFFERENCE", value.getOutcome().name());
             assertNull(value.getLocal().getResult());
             assertNull(value.getLocal().getResultVersion());

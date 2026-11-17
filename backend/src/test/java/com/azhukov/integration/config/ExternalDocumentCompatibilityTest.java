@@ -19,8 +19,7 @@ class ExternalDocumentCompatibilityTest {
     void allThreeResultsKeepTheHistoricalWireAndStoredJson() {
         var json = mapper();
         var protocol = new ExchangeProtocol();
-        var identity =
-                "\"operationId\":\"00000000-0000-4000-8000-000000000001\",\"request\":{\"reference\":\"REQ-000001\",\"quantity\":25}";
+        var identity = "\"operationId\":\"00000000-0000-4000-8000-000000000001\",\"request\":{\"quantity\":25}";
         for (var fields :
                 new String[] {
                     "\"version\":1,\"status\":\"RUNNING\"",
@@ -47,7 +46,7 @@ class ExternalDocumentCompatibilityTest {
                 json.readTree(
                         """
                         {"operationId":"00000000-0000-4000-8000-000000000001",
-                         "request":{"reference":"REQ-000001","quantity":25},
+                         "request":{"quantity":25},
                          "acceptedAt":"2026-11-12T00:00:00Z","executions":0,"result":null}
                         """);
         var current = protocol.state(expected);

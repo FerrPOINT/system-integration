@@ -6,7 +6,6 @@ let formRules:
   | {
       Title: TextRule;
       ActionReason: TextRule;
-      Reference: { prefix: string; numberPattern: string };
       Quantity: { minimum: number; maximum: number };
       Username: TextRule;
     }
@@ -31,16 +30,7 @@ export default defineConfig({
               throw new Error('Missing form constraints: ' + name);
             textRules[name] = { maxLength: schema.maxLength, pattern: schema.pattern };
           }
-          const input = spec.components?.schemas?.OperationInput;
-          if (!input || !('properties' in input)) throw new Error('Missing OperationInput constraints');
-          const reference = input.properties?.reference;
-          const quantity = input.properties?.quantity;
-          const referenceParts =
-            reference && 'pattern' in reference && typeof reference.pattern === 'string'
-              ? /^\^([A-Z]+-)(\[0-9\]\{[1-9][0-9]*\})\$$/.exec(reference.pattern)
-              : null;
-          if (!referenceParts) throw new Error('Expected a fixed request reference prefix and a digit pattern');
-          const [, prefix, numberPattern] = referenceParts;
+          const quantity = spec.components?.schemas?.Quantity;
           if (
             !quantity ||
             !('minimum' in quantity) ||
@@ -65,7 +55,6 @@ export default defineConfig({
           formRules = {
             Title: textRules.Title,
             ActionReason: textRules.ActionReason,
-            Reference: { prefix, numberPattern },
             Quantity: { minimum: quantity.minimum, maximum: quantity.maximum },
             Username: { maxLength: username.maxLength, pattern: username.pattern },
           };

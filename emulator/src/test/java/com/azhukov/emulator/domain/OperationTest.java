@@ -12,7 +12,7 @@ class OperationTest {
     private final OffsetDateTime at = OffsetDateTime.parse("2026-11-12T00:00:00Z");
 
     private Operation pending(int quantity) {
-        return new Operation(id, new OperationRequest("REQ-000001", quantity), at, 0, null);
+        return new Operation(id, new OperationRequest(quantity), at, 0, null);
     }
 
     @Test
@@ -24,20 +24,14 @@ class OperationTest {
         assertEquals(OperationResult.Status.REJECTED, rejected.result().status());
         assertEquals("QUANTITY_LIMIT_EXCEEDED", rejected.result().rejectionCode());
         var completed = new Operation(id, rejected.result().request(), at, 1, rejected.result());
-        completed.requireRequest(new OperationRequest("REQ-000001", 101));
+        completed.requireRequest(new OperationRequest(101));
         assertThrows(IllegalStateException.class, () -> completed.execute(FaultMode.NONE, at));
         assertEquals(
                 RuleViolation.Code.OPERATION_CONFLICT,
-                assertThrows(
-                                RuleViolation.class,
-                                () -> completed.requireRequest(new OperationRequest("REQ-000002", 101)))
-                        .code());
+                assertThrows(RuleViolation.class, () -> completed.requireRequest(new OperationRequest(102))).code());
         assertEquals(
                 RuleViolation.Code.OPERATION_CONFLICT,
-                assertThrows(
-                                RuleViolation.class,
-                                () -> completed.requireRequest(new OperationRequest("REQ-000001", 100)))
-                        .code());
+                assertThrows(RuleViolation.class, () -> completed.requireRequest(new OperationRequest(100))).code());
     }
 
     @Test
@@ -55,20 +49,5 @@ class OperationTest {
         assertEquals(3, duplicate.events().size());
         assertEquals(duplicate.events().get(1).result(), duplicate.events().get(2).result());
         assertEquals(List.of(0, 0, 1), duplicate.events().stream().map(Operation.Event::copy).toList());
-    }
-
-    @Test
-    void boundFaultIsNotConsumedByAnotherOperationAndCannotBeReconfigured() {
-        var bound = new Fault(FaultMode.DUPLICATE_RESULT, id);
-        assertEquals(FaultMode.NONE, bound.forNextAcceptance());
-        assertFalse(bound.changeTo(FaultMode.DUPLICATE_RESULT));
-        assertEquals(
-                RuleViolation.Code.FAULT_ALREADY_BOUND,
-                assertThrows(RuleViolation.class, () -> bound.changeTo(FaultMode.DELAY_RESULT)).code());
-        assertTrue(new Fault(FaultMode.DUPLICATE_RESULT, null).changeTo(FaultMode.DELAY_RESULT));
-        assertEquals(
-                RuleViolation.Code.UNAVAILABLE,
-                assertThrows(RuleViolation.class, () -> new Fault(FaultMode.UNAVAILABLE, null).forNextAcceptance())
-                        .code());
     }
 }

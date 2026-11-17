@@ -6,6 +6,7 @@ import { ApiSession, ApiFailure, localOrigin } from '../support/http.mjs';
 import { qualifiedLoadEnvironment } from '../load/environment.mjs';
 import { loadIntegrity, drainLoad } from '../load/metrics.mjs';
 import { verifyCreatedTasks, verifyFinishedSnapshot } from '../load/integrity.mjs';
+import { createHeldDelivery, releaseHeldDelivery } from '../support/held-delivery.mjs';
 
 const git = (...args) => execFileSync('git', args, { cwd: new URL('../..', import.meta.url), encoding: 'utf8' }).trim();
 const testSourceCommit = git('rev-parse', 'HEAD');
@@ -49,8 +50,8 @@ async function externalState(id) {
   assert.equal(response.status, 200);
   return value;
 }
-async function fault(reference, mode) {
-  const response = await fetch(external + '/test/faults/' + reference, {
+async function fault(operationId, mode) {
+  const response = await fetch(external + '/test/faults/' + operationId, {
     method: mode ? 'PUT' : 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: mode ? JSON.stringify({ mode }) : undefined,
@@ -58,10 +59,10 @@ async function fault(reference, mode) {
   });
   assert.equal(response.status, 204);
 }
-async function create(reference, title, ownerId) {
-  const result = await owner.command('POST', '/api/tasks', { title, request: { reference, quantity: 25 } });
+async function create(title, ownerId) {
+  const result = await owner.command('POST', '/api/tasks', { title, quantity: 25 });
   const task = await owner.get('/api/tasks/' + result.taskId);
-  created.push({ taskId: result.taskId, client: 0, ownerId, reference, title });
+  created.push({ taskId: result.taskId, client: 0, ownerId, title });
   return task;
 }
 async function quiescent() {
@@ -77,7 +78,7 @@ try {
   const identity = await owner.login('initiator.one', process.env.SI_DEMO_PASSWORD);
   await operator.login('operator', process.env.SI_DEMO_PASSWORD);
   for (let n = 0; n < 5; n++) {
-    const task = await create('REQ-' + (860000 + n), 'Isolation warm ' + n, identity.userId);
+    const task = await create('Isolation warm ' + n, identity.userId);
     await until(
       'warm task did not complete',
       async () => (await owner.get('/api/tasks/' + task.taskId)).businessStatus === 'SUCCEEDED',
@@ -85,17 +86,18 @@ try {
   }
   await quiescent();
   for (let n = 0; n < 5; n++) {
-    const reference = 'REQ-' + (860100 + n * 2),
-      trialStarted = performance.now();
-    faulted.add(reference);
-    await fault(reference, 'DROP_RESPONSE_AFTER_EXECUTION');
+    const slow = await createHeldDelivery(() => create('Isolation slow ' + n, identity.userId));
+    const id = slow.operationId;
+    faulted.add(id);
+    await fault(id, 'DROP_RESPONSE_AFTER_EXECUTION');
+    const trialStarted = performance.now();
     try {
-      const slow = await create(reference, 'Isolation slow ' + n, identity.userId);
+      releaseHeldDelivery(id);
       await until('delayed operation not accepted', () => externalState(slow.operationId));
       const before = await operator.get('/actuator/exchange');
       assert.ok(before.feed.deliveryInFlight >= 1, 'The delayed HTTP response must actually be in flight');
       const fastStarted = performance.now();
-      const fast = await create('REQ-' + (860101 + n * 2), 'Isolation fast ' + n, identity.userId);
+      const fast = await create('Isolation fast ' + n, identity.userId);
       await until('following operation not accepted', () => externalState(fast.operationId));
       const acceptedAfterMs = performance.now() - fastStarted;
       report.trials.push({ acceptedAfterMs, delayedResponseWasInFlight: true });
@@ -105,8 +107,8 @@ try {
       );
       await quiescent();
     } finally {
-      await fault(reference);
-      faulted.delete(reference);
+      await fault(id);
+      faulted.delete(id);
       // The emulator's deliberate reply delay is 5 s. Keep trials independent;
       // this cooldown is outside the measured acceptance interval.
       await pause(Math.max(0, 5500 - (performance.now() - trialStarted)));
@@ -126,9 +128,9 @@ try {
     .find((line) => line.includes('delivery-isolation.mjs:'))
     ?.trim();
 } finally {
-  for (const reference of faulted) {
+  for (const id of faulted) {
     try {
-      await fault(reference);
+      await fault(id);
     } catch (error) {
       report.cleanupError = error.name;
     }

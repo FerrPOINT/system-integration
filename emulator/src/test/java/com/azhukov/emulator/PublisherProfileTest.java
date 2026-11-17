@@ -50,10 +50,10 @@ class PublisherProfileTest {
         try {
             jdbc.update(
                     """
-                    INSERT INTO operations(id,reference,quantity,accepted_at,executions,result,completed_at)
-                    SELECT md5('publisher-profile:'||i)::uuid,'REQ-'||(700000+i),25,'2026-11-12'::timestamptz+i*interval '1 millisecond',1,
+                    INSERT INTO operations(id,quantity,accepted_at,executions,result,completed_at)
+                    SELECT md5('publisher-profile:'||i)::uuid,25,'2026-11-12'::timestamptz+i*interval '1 millisecond',1,
                     jsonb_build_object('operationId',md5('publisher-profile:'||i)::uuid,
-                        'request',jsonb_build_object('reference','REQ-'||(700000+i),'quantity',25),
+                        'request',jsonb_build_object('quantity',25),
                         'version',2,'status','SUCCEEDED','completedAt','2026-11-12T12:00:00Z'),'2026-11-12T12:00:00Z'::timestamptz
                     FROM generate_series(1,1000)i
                     """);
@@ -61,7 +61,7 @@ class PublisherProfileTest {
                     """
                     INSERT INTO result_events(operation_id,version,copy_number,payload,publish_after,created_at)
                     SELECT o.id,v,0,CASE WHEN v=2 THEN o.result ELSE jsonb_build_object('operationId',o.id,
-                        'request',jsonb_build_object('reference',o.reference,'quantity',o.quantity),'version',1,'status','RUNNING') END,
+                        'request',jsonb_build_object('quantity',o.quantity),'version',1,'status','RUNNING') END,
                         clock_timestamp(),o.accepted_at+v*interval '1 microsecond'
                     FROM operations o CROSS JOIN generate_series(1,2)v
                     """);

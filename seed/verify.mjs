@@ -22,7 +22,7 @@ export async function verify(db, model, { fresh = false } = {}) {
     const task = await api.get('/api/tasks/' + expected.id);
     assert.equal(task.ownerId, expected.owner_id);
     assert.equal(task.operationId, expected.operation_id);
-    assert.equal(task.request.reference, expected.request_reference);
+    assert.match(task.taskNumber, /^[1-9][0-9]*$/);
     assert.equal(task.request.quantity, expected.request_quantity);
     if (fresh) {
       assert.equal(task.deliveryStatus, expected.delivery_status);
@@ -32,9 +32,13 @@ export async function verify(db, model, { fresh = false } = {}) {
     summary.tasks++;
   });
   assert.equal(summary.tasks, TASK_COUNT);
+  assert.equal(new Set([...actualTasks.values()].map((task) => task.taskNumber)).size, TASK_COUNT);
   console.log(`Verified ${summary.tasks} task cards.`);
   const recentTasksByOperation = new Map(
     model.rows.tasks.slice(-RECENT_TASK_COUNT).map((task) => [task.operation_id, actualTasks.get(task.id)]),
+  );
+  const protocolOperations = new Set(
+    model.examples.filter((example) => example.scenario === 'protocol').map((example) => example.operationId),
   );
   await parallel(model.rows.operations, 6, async (expected) => {
     const response = await fetch(db.emulatorUrl + '/operations/' + expected.id, {
@@ -43,7 +47,8 @@ export async function verify(db, model, { fresh = false } = {}) {
     assert.equal(response.status, 200);
     const value = await response.json();
     assert.equal(value.operationId, expected.id);
-    assert.equal(value.request.reference, expected.reference);
+    assert.deepEqual(value.result.request, value.request);
+    if (fresh || !protocolOperations.has(expected.id)) assert.equal(value.request.quantity, expected.quantity);
     assert.equal(value.executions, 1);
     assert.equal(value.result.status, expected.result.status);
     const task = recentTasksByOperation.get(expected.id);
@@ -66,6 +71,7 @@ export async function verify(db, model, { fresh = false } = {}) {
     const issue = await api.get('/api/exchange/issues/' + expected.id);
     assert.equal(issue.issueId, expected.id);
     assert.equal(issue.taskId ?? null, expected.task_id);
+    assert.equal(issue.taskNumber, actualTasks.get(expected.task_id)?.taskNumber);
     if (fresh) {
       assert.equal(issue.status, expected.status);
       assert.equal(issue.kind, expected.kind);

@@ -52,7 +52,6 @@ export async function runNf08Workload(clients, { warmupMs = 30_000, measureMs = 
   const created = [],
     allCreated = [];
   const warmupErrors = {};
-  let serial = 200000;
   const startedAt = new Date().toISOString();
   const warmEnd = performance.now() + warmupMs;
   const measureEnd = warmEnd + measureMs;
@@ -87,10 +86,9 @@ export async function runNf08Workload(clients, { warmupMs = 30_000, measureMs = 
             client.task = result;
           }
           if (client.action === 2) {
-            if (serial > 999999) throw new Error('REFERENCE_RANGE_EXHAUSTED');
             const input = {
               title: `NF08 client ${client.index} create ${client.counter}`,
-              request: { reference: `REQ-${serial++}`, quantity: 25 },
+              quantity: 25,
             };
             const result = await client.session.command('POST', '/api/tasks', input);
             if (typeof result?.taskId !== 'string') throw new ApiFailure(201, 'INVALID_CREATE_RESULT');
@@ -99,7 +97,6 @@ export async function runNf08Workload(clients, { warmupMs = 30_000, measureMs = 
               client: client.index,
               ownerId: client.userId,
               title: input.title,
-              reference: input.request.reference,
             };
             allCreated.push(createdTask);
           }

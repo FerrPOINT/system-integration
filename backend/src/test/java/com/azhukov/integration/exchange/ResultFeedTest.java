@@ -111,7 +111,7 @@ class ResultFeedTest extends PostgresTest {
                                                     "operationId",
                                                     operation,
                                                     "request",
-                                                    java.util.Map.of("reference", "REQ-000001", "quantity", 25),
+                                                    java.util.Map.of("quantity", 25),
                                                     "version",
                                                     2,
                                                     "status",
@@ -250,7 +250,7 @@ class ResultFeedTest extends PostgresTest {
         var valid =
                 json.createObjectNode()
                         .put("operationId", operation.toString())
-                        .set("request", json.createObjectNode().put("reference", "REQ-000001").put("quantity", 25))
+                        .set("request", json.createObjectNode().put("quantity", 25))
                         .put("version", 2)
                         .put("status", "SUCCEEDED")
                         .put("completedAt", "2026-11-12T00:00:00Z");
@@ -342,7 +342,7 @@ class ResultFeedTest extends PostgresTest {
         var bad =
                 json.createObjectNode()
                         .put("operationId", badOperation.toString())
-                        .set("request", json.createObjectNode().put("reference", "REQ-000001").put("quantity", 25))
+                        .set("request", json.createObjectNode().put("quantity", 25))
                         .put("version", 2)
                         .put("status", "SUCCEEDED")
                         .put("completedAt", "+10000-01-01T00:00:00Z");

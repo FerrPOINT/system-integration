@@ -104,7 +104,7 @@ for (const [code, count] of Object.entries(external.errors)) externalErrors[code
 const externalCheckFinishedAt = new Date().toISOString();
 // The measured generator has stopped; repeated commands must add only one record.
 const repeatedKey = crypto.randomUUID();
-const repeatedInput = { title: 'NF08 concurrent idempotency', request: { reference: 'REQ-999991', quantity: 25 } };
+const repeatedInput = { title: 'NF08 concurrent idempotency', quantity: 25 };
 const sameOwner = clients.filter((client) => client.index % 2 === 0);
 const beforeRepeated = await sameOwner[0].session.get('/api/tasks');
 const replies = await Promise.all(
@@ -145,7 +145,6 @@ allCreated.push({
   client: sameOwner[0].index,
   ownerId: sameOwner[0].userId,
   title: repeatedInput.title,
-  reference: repeatedInput.request.reference,
 });
 const drain = await drainLoad(resources);
 const finalIntegrity = { passed: false, expectedRecords: 5000 + allCreated.length };

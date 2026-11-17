@@ -139,7 +139,7 @@ export function IssueList() {
                             </div>
                             {issue.taskId ? (
                               <p className="ui-truncate" title={issue.taskTitle}>
-                                {issue.requestReference} · {issue.taskTitle}
+                                № {issue.taskNumber} · {issue.taskTitle}
                               </p>
                             ) : (
                               <p>Общая проблема ленты</p>
@@ -187,7 +187,7 @@ export function IssueList() {
                             </Link>
                             {issue.taskId ? (
                               <small className="ui-truncate" title={issue.taskTitle}>
-                                {issue.requestReference} · {issue.taskTitle}
+                                № {issue.taskNumber} · {issue.taskTitle}
                               </small>
                             ) : (
                               <small className="ui-truncate" title={issue.summary}>

@@ -5,6 +5,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { ApiSession, ApiFailure, localOrigin } from '../support/http.mjs';
 import { loadEnvironment } from '../load/environment.mjs';
+import { createHeldDelivery, releaseHeldDelivery } from '../support/held-delivery.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19680');
@@ -67,8 +68,8 @@ async function login(username = 'initiator.one') {
   await session.login(username, process.env.SI_DEMO_PASSWORD);
   return session;
 }
-async function fault(reference, mode) {
-  const response = await fetch(external + '/test/faults/' + reference, {
+async function fault(operationId, mode) {
+  const response = await fetch(external + '/test/faults/' + operationId, {
     method: mode ? 'PUT' : 'DELETE',
     signal: AbortSignal.timeout(10_000),
     headers: { 'Content-Type': 'application/json', Connection: 'close' },
@@ -151,13 +152,16 @@ for (const service of ['backend', 'emulator']) {
 
 let api = await login();
 const probes = [];
-async function create(reference, mode) {
-  await fault(reference);
-  if (mode) await fault(reference, mode);
-  const title = 'Recovery ' + randomUUID();
-  const created = await api.command('POST', '/api/tasks', { title, request: { reference, quantity: 25 } });
-  const task = await api.get('/api/tasks/' + created.taskId);
+async function enqueue() {
+  const { taskId } = await api.command('POST', '/api/tasks', { title: 'Recovery ' + randomUUID(), quantity: 25 });
+  const task = await api.get('/api/tasks/' + taskId);
   probes.push(task);
+  return task;
+}
+async function createWithFault(mode) {
+  const task = await createHeldDelivery(enqueue);
+  await fault(task.operationId, mode);
+  releaseHeldDelivery(task.operationId);
   return task;
 }
 async function completed(task, milliseconds = 60_000) {
@@ -171,22 +175,18 @@ async function completed(task, milliseconds = 60_000) {
   );
 }
 try {
-  const reference = 'REQ-830001';
-  await fault(reference);
-  await fault(reference, 'DROP_RESPONSE_AFTER_EXECUTION');
-  const title = 'Recovery ' + randomUUID();
+  const task = await createHeldDelivery(enqueue);
+  await fault(task.operationId, 'DROP_RESPONSE_AFTER_EXECUTION');
   const claimLatch = await hold(
     'app',
     `DO $$ DECLARE target uuid; BEGIN LOOP
     SELECT t.id INTO target FROM tasks t JOIN delivery_queue q ON q.operation_id = t.operation_id
-      WHERE t.request_reference = ${sqlQuote(reference)} AND t.title = ${sqlQuote(title)} AND q.claim_id IS NOT NULL LIMIT 1;
+      WHERE t.operation_id = ${sqlQuote(task.operationId)} AND q.claim_id IS NOT NULL;
     IF target IS NOT NULL THEN PERFORM 1 FROM tasks WHERE id = target FOR UPDATE; EXIT; END IF;
     PERFORM pg_sleep(0.01);
   END LOOP; END $$;`,
   );
-  const accepted = await api.command('POST', '/api/tasks', { title, request: { reference, quantity: 25 } });
-  const task = await api.get('/api/tasks/' + accepted.taskId);
-  probes.push(task);
+  releaseHeldDelivery(task.operationId);
   await claimLatch.ready;
   await waitFor('external commit', async () => {
     const response = await fetch(external + '/operations/' + task.operationId, {
@@ -217,14 +217,14 @@ try {
     query('app', `SELECT outcome FROM delivery_attempts WHERE id = ${sqlQuote(interrupted.claimId)};`),
     'INTERRUPTED',
   );
-  await fault(reference);
+  await fault(task.operationId);
   await completed(task);
   mark('API recovers an interrupted durable claim through GET without reexecution', {
     taskId: task.taskId,
     operationId: task.operationId,
   });
 
-  const applying = await create('REQ-830002', 'DROP_RESPONSE_AFTER_EXECUTION');
+  const applying = await createWithFault('DROP_RESPONSE_AFTER_EXECUTION');
   await waitFor(
     'confirmed held result',
     async () => (await api.get('/api/tasks/' + applying.taskId)).deliveryStatus === 'ACKNOWLEDGED',
@@ -232,7 +232,7 @@ try {
   const beforeCursor = Number(query('app', 'SELECT last_cursor FROM incoming_position WHERE id = 1;'));
   const cursorLatch = await hold('app', 'SELECT last_cursor FROM incoming_position WHERE id = 1 FOR UPDATE;');
   await cursorLatch.ready;
-  await fault('REQ-830002');
+  await fault(applying.operationId);
   await waitFor(
     'consumer waiting before applying cursor',
     () =>
@@ -265,7 +265,7 @@ try {
     input: disabledWorker,
   });
   loadEnvironment();
-  const pending = await create('REQ-830003');
+  const pending = await enqueue();
   const acceptedState = await waitFor('external acceptance without execution', async () => {
     const response = await fetch(external + '/operations/' + pending.operationId, {
       headers: { Connection: 'close' },
@@ -292,7 +292,7 @@ try {
   const publishLatch = await hold('emulator', 'SELECT last_cursor FROM feed_position WHERE id = 1 FOR UPDATE;');
   await publishLatch.ready;
   // Normal execution must continue while the independent publisher waits on the counter.
-  const unpublished = await create('REQ-830004');
+  const unpublished = await enqueue();
   const executed = await waitFor('execution committed before publication', async () => {
     const response = await fetch(external + '/operations/' + unpublished.operationId, {
       headers: { Connection: 'close' },
@@ -416,16 +416,8 @@ try {
     docker(['rm', '--force', fixture]);
   }
   api = await login();
-  await fault('REQ-830005', 'UNAVAILABLE');
-  const burst = await Promise.all(
-    Array.from({ length: 8 }, async (_, index) => {
-      const created = await api.command('POST', '/api/tasks', {
-        title: 'Graceful shutdown ' + index,
-        request: { reference: 'REQ-830005', quantity: 25 },
-      });
-      return api.get('/api/tasks/' + created.taskId);
-    }),
-  );
+  const burst = [];
+  for (let index = 0; index < 8; index++) burst.push(await createWithFault('UNAVAILABLE'));
   const shutdownSince = new Date().toISOString();
   composeRun(['stop', 'backend', 'emulator']);
   const exits = ['backend', 'emulator'].map((service) => {
@@ -440,7 +432,7 @@ try {
   });
   composeRun(['up', '-d', '--no-build', '--no-deps', '--wait', 'backend', 'emulator']);
   api = await login();
-  await fault('REQ-830005');
+  for (const item of burst) await fault(item.operationId);
   for (const item of burst) {
     // Recovery can require GET then PUT, each after the contractual 60 s maximum backoff.
     await completed(item, 150_000);
@@ -478,7 +470,7 @@ try {
     unavailable: outcomes.filter((result) => result.status === 503).length,
   });
 
-  const bounded = await create('REQ-830020', 'UNAVAILABLE');
+  const bounded = await createWithFault('UNAVAILABLE');
   const series = () =>
     queryJson(
       'app',
@@ -507,9 +499,9 @@ try {
   composeRun(['restart', 'backend']);
   composeRun(['up', '-d', '--no-build', '--no-deps', '--wait', 'backend']);
   api = await login();
-  await fault('REQ-830020');
+  await fault(bounded.operationId);
   advance();
-  const witness = await create('REQ-830021');
+  const witness = await enqueue();
   await completed(witness);
   assert.equal((await api.get('/api/tasks/' + bounded.taskId)).deliveryStatus, 'NEEDS_REVIEW');
   assert.deepEqual(series(), { total: 5, series: 5 });

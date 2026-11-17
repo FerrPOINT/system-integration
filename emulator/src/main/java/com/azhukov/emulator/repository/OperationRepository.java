@@ -22,22 +22,18 @@ public interface OperationRepository {
 
     void lockOperation(UUID id);
 
-    Fault lockFault(String reference);
+    FaultMode lockFault(UUID id);
 
     /** Returns the stored snapshot, including the database-assigned acceptance time. */
     Operation insert(UUID id, OperationRequest input);
-
-    void bindFault(String reference, UUID id);
 
     void complete(OperationResult result);
 
     int publish(int limit);
 
-    void lockFaultConfiguration(String reference);
-
-    void configure(String reference, FaultMode mode);
+    void configure(UUID id, FaultMode mode);
 
     void releaseEvents(UUID operation);
 
-    void clearFault(String reference);
+    void clearFault(UUID id);
 }

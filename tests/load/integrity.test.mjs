@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { verifyCreatedOperation, verifyTaskHistory, verifyFinishedSnapshot } from './integrity.mjs';
 
-const expected = { taskId: 'task', ownerId: 'owner', title: 'Created task', reference: 'REQ-200001' };
-const request = { reference: expected.reference, quantity: 25 };
+const expected = { taskId: 'task', ownerId: 'owner', title: 'Created task' };
+const request = { quantity: 25 };
 const result = {
   operationId: 'operation',
   request,
@@ -13,6 +13,7 @@ const result = {
 };
 const task = {
   ...expected,
+  taskNumber: '42',
   request,
   operationId: 'operation',
   deliveryStatus: 'ACKNOWLEDGED',
@@ -62,7 +63,7 @@ test('normal-mode verification proves the sent payload, owner and both final res
 test('agreement between both servers cannot hide a changed original request or owner', () => {
   const changedTask = copy(task),
     changedState = copy(state);
-  changedTask.request.reference = changedState.request.reference = changedState.result.request.reference = 'REQ-999999';
+  changedTask.request.quantity = changedState.request.quantity = changedState.result.request.quantity = 26;
   assert.throws(
     () => verifyCreatedOperation(expected, changedTask, 200, changedState, true),
     (error) => error.code === 'SAVED_REQUEST_CHANGED',
@@ -137,6 +138,7 @@ test('final snapshot requires every accepted operation, history and cursor, incl
     app: {
       ...digests,
       records: 2,
+      numbered: 2,
       pending: 0,
       badLocalState: 0,
       queued: 0,
@@ -153,6 +155,9 @@ test('final snapshot requires every accepted operation, history and cursor, incl
   for (const mutate of [
     (x) => {
       x.app.pending = 1;
+    },
+    (x) => {
+      x.app.numbered = 1;
     },
     (x) => {
       x.app.badLocalState = 1;

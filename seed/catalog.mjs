@@ -93,16 +93,14 @@ export function catalog() {
       : index % 7 === 0 && !recent
         ? 'rejected'
         : 'success';
-    const reference = `REQ-${600001 + index}`;
     const quantity = scenario === 'rejected' ? 101 + ((index * 37) % 900) : 1 + ((index * 17) % 100);
-    const title = `${actions[index % actions.length]} ${goods[index % goods.length]} — ${sites[index % sites.length]}, заявка ${reference.slice(4)}`;
+    const title = `${actions[index % actions.length]} ${goods[index % goods.length]} — ${sites[index % sites.length]}`;
     const ownerIndex = scenarioExample ? index + Math.floor(exampleIndex / SCENARIOS.length) : index;
     return {
       index,
       scenario,
       scenarioExample,
       recent,
-      reference,
       quantity,
       title,
       owner: ownerIndex % 2 ? 'initiator.two' : 'initiator.one',

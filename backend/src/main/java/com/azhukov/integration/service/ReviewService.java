@@ -148,7 +148,8 @@ public class ReviewService {
                                     LocalSnapshot.of(current),
                                     availability,
                                     external,
-                                    issue);
+                                    issue,
+                                    reply.protocolFailure());
                     issues.saveReconciliation(saved, current.version());
                     tasks.history(
                             current.task(),
@@ -269,7 +270,7 @@ public class ReviewService {
         var task = context.state() == null ? null : context.state().task();
         return new IssueView(
                 context.view(user.id()),
-                task == null ? null : task.request().reference(),
+                task == null ? null : task.taskNumber(),
                 task == null ? null : task.title().value());
     }
 

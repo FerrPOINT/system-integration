@@ -17,12 +17,11 @@ class ExchangeProtocolTest {
     private final ExchangeProtocol protocol = new ExchangeProtocol();
     private final String result =
             """
-            {"operationId":"00000000-0000-4000-8000-000000000001","request":{"reference":"REQ-000001","quantity":25},
+            {"operationId":"00000000-0000-4000-8000-000000000001","request":{"quantity":25},
             "version":2,"status":"SUCCEEDED","completedAt":"2026-11-12T00:00:00Z"}
             """;
     private final OperationIdentity identity =
-            new OperationIdentity(
-                    UUID.fromString("00000000-0000-4000-8000-000000000001"), new TaskInput("REQ-000001", 25));
+            new OperationIdentity(UUID.fromString("00000000-0000-4000-8000-000000000001"), new TaskInput(25));
 
     @Test
     void validatesConditionalResultRulesAndImmutableInput() {
@@ -60,7 +59,7 @@ class ExchangeProtocolTest {
     void stateChecksNestedIdentityAndExecutionCount() {
         String state =
                 """
-                {"operationId":"00000000-0000-4000-8000-000000000001","request":{"reference":"REQ-000001","quantity":25},
+                {"operationId":"00000000-0000-4000-8000-000000000001","request":{"quantity":25},
                 "acceptedAt":"2026-11-11T00:00:00Z","executions":1,"result":%s}
                 """
                         .formatted(result);
@@ -154,7 +153,7 @@ class ExchangeProtocolTest {
                         json.readTree(
                                 """
                                 {"operationId":"00000000-0000-4000-8000-000000000001",
-                                 "request":{"reference":"REQ-000001","quantity":25},"acceptedAt":"2026-11-11T00:00:00Z"}
+                                 "request":{"quantity":25},"acceptedAt":"2026-11-11T00:00:00Z"}
                                 """);
         var state = ack.deepCopy().put("executions", 0).putNull("result");
         var missing =

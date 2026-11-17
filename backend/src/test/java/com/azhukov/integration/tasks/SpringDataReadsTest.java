@@ -341,8 +341,8 @@ class SpringDataReadsTest extends PostgresTest {
     private void insert(UUID id, UUID owner, BusinessStatus status, OffsetDateTime at) {
         jdbc.update(
                 """
-                INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,business_status,created_at)
-                VALUES (?,?,?,'Read fixture','REQ-000001',25,?,?)
+                INSERT INTO tasks(id,owner_id,operation_id,title,request_quantity,business_status,created_at)
+                VALUES (?,?,?,'Read fixture',25,?,?)
                 """,
                 id,
                 owner,

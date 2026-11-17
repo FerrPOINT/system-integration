@@ -51,7 +51,8 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     ownerId: '00000000-0000-4000-8000-000000000003',
     title: state.title,
     titleRevision: 1,
-    request: { reference: 'REQ-000001', quantity: 25 },
+    taskNumber: '1',
+    request: { quantity: 25 },
     createdAt: '2026-11-14T00:00:00Z',
     deliveryStatus: 'ACKNOWLEDGED',
     businessStatus: 'SUCCEEDED',
@@ -78,7 +79,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     summary: 'Fixture discrepancy',
     evidence: state.evidenceReason ? { reason: state.evidenceReason } : undefined,
     taskTitle: state.title,
-    requestReference: 'REQ-000001',
+    taskNumber: state.generalIssue ? undefined : '1',
     openedAt: '2026-11-14T00:00:00Z',
     latestReconciliationId: state.generalIssue ? undefined : state.latestSnapshot,
     assignedTo: state.assigned ? task().ownerId : undefined,
@@ -924,20 +925,27 @@ test('accepted create offers only read recovery after a failed follow-up', async
   const state = await mockApi(page);
   await page.goto('/tests/command-outcome.html?screen=list');
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Название', exact: true }).fill('Created task');
-  const reference = page.getByRole('textbox', { name: 'Номер заявки', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Новое задание', exact: true });
+  const title = dialog.getByRole('textbox', { name: 'Название', exact: true });
+  const quantity = dialog.getByRole('spinbutton', { name: 'Количество', exact: true });
+  await expect(dialog.locator('input')).toHaveCount(2);
+  const titleBox = (await title.boundingBox())!;
+  const quantityBox = (await quantity.boundingBox())!;
+  expect(quantityBox.y).toBeCloseTo(titleBox.y, 0);
+  expect(quantityBox.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width);
+  await title.fill('Created task');
   const submit = page.getByRole('button', { name: 'Создать', exact: true });
-  await reference.fill('00002');
+  await quantity.fill('1001');
   await submit.click();
-  expect(await reference.evaluate((input: HTMLInputElement) => input.validity.patternMismatch)).toBe(true);
+  expect(await quantity.evaluate((input: HTMLInputElement) => input.validity.rangeOverflow)).toBe(true);
   expect(state.commands).toHaveLength(0);
 
-  await reference.fill('000002');
+  await quantity.fill('26');
   await submit.click();
   await expect(page.getByRole('alert').filter({ hasText: 'Задание создано.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Создать', exact: true })).toHaveCount(0);
   expect(state.commands).toHaveLength(1);
-  expect(state.commands[0].body).toMatchObject({ request: { reference: 'REQ-000002' } });
+  expect(state.commands[0].body).toEqual({ title: 'Created task', quantity: 26 });
   state.failRead = false;
   await page.getByRole('button', { name: 'Повторить обновление' }).click();
   await expect(page.getByRole('heading', { name: 'Created task', exact: true })).toBeVisible();
@@ -948,7 +956,6 @@ async function openCreate(page: Page, title: string) {
   await page.goto('/tests/command-outcome.html?screen=list');
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
   await page.getByRole('textbox', { name: 'Название', exact: true }).fill(title);
-  await page.getByRole('textbox', { name: 'Номер заявки', exact: true }).fill('456789');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
 }
 
@@ -1197,7 +1204,6 @@ test('leaving an uncertain create requires an explicit warning before a new comm
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
   await page.getByRole('textbox', { name: 'Название', exact: true }).fill('Deliberate new command');
-  await page.getByRole('textbox', { name: 'Номер заявки', exact: true }).fill('567890');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Задание создано.');
   expect(state.commands).toHaveLength(2);

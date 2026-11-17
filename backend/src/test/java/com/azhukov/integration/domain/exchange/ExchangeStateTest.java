@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 class ExchangeStateTest {
     private final UUID operation = UUID.fromString("00000000-0000-4000-8000-000000000001");
-    private final TaskInput input = new TaskInput("REQ-123456", 25);
+    private final TaskInput input = new TaskInput(25);
     private final OffsetDateTime at = OffsetDateTime.parse("2026-01-01T00:00:00Z");
 
     private OperationResult running() {
@@ -30,6 +30,7 @@ class ExchangeStateTest {
         return new ExchangeState(
                 new Task(
                         UUID.randomUUID(),
+                        1,
                         operation,
                         UUID.randomUUID(),
                         new TaskTitle("Название", 4),
@@ -44,8 +45,7 @@ class ExchangeStateTest {
 
     @Test
     void anUnrelatedImmutableRequestNeverBecomesADuplicateOrAnApplication() {
-        var changed =
-                new OperationResult(operation, new TaskInput("REQ-123456", 26), 2, BusinessStatus.SUCCEEDED, at, null);
+        var changed = new OperationResult(operation, new TaskInput(26), 2, BusinessStatus.SUCCEEDED, at, null);
         for (var delivery : DeliveryStatus.values())
             assertEquals(REQUEST_MISMATCH, state(delivery, terminal()).disposition(changed));
         var otherOperation = new OperationResult(UUID.randomUUID(), input, 2, BusinessStatus.SUCCEEDED, at, null);

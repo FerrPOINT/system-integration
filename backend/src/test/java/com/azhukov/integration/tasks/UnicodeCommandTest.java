@@ -13,7 +13,7 @@ class UnicodeCommandTest extends PostgresTest {
     void generatedValidationAndDomainAgreeOnTitleLengthWhitespaceAndReplay() throws Exception {
         var owner = login("initiator.one");
         String title = "😀".repeat(160);
-        var input = Map.of("title", title, "request", Map.of("reference", "REQ-000001", "quantity", 25));
+        var input = Map.of("title", title, "quantity", 25);
         var key = UUID.randomUUID();
         var created = create(owner, key, json.writeValueAsString(input));
         status(201, created);
@@ -62,9 +62,7 @@ class UnicodeCommandTest extends PostgresTest {
         status(200, renamed);
         assertEquals("Читаемое название", jdbc.queryForObject("SELECT title FROM tasks WHERE id=?", String.class, id));
         var key = UUID.randomUUID();
-        var input =
-                json.writeValueAsString(
-                        Map.of("title", "\uFEFF", "request", Map.of("reference", "REQ-000002", "quantity", 25)));
+        var input = json.writeValueAsString(Map.of("title", "\uFEFF", "quantity", 25));
         var receipt = create(owner, key, input);
         status(201, receipt);
         var replay = create(owner, key, input);

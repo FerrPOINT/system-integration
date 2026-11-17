@@ -4,6 +4,7 @@ import com.azhukov.emulator.mapper.OperationApiMapper;
 import com.azhukov.emulator.service.OperationService;
 import com.azhukov.integration.contract.external.api.TestFaultsApi;
 import com.azhukov.integration.contract.external.model.FaultConfiguration;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
@@ -17,14 +18,14 @@ class FaultController implements TestFaultsApi {
     private final OperationApiMapper mapper;
 
     @Override
-    public ResponseEntity<Void> configureFault(String reference, FaultConfiguration input) {
-        operations.configure(reference, mapper.faultMode(input.getMode()));
+    public ResponseEntity<Void> configureFault(UUID operationId, FaultConfiguration input) {
+        operations.configure(operationId, mapper.faultMode(input.getMode()));
         return ResponseEntity.noContent().build();
     }
 
     @Override
-    public ResponseEntity<Void> clearFault(String reference) {
-        operations.clear(reference);
+    public ResponseEntity<Void> clearFault(UUID operationId) {
+        operations.clear(operationId);
         return ResponseEntity.noContent().build();
     }
 }

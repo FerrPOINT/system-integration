@@ -1,21 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  titleInputProps,
-  validReason,
-  referenceNumberInputProps,
-  formatRequestReference,
-  quantityInputProps,
-  usernameInputProps,
-} from '../src/shared/lib/form-rules.ts';
+import { titleInputProps, validReason, quantityInputProps, usernameInputProps } from '../src/shared/lib/form-rules.ts';
 
 test('request and login inputs use the contract format and numeric bounds', () => {
-  const referenceNumber = new RegExp('^(?:' + referenceNumberInputProps.pattern + ')$', 'v');
-  for (const value of ['000001', '999999']) {
-    assert.ok(referenceNumber.test(value));
-    assert.equal(formatRequestReference(value), 'REQ-' + value);
-  }
-  for (const value of ['REQ-000001', '00000', '0000001', 'ABCDEF', '000 01']) assert.ok(!referenceNumber.test(value));
   assert.deepEqual(quantityInputProps, { min: 1, max: 1000, step: 1 });
   assert.equal(usernameInputProps.maxLength, 64);
   const username = new RegExp('^(?:' + usernameInputProps.pattern + ')$', 'v');

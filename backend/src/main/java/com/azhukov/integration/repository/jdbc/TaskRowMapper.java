@@ -38,10 +38,11 @@ public class TaskRowMapper implements RowMapper<Task> {
             throws java.sql.SQLException {
         return new Task(
                 rs.getObject("id", UUID.class),
+                rs.getLong("task_number"),
                 rs.getObject("operation_id", UUID.class),
                 rs.getObject("owner_id", UUID.class),
                 new TaskTitle(rs.getString("title"), rs.getLong("title_revision")),
-                new TaskInput(rs.getString("request_reference"), rs.getInt("request_quantity")),
+                new TaskInput(rs.getInt("request_quantity")),
                 DeliveryStatus.valueOf(rs.getString("delivery_status")),
                 business,
                 rs.getObject("created_at", OffsetDateTime.class),

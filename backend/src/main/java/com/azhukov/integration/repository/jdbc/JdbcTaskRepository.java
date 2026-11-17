@@ -49,16 +49,15 @@ public class JdbcTaskRepository implements TaskRepository {
         UUID operationId = UUID.randomUUID();
         return jdbc.query(
                         """
-                        INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity)
-                        VALUES (?,?,?,?,?,?) RETURNING *
+                        INSERT INTO tasks(id,owner_id,operation_id,title,request_quantity)
+                        VALUES (?,?,?,?,?) RETURNING *
                         """,
                         rowMapper,
                         id,
                         owner,
                         operationId,
                         input.title(),
-                        input.request().reference(),
-                        input.request().quantity())
+                        input.quantity())
                 .getFirst();
     }
 

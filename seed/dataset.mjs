@@ -29,7 +29,7 @@ export function dataset(users, anchor) {
   );
   const examples = [];
   for (const item of catalog()) {
-    const { index, scenario, scenarioExample, recent, reference, quantity, taskId, operationId } = item;
+    const { index, scenario, scenarioExample, recent, quantity, taskId, operationId } = item;
     const operator = users.operator;
     const owner = users[item.owner];
     // Keep ordinary completed tasks ahead of diagnostic examples in the newest-first registry.
@@ -41,7 +41,7 @@ export function dataset(users, anchor) {
     let tick = 0;
     let event = 0;
     let reconciliation = 0;
-    const request = { reference, quantity };
+    const request = { quantity };
     const pending = [
       'waiting',
       'unavailable',
@@ -70,7 +70,7 @@ export function dataset(users, anchor) {
     const actual = result(
       rejected ? 'REJECTED' : 'SUCCEEDED',
       2,
-      foreign ? { reference: `REQ-${650001 + index}`, quantity } : request,
+      foreign ? { quantity: quantity === 100 ? 99 : quantity + 1 } : request,
     );
     const conflicting = result('REJECTED');
     const accepted = pending ? null : running ? result('RUNNING', 1) : result(rejected ? 'REJECTED' : 'SUCCEEDED');
@@ -80,7 +80,6 @@ export function dataset(users, anchor) {
       operation_id: operationId,
       title: item.title,
       title_revision: 1,
-      request_reference: reference,
       request_quantity: quantity,
       delivery_status: paused ? 'NEEDS_REVIEW' : scenario === 'stopped' ? 'STOPPED' : 'ACKNOWLEDGED',
       business_status: pending ? 'PENDING' : running ? 'RUNNING' : rejected ? 'REJECTED' : 'SUCCEEDED',
@@ -153,8 +152,7 @@ export function dataset(users, anchor) {
     if (!missing) {
       rows.operations.push({
         id: operationId,
-        reference: actual.request.reference,
-        quantity,
+        quantity: actual.request.quantity,
         accepted_at: external.acceptedAt,
         executions: 1,
         result: actual,
@@ -173,15 +171,13 @@ export function dataset(users, anchor) {
           created_at: time(Math.max(30, completedSecond) + copy),
         });
       }
-      // Held notifications are explicit. Releasing this reference uses the normal fault API.
+      // Held notifications are explicit. Releasing this operation uses the normal fault API.
       if (scenarioExample)
         rows.faults.push({
-          reference: actual.request.reference,
+          operation_id: operationId,
           mode: 'DROP_RESPONSE_AFTER_EXECUTION',
-          bound_operation_id: operationId,
         });
-    } else if (scenario === 'unavailable')
-      rows.faults.push({ reference, mode: 'UNAVAILABLE', bound_operation_id: null });
+    } else if (scenario === 'unavailable') rows.faults.push({ operation_id: operationId, mode: 'UNAVAILABLE' });
 
     const issueScenarios = [
       'unavailable',
@@ -210,7 +206,7 @@ export function dataset(users, anchor) {
               : 'RECONCILIATION_DIFFERENCE';
       const summaries = {
         DELIVERY_DELAYED: 'Серия доставки исчерпана; ожидается проверка связи и разрешение оператора',
-        PROTOCOL_ERROR: 'ID операции занят запросом с другим номером заявки',
+        PROTOCOL_ERROR: 'ID операции занят запросом с другим количеством',
         RESULT_CONFLICT: 'Получен противоречащий ранее принятому окончательный результат',
         DELIVERY_UNCERTAIN: 'Ответ исполнителя потерян; получение операции проверено отдельным запросом',
         RECONCILIATION_DIFFERENCE: 'Сверка обнаружила расхождение локального и внешнего состояния',
@@ -370,7 +366,7 @@ export function dataset(users, anchor) {
       const action = scenario === 'applied' ? 'APPLY_EXTERNAL_RESULT' : 'ACKNOWLEDGE_DIFFERENCE';
       const reason =
         scenario === 'applied'
-          ? 'Проверены номер заявки, объём и единственное исполнение. Принимаю фактический результат комплектации.'
+          ? 'Проверены ID операции, количество и единственное исполнение. Принимаю фактический результат комплектации.'
           : 'Отправка отменена по согласованию со складом: заявка заменена новым заказом. Продолжение доставки не требуется.';
       issue.resolution = {
         issueId: issue.id,

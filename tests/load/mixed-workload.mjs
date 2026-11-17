@@ -24,12 +24,9 @@ export function mixedSchedule(env = {}) {
     !Number.isInteger(warmSeconds) ||
     warmSeconds < 1 ||
     !flags.length ||
-    flags.some((flag) => !['0', '1'].includes(flag)) ||
-    warmRate * warmSeconds + rate * flags.length * seconds > 399000
+    flags.some((flag) => !['0', '1'].includes(flag))
   )
-    throw new Error(
-      'Invalid mixed schedule: rate 1..100, warm rate 1..rate, positive durations, reads 0/1 and finite references',
-    );
+    throw new Error('Invalid mixed schedule: rate 1..100, warm rate 1..rate, positive durations, reads 0/1');
   return [
     { rate: warmRate, durationMs: warmSeconds * 1000, reads: true },
     ...flags.map((flag) => ({ rate, durationMs: seconds * 1000, reads: flag === '1' })),
@@ -78,7 +75,7 @@ export function mixedWorkload(clients, accounts, readsByPhase) {
       track(metrics[phase].create, async () => {
         const input = {
           title: 'Mixed create ' + index,
-          request: { reference: 'REQ-' + (600000 + index), quantity: 25 },
+          quantity: 25,
         };
         const result = await client.session.command('POST', '/api/tasks', input);
         if (typeof result?.taskId !== 'string') throw new ApiFailure(201, 'INVALID_CREATE_RESULT');
@@ -87,7 +84,6 @@ export function mixedWorkload(clients, accounts, readsByPhase) {
           client: clientIndex,
           ownerId: client.userId,
           title: input.title,
-          reference: input.request.reference,
           phase,
         });
       }),

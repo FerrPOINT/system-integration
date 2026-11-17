@@ -39,7 +39,7 @@ class GeneratedContractTest {
                         """
                         {
                           "operationId": "40ad5299-2e09-4d7f-9a14-f02ca60f55ef",
-                          "request": {"reference": "REQ-123456", "quantity": 25},
+                          "request": {"quantity": 25},
                           "acceptedAt": "2026-11-11T00:00:00Z",
                           "executions": 0,
                           "result": null
@@ -51,7 +51,7 @@ class GeneratedContractTest {
                         """
                         {
                           "operationId": "40ad5299-2e09-4d7f-9a14-f02ca60f55ef",
-                          "request": {"reference": "REQ-123456", "quantity": 25},
+                          "request": {"quantity": 25},
                           "version": 2,
                           "status": "SUCCEEDED",
                           "completedAt": "2026-11-11T00:00:01Z"
@@ -63,7 +63,7 @@ class GeneratedContractTest {
                         """
                         {
                           "operationId": "40ad5299-2e09-4d7f-9a14-f02ca60f55ef",
-                          "request": {"reference": "REQ-123456", "quantity": 25},
+                          "request": {"quantity": 25},
                           "acceptedAt": "2026-11-11T00:00:00Z"
                         }
                         """,
@@ -75,7 +75,7 @@ class GeneratedContractTest {
         assertEquals(2, result.get("version").intValue());
         assertEquals("SUCCEEDED", result.get("status").asString());
         assertEquals(25, result.get("request").get("quantity").intValue());
-        assertEquals("REQ-123456", json.valueToTree(acknowledgement).at("/request/reference").asString());
+        assertEquals(25, json.valueToTree(acknowledgement).at("/request/quantity").asInt());
         assertEquals("2026-11-11T00:00:01Z", result.get("completedAt").asString());
         assertFalse(result.has("rejectionCode"));
     }
@@ -98,7 +98,7 @@ class GeneratedContractTest {
                             "reason": "Different content for the same version",
                             "cursor": 12,
                             "local": {
-                              "request": {"reference": "REQ-123456", "quantity": 25},
+                              "request": {"quantity": 25},
                               "deliveryStatus": "ACKNOWLEDGED",
                               "businessStatus": "SUCCEEDED",
                               "resultVersion": 2,
@@ -106,7 +106,7 @@ class GeneratedContractTest {
                             },
                             "received": {
                               "operationId": "40ad5299-2e09-4d7f-9a14-f02ca60f55ef",
-                              "request": {"reference": "REQ-123456", "quantity": 25},
+                              "request": {"quantity": 25},
                               "version": 2,
                               "status": "REJECTED",
                               "rejectionCode": "QUANTITY_LIMIT_EXCEEDED",

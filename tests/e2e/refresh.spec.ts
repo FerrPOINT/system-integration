@@ -11,11 +11,12 @@ for (const deliveryStatus of ['NEEDS_REVIEW', 'STOPPED'] as const) {
     const id = crypto.randomUUID();
     const task = {
       taskId: id,
+      taskNumber: '1',
       operationId: crypto.randomUUID(),
       ownerId: user.userId,
       title: 'E2E интервал обновления',
       titleRevision: 1,
-      request: { reference: 'REQ-850001', quantity: 25 },
+      request: { quantity: 25 },
       deliveryStatus,
       businessStatus: 'PENDING',
       createdAt: '2026-11-12T00:00:00Z',
@@ -71,7 +72,7 @@ test('UI-14: a completed task receives another operator audit entry without reop
     headers: { 'X-CSRF-TOKEN': csrf.token, 'Idempotency-Key': crypto.randomUUID() },
     data: {
       title: 'E2E завершённая история ' + crypto.randomUUID(),
-      request: { reference: 'REQ-850002', quantity: 25 },
+      quantity: 25,
     },
   });
   expect(created.status()).toBe(201);

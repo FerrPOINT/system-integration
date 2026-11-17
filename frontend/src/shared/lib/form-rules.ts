@@ -17,7 +17,5 @@ export const titleInputProps = {
 export const reasonCodePointLimit = formRules.ActionReason.maxLength;
 export const reasonMaxLength = reasonCodePointLimit * 2;
 export const validReason = (value: string) => validText(value, formRules.ActionReason);
-export const referenceNumberInputProps = { pattern: formRules.Reference.numberPattern, inputMode: 'numeric' } as const;
-export const formatRequestReference = (referenceNumber: string) => formRules.Reference.prefix + referenceNumber;
 export const quantityInputProps = { min: formRules.Quantity.minimum, max: formRules.Quantity.maximum, step: 1 };
 export const usernameInputProps = { maxLength: formRules.Username.maxLength, pattern: formRules.Username.pattern };
