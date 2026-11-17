@@ -24,7 +24,7 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
   const update = useExchangeRefresh();
   const dirty = draft !== null;
   const busy = command.isPending || otherCommand.pending;
-  const guard = useFormNavigationGuard({ dirty: dirty || otherCommand.unresolved, pending: busy });
+  const guard = useFormNavigationGuard({ dirty: otherCommand.unresolved, pending: busy });
   const stale = isDecisionStale(basis, issue) || Boolean(action && !actions.includes(action));
   const clearDraft = () => {
     resetCommand();
@@ -37,7 +37,6 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
       clearDraft();
       return;
     }
-    guard.protect();
     setDraft({ action: nextAction, reason: nextReason, basis: basis ?? decisionBasis(issue) });
   }
   const input =
@@ -81,6 +80,7 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
     },
     submit() {
       if (!input) return;
+      guard.protect();
       command.mutate(input, {
         onSuccess: () => {
           guard.release();
