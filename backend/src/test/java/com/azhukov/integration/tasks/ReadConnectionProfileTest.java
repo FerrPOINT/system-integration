@@ -36,7 +36,7 @@ class ReadConnectionProfileTest extends PostgresTest {
                     'Read profile '||n,25,'ACKNOWLEDGED','SUCCEEDED',
                     '2026-11-10T12:00:00Z'::timestamptz+n*interval '1 millisecond',
                     jsonb_build_object('operationId',operation_id,'request',
-                        jsonb_build_object('reference','quantity',25),
+                        jsonb_build_object('quantity',25),
                         'version',2,'status','SUCCEEDED','completedAt','2026-11-10T12:01:00Z')
                 FROM (SELECT n,gen_random_uuid() AS id,gen_random_uuid() AS operation_id
                     FROM generate_series(1,5000) n) fixture

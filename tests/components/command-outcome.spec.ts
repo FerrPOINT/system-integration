@@ -29,6 +29,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     generalIssue: false,
     revision: 1,
     latestSnapshot: snapshotId,
+    newSnapshot: snapshotId,
     role,
     rejectCreate: false,
     badCreateReceipt: undefined as unknown,
@@ -58,8 +59,8 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     businessStatus: 'SUCCEEDED',
     result: { status: 'SUCCEEDED', completedAt: '2026-11-14T00:00:00Z' },
   });
-  const snapshot = () => ({
-    reconciliationId: snapshotId,
+  const snapshot = (id: string) => ({
+    reconciliationId: id,
     taskId,
     issueId: taskId,
     operationId: taskId,
@@ -192,7 +193,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
           state.resolved = true;
           return route.fulfill({ json: issue().resolution });
         }
-        if (path.endsWith('/reconciliations')) return route.fulfill({ json: snapshot() });
+        if (path.endsWith('/reconciliations')) return route.fulfill({ json: snapshot(state.newSnapshot) });
         return route.fulfill({ status: request.method() === 'POST' ? 201 : 200, json: { taskId } });
       }
       state.reads.push(path);
@@ -215,7 +216,9 @@ async function mockApi(page: Page, role = 'INITIATOR') {
         });
       }
       if (path === '/api/exchange/issues/' + taskId) return route.fulfill({ json: issue() });
-      if (path.endsWith('/reconciliations/' + snapshotId)) return route.fulfill({ json: snapshot() });
+      if (path.endsWith('/reconciliations/' + snapshotId)) return route.fulfill({ json: snapshot(snapshotId) });
+      if (path.endsWith('/reconciliations/' + state.newSnapshot))
+        return route.fulfill({ json: snapshot(state.newSnapshot) });
       if (path.endsWith('/history'))
         return route.fulfill({ json: { items: [], page: 0, hasNext: false, totalItems: 0, totalPages: 0 } });
       if (path === '/api/tasks')
@@ -484,7 +487,11 @@ for (const command of ['login', 'logout']) {
       await openAccountMenu(page);
       await page.getByRole('button', { name: 'Выйти', exact: true }).click();
     }
-    await expect(page.getByRole('alert').filter({ hasText: 'Для безопасной смены сессии' })).toBeVisible();
+    const surface =
+      command === 'logout' && test.info().project.name === 'mobile'
+        ? page.getByRole('dialog', { name: 'Меню приложения' })
+        : page;
+    await expect(surface.getByRole('alert').filter({ hasText: 'Для безопасной смены сессии' })).toBeVisible();
     expect(state.logins).toBe(0);
     expect(state.logouts).toBe(0);
   });
@@ -496,10 +503,11 @@ test('logout read failure remains visible in the active account controls', async
   state.failCsrf = true;
   await openAccountMenu(page);
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'Не удалось выполнить запрос' })).toBeVisible();
+  const mobile = test.info().project.name === 'mobile';
+  const surface = mobile ? page.getByRole('dialog', { name: 'Меню приложения' }) : page;
+  await expect(surface.getByRole('alert').filter({ hasText: 'Не удалось выполнить запрос' })).toBeVisible();
   expect(state.logouts).toBe(0);
-  if (test.info().project.name === 'mobile') {
-    await expect(page.getByRole('dialog', { name: 'Меню приложения' }).getByRole('alert')).toBeVisible();
+  if (mobile) {
     await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
     await expect(page.getByRole('alert').filter({ hasText: 'Не удалось выполнить запрос' })).toBeVisible();
   }
@@ -1050,9 +1058,13 @@ for (const screen of ['', 'issue', 'reconciliation']) {
       await page.getByRole('button', { name: 'Вернуться к проверке', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Проверить результат сверки', exact: true })).toBeFocused();
       state.badSnapshotReceipt = undefined;
+      if (screen === 'reconciliation') {
+        state.newSnapshot = '00000000-0000-4000-8000-000000000011';
+        state.failReadAfterWrite = false;
+      }
       await page.getByRole('button', { name: 'Проверить результат сверки', exact: true }).click();
       if (screen === 'reconciliation') {
-        // No active task/issue read exists here; accepted recovery can finish without a failing GET.
+        // A successful new snapshot opens a different card.
         await expect(page.getByRole('button', { name: 'Выполнить сверку', exact: true })).toBeEnabled();
       } else {
         await expect(page.getByRole('alert').filter({ hasText: 'Сверка сохранена.' })).toBeVisible();

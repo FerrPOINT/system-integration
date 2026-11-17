@@ -25,10 +25,10 @@ class UnicodeCommandTest extends PostgresTest {
                         UUID.fromString(body(created).get("taskId").asString())));
         assertEquals(body(created), body(create(owner, key, json.writeValueAsString(input))));
         for (String invalid : new String[] {"😀".repeat(161), "\u0085", " \u0085"}) {
-            var bad = Map.of("title", invalid, "request", input.get("request"));
+            var bad = Map.of("title", invalid, "quantity", input.get("quantity"));
             status(400, create(owner, UUID.randomUUID(), json.writeValueAsString(bad)));
         }
-        var neighbor = Map.of("title", "X\uFEFF", "request", input.get("request"));
+        var neighbor = Map.of("title", "X\uFEFF", "quantity", input.get("quantity"));
         status(201, create(owner, UUID.randomUUID(), json.writeValueAsString(neighbor)));
         assertEquals(2, count("tasks"));
         assertEquals(2, count("command_receipts"));

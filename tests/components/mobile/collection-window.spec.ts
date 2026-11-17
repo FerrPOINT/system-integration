@@ -299,7 +299,7 @@ test('return restores the visible record after inactive query data is evicted', 
   await expect(page.getByRole('heading', { name: 'Состояние задания', exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as Fixture).fixtureEvictInactiveLists());
   expect((await info(page)).cached).toBe(0);
-  await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
+  await page.getByRole('link', { name: 'Задания', exact: true }).click();
   await ready(page);
   const row = page.locator('[data-record-id="' + anchor.id + '"]');
   await expect(row).toBeVisible();
