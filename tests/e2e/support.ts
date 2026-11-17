@@ -57,7 +57,7 @@ export async function collectFeed(region: Locator, selector: string, attribute: 
   for (let attempt = 0; attempt < 100; attempt++) {
     await expect(region).toHaveAttribute('aria-busy', 'false');
     const match = /^(\d+)–(\d+) из (\d+)$/.exec(await range.innerText());
-    expect(match, 'Feed must show its loaded range').not.toBeNull();
+    expect(match, 'Mobile feed must show its loaded range').not.toBeNull();
     const [, start, end, total] = match!.map(Number);
     const ids = await region
       .locator(selector)
@@ -79,5 +79,5 @@ export async function collectFeed(region: Locator, selector: string, attribute: 
       })
       .toBeGreaterThan(end);
   }
-  throw new Error('Feed did not reach the last record');
+  throw new Error('Mobile feed did not reach the last record');
 }

@@ -8,7 +8,7 @@ import { ActionGroup } from '../../../shared/ui/action-group';
 import { Link, useLocation } from 'react-router-dom';
 import type { HistoryEvent } from '../../../../build/generated/openapi/client';
 import { taskKeys } from '../api/task-keys';
-import { Loading } from '../../../shared/ui/feedback';
+import { Loading, Pagination } from '../../../shared/ui/feedback';
 import { timestamp } from '../../../shared/lib/format/timestamp';
 import { usePagination } from '../../../shared/lib/pagination/use-pagination';
 import { useMediaQuery } from '../../../shared/ui/use-media-query';
@@ -29,23 +29,22 @@ export function History({
 }) {
   const location = useLocation();
   const mobile = useMediaQuery('(max-width: 760px)');
-  const { page, size, valid } = usePagination('feed');
+  const { page, size, valid, viewportRef, changePage } = usePagination(mobile ? 'feed' : 'pages');
   const collection = useCollection({
     key: taskKeys.history(id),
     positionScope: location.key,
     page,
     size,
-    feed: true,
+    feed: mobile,
     enabled: valid,
-    scrollWithinViewport: !mobile,
+    viewportRef,
     read: (page, size, signal) => readHistoryPage(id, page, size, signal),
     identify: identifyHistoryEvent,
     refreshInterval,
   });
   const { query: history, items: historyItems, meta: historyPage } = collection;
   const {
-    viewportRef,
-    scrollRoot,
+    viewportRef: registryRef,
     restoring,
     autoLoad,
     nextError,
@@ -56,7 +55,7 @@ export function History({
     refresh,
   } = collection;
   return (
-    <div className="task-history-viewport">
+    <div className="task-history-viewport" data-feed-viewport={mobile || undefined}>
       <Card asChild>
         <section className="history-panel" aria-labelledby="task-history-title">
           <CardContent className="paged-list ui-page-stack" aria-busy={history.isFetching || restoring}>
@@ -65,15 +64,11 @@ export function History({
             </CardTitle>
             <div
               className="paged-viewport"
-              ref={viewportRef}
-              data-feed-viewport
-              role="region"
-              aria-label="События истории"
-              tabIndex={mobile ? undefined : 0}
+              ref={registryRef}
+              data-page-measurement={history.isError || history.isPlaceholderData ? 'paused' : undefined}
             >
-              {valid && historyPage && (
+              {mobile && valid && historyPage && (
                 <FeedStart
-                  scrollRoot={scrollRoot}
                   hasPrevious={history.hasPreviousPage}
                   pending={history.isFetchingPreviousPage}
                   busy={history.isFetching}
@@ -98,9 +93,14 @@ export function History({
                   {!history.isFetchNextPageError && !history.isFetchPreviousPageError && (
                     <ErrorMessage error={history.error} />
                   )}
-                  <Timeline>
+                  <Timeline data-page-items data-variable-page-total={historyPage.totalItems}>
                     {historyItems.map((event) => (
-                      <TimelineItem key={event.eventId} data-event-id={event.eventId} data-record-id={event.eventId}>
+                      <TimelineItem
+                        key={event.eventId}
+                        data-page-item
+                        data-event-id={event.eventId}
+                        data-record-id={event.eventId}
+                      >
                         <TimelineMarker />
                         <TimelineContent>
                           {technicalHistoryLabels[event.type] ? (
@@ -131,23 +131,36 @@ export function History({
                       </TimelineItem>
                     ))}
                   </Timeline>
-                  <FeedFooter
-                    scrollRoot={scrollRoot}
-                    loaded={historyItems.length}
-                    total={historyPage.totalItems}
-                    start={historyPage.firstPage * size + 1}
-                    end={Math.min((historyPage.page + 1) * size, historyPage.totalItems)}
-                    hasNext={history.hasNextPage}
-                    pending={history.isFetchingNextPage}
-                    busy={history.isFetching}
-                    notice={positionNotice}
-                    autoLoad={autoLoad}
-                    error={nextError}
-                    onLoad={loadNext}
-                  />
                 </>
               )}
             </div>
+            {mobile ? (
+              valid &&
+              historyPage && (
+                <FeedFooter
+                  loaded={historyItems.length}
+                  total={historyPage.totalItems}
+                  start={historyPage.firstPage * size + 1}
+                  end={Math.min((historyPage.page + 1) * size, historyPage.totalItems)}
+                  hasNext={history.hasNextPage}
+                  pending={history.isFetchingNextPage}
+                  busy={history.isFetching}
+                  notice={positionNotice}
+                  autoLoad={autoLoad}
+                  error={nextError}
+                  onLoad={loadNext}
+                />
+              )
+            ) : (
+              <Pagination
+                page={valid ? page : 0}
+                size={size}
+                totalItems={historyPage?.totalItems}
+                totalPages={historyPage?.totalPages}
+                pending={history.isFetching || !valid}
+                onChange={changePage}
+              />
+            )}
           </CardContent>
         </section>
       </Card>
