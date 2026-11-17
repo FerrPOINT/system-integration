@@ -9,7 +9,7 @@
 | Задача | Компонент |
 | --- | --- |
 | Поверхность, содержимое и заголовок | Card, CardContent, CardTitle |
-| Название экрана и действия | PageHeader, ActionGroup, BackLink |
+| Название экрана и действия | PageHeader, ActionGroup |
 | Поле и подпись | FormField, Label, Input, Textarea, Select |
 | Сообщение, загрузка и пустое состояние | Notice, Loading, EmptyState, ErrorMessage |
 | Список, страницы и история | Table, PageNavigation, Timeline |

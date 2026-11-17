@@ -1,6 +1,6 @@
 import './operations.css';
 import { ErrorMessage } from '../../../shared/ui/error-message';
-import { BackLink } from '../../../shared/ui/back-link';
+import { ActionGroup } from '../../../shared/ui/action-group';
 import { Notice } from '../../../shared/ui/notice';
 import { Card, CardContent, CardTitle } from '../../../shared/ui/card';
 import { PageHeader } from '../../../shared/ui/page-header';
@@ -32,7 +32,6 @@ function SavedReconciliation({ taskId, reconciliationId }: { taskId: string; rec
   if (!snapshot.data)
     return (
       <>
-        <BackLink to={'/tasks/' + taskId}>К заданию</BackLink>
         <ErrorMessage error={snapshot.error} />
         <Button onClick={() => snapshot.refetch()}>Повторить</Button>
       </>
@@ -42,7 +41,6 @@ function SavedReconciliation({ taskId, reconciliationId }: { taskId: string; rec
     <>
       <PageHeader
         className="detail-page-header"
-        back={<BackLink to={'/tasks/' + taskId}>К заданию</BackLink>}
         title="Сохранённая сверка"
         actions={<ReconcileButton taskId={taskId} />}
       />
@@ -82,11 +80,14 @@ function SavedReconciliation({ taskId, reconciliationId }: { taskId: string; rec
                 </Card>
               )}
             </div>
-            {item.issueId && (
-              <Button asChild variant="default">
-                <Link to={'/issues/' + item.issueId}>Перейти к разбору и решению</Link>
-              </Button>
-            )}
+            <ActionGroup align="start">
+              <Link to={'/tasks/' + taskId}>Открыть задание и историю</Link>
+              {item.issueId && (
+                <Button asChild variant="default">
+                  <Link to={'/issues/' + item.issueId}>Перейти к разбору и решению</Link>
+                </Button>
+              )}
+            </ActionGroup>
           </CardContent>
         </section>
       </Card>

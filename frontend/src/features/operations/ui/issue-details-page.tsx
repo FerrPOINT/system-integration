@@ -1,6 +1,5 @@
 import './operations.css';
 import { ErrorMessage } from '../../../shared/ui/error-message';
-import { BackLink } from '../../../shared/ui/back-link';
 import { ActionGroup } from '../../../shared/ui/action-group';
 import { Card, CardContent, CardTitle } from '../../../shared/ui/card';
 import { PageHeader } from '../../../shared/ui/page-header';
@@ -11,7 +10,6 @@ import { timestamp } from '../../../shared/lib/format/timestamp';
 import { Loading, RefreshButton } from '../../../shared/ui/feedback';
 import { issueKindLabels as kinds } from '../model/issue-labels';
 import { Snapshot, ReceivedResult } from './exchange-snapshot';
-import { useListReturn } from '../../../shared/lib/router/use-list-return';
 import { IssueActions } from './issue-actions';
 import { actionLabels } from '../model/decision';
 import { issueOptions } from '../api/exchange-queries';
@@ -22,13 +20,11 @@ export function IssueCard() {
 }
 
 function IssueDetails({ id }: { id: string }) {
-  const returnTo = useListReturn('/issues');
   const issue = useQuery(issueOptions(id));
   if (issue.isPending) return <Loading />;
   if (!issue.data)
     return (
       <>
-        <BackLink to={returnTo}>К разбору обмена</BackLink>
         <ErrorMessage error={issue.error} />
         <Button onClick={() => issue.refetch()}>Повторить</Button>
       </>
@@ -38,7 +34,6 @@ function IssueDetails({ id }: { id: string }) {
     <>
       <PageHeader
         className="detail-page-header"
-        back={<BackLink to={returnTo}>К разбору обмена</BackLink>}
         title={kinds[item.kind]}
         actions={<RefreshButton pending={issue.isFetching} onClick={() => issue.refetch()} />}
       />

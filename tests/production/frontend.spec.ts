@@ -553,6 +553,30 @@ test('exact filter bounds remain visible and unchanged until edited', async ({ p
   expect(new URL(page.url()).searchParams.get('createdTo')).toBe(to);
 });
 
+test('browser Back retraces linked issue, reconciliation and task cards', async ({ page }) => {
+  await mockApi(page, 'OPERATOR', 1, { historyActions: true });
+  const main = page.getByRole('main');
+  const issueTitle = page.getByRole('heading', { name: 'Расхождение при сверке', exact: true });
+  const snapshotTitle = page.getByRole('heading', { name: 'Сохранённая сверка', exact: true });
+  await page.goto('/issues/' + taskId);
+  await expect(issueTitle).toBeVisible();
+  await expect(main.getByRole('link', { name: 'К разбору обмена', exact: true })).toHaveCount(0);
+  await main.getByRole('link', { name: 'Открыть последнюю сверку', exact: true }).click();
+  await expect(snapshotTitle).toBeVisible();
+  await expect(main.getByRole('link', { name: 'К заданию', exact: true })).toHaveCount(0);
+  await main.getByRole('link', { name: 'Открыть задание и историю', exact: true }).click();
+  await expect(main.getByRole('heading', { name: task.title, exact: true })).toBeVisible();
+  await expect(main.getByRole('link', { name: 'К заданиям', exact: true })).toHaveCount(0);
+  await main.getByRole('link', { name: 'Открыть разбор', exact: true }).click();
+  await expect(issueTitle).toBeVisible();
+  await page.goBack();
+  await expect(main.getByRole('heading', { name: task.title, exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(snapshotTitle).toBeVisible();
+  await page.goBack();
+  await expect(issueTitle).toBeVisible();
+});
+
 test('desktop navigation resets warm detail scroll and restores POP after query GC @desktop', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 480 });
   await page.clock.install();
@@ -577,7 +601,7 @@ test('desktop navigation resets warm detail scroll and restores POP after query 
   await page.goForward();
   await expect.poll(() => page.locator('main').evaluate((main) => main.scrollTop)).toBe(0);
   await page.setViewportSize({ width: 800, height: 480 });
-  await page.getByRole('link', { name: 'К заданию', exact: true }).click();
+  await page.getByRole('link', { name: 'Открыть задание и историю', exact: true }).click();
   const next = page
     .getByRole('region', { name: 'История', exact: true })
     .getByRole('button', { name: 'Далее →', exact: true });

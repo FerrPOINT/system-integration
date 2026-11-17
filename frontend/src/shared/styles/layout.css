@@ -93,24 +93,11 @@ a {
     font-size: 12px;
   }
   .detail-page-header {
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
-  .detail-page-header > .ui-page-heading {
-    display: contents;
-  }
-  .detail-page-header .ui-back-link {
-    grid-column: 1;
-    grid-row: 1;
-    justify-self: start;
-  }
   .detail-page-header > .ui-page-actions {
-    grid-column: 2;
-    grid-row: 1;
     justify-self: end;
-  }
-  .detail-page-header .ui-page-copy {
-    grid-column: 1 / -1;
-    grid-row: 2;
   }
 }
 

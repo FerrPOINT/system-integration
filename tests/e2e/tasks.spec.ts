@@ -54,7 +54,7 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
     expect(await historyViewport.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
   }
   await page.setViewportSize({ width: testInfo.project.name === 'desktop' ? 1440 : 390, height: 1000 });
-  await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
+  await page.getByRole('link', { name: 'Задания', exact: true }).click();
   await expect(page.getByRole('link', { name: name + ' обновлено', exact: true })).toBeVisible();
   if (testInfo.project.name === 'mobile') {
     await expect(page.getByRole('table')).toHaveCount(0);

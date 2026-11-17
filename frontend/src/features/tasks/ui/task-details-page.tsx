@@ -1,6 +1,5 @@
 import './tasks.css';
 import { ErrorMessage } from '../../../shared/ui/error-message';
-import { BackLink } from '../../../shared/ui/back-link';
 import { ActionGroup } from '../../../shared/ui/action-group';
 import { Card, CardContent, CardTitle } from '../../../shared/ui/card';
 import { PageHeader } from '../../../shared/ui/page-header';
@@ -15,7 +14,6 @@ import { timestamp } from '../../../shared/lib/format/timestamp';
 import { ReconcileButton } from '../../operations/reconciliation';
 import { taskRefreshInterval } from '../model/refresh-interval';
 import { BusinessBadge } from './task-presenters';
-import { useListReturn } from '../../../shared/lib/router/use-list-return';
 import { taskOptions } from '../api/task-queries';
 
 import { RenameForm } from './task-rename-form';
@@ -29,7 +27,6 @@ export function TaskCard({ user }: { user: GetSession200 }) {
 }
 
 function TaskDetails({ id, user }: { id: string; user: GetSession200 }) {
-  const returnTo = useListReturn('/tasks');
   const task = useQuery(taskOptions(id));
   const [editing, setEditing] = useState(false);
   const editTrigger = useRef<HTMLButtonElement>(null);
@@ -48,7 +45,6 @@ function TaskDetails({ id, user }: { id: string; user: GetSession200 }) {
   if (!task.data)
     return (
       <>
-        <BackLink to={returnTo}>К заданиям</BackLink>
         <ErrorMessage error={task.error} />
         <Button onClick={() => task.refetch()}>Повторить</Button>
       </>
@@ -58,7 +54,6 @@ function TaskDetails({ id, user }: { id: string; user: GetSession200 }) {
     <>
       <PageHeader
         className="detail-page-header"
-        back={<BackLink to={returnTo}>К заданиям</BackLink>}
         title={item.title}
         actions={<RefreshButton pending={task.isFetching} onClick={() => task.refetch()} />}
       />

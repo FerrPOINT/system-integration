@@ -41,12 +41,6 @@
   outline: 2px solid var(--color-focus);
   outline-offset: 4px;
 }
-.ui-page-heading {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-}
 .ui-form-field {
   display: flex;
   min-width: 0;
@@ -437,9 +431,6 @@ button.ui-card {
   display: grid;
   min-width: 0;
   gap: var(--ui-panel-padding);
-}
-.ui-page-copy {
-  min-width: 0;
 }
 .ui-card-content > .ui-card-title {
   line-height: 1.4;

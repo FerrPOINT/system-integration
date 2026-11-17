@@ -156,7 +156,7 @@ test('new history entry starts at page zero while native Back restores the old a
   await expect.poll(async () => Math.abs((await row.boundingBox())!.y - anchor.top)).toBeLessThan(2);
   await row.getByRole('link', { name: 'Открыть сохранённую сверку', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Сохранённая сверка', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: 'К заданию', exact: true }).click();
+  await page.getByRole('link', { name: 'Открыть задание и историю', exact: true }).click();
   await ready(page, true);
   await expect.poll(async () => (await info(page)).pages[0]).toBe(0);
   await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);

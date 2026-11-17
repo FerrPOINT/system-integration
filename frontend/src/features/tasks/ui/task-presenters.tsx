@@ -9,17 +9,7 @@ import type { BusinessStatus } from '../../../../build/generated/openapi/client'
 
 import type { Task } from '../../../../build/generated/openapi/client';
 
-export function TaskRecords({
-  items,
-  size,
-  mobile,
-  returnState,
-}: {
-  items: Task[];
-  size: number;
-  mobile: boolean;
-  returnState: { returnTo: string };
-}) {
+export function TaskRecords({ items, size, mobile }: { items: Task[]; size: number; mobile: boolean }) {
   return (
     <>
       {mobile ? (
@@ -33,7 +23,6 @@ export function TaskRecords({
                   aria-describedby={'task-state-' + task.taskId + ' task-meta-' + task.taskId}
                   title={task.title}
                   to={'/tasks/' + task.taskId}
-                  state={returnState}
                 >
                   <CardContent density="compact" className="mobile-card-content">
                     <div className="mobile-card-heading">
@@ -76,7 +65,7 @@ export function TaskRecords({
               {items.slice(0, size).map((task) => (
                 <tr key={task.taskId} className="ui-linked-row" data-page-item data-record-id={task.taskId}>
                   <td>
-                    <Link className="ui-truncate" title={task.title} to={'/tasks/' + task.taskId} state={returnState}>
+                    <Link className="ui-truncate" title={task.title} to={'/tasks/' + task.taskId}>
                       {task.title}
                     </Link>
                     <small>

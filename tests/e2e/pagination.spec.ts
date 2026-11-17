@@ -194,7 +194,7 @@ test('UI-10: lost create response keeps the command key and invalidates the cach
   expect(keys[0]).toBe(keys[1]);
   expect(ids[0]).toBe(ids[1]);
   expect((await (await page.request.get('/api/tasks')).json()).totalItems).toBe(before.totalItems + 1);
-  await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
+  await page.getByRole('link', { name: 'Задания', exact: true }).click();
   await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();
   await page.unrouteAll({ behavior: 'wait' });
 });
