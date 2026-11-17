@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { ApiSession, ApiFailure, parallel } from '../tests/support/http.mjs';
-import { generalIssues, TASK_COUNT } from './catalog.mjs';
+import { generalIssues, RECENT_TASK_COUNT, TASK_COUNT } from './catalog.mjs';
 import { literal } from './postgres.mjs';
 
 /** Verify served domain objects, not only SQL row counts or fixture JSON. */
@@ -8,7 +8,15 @@ export async function verify(db, model, { fresh = false } = {}) {
   if (!process.env.SI_DEMO_PASSWORD) throw new Error('SI_DEMO_PASSWORD is required for API verification');
   const api = new ApiSession(db.backendUrl);
   await api.login('operator', process.env.SI_DEMO_PASSWORD);
-  const summary = { tasks: 0, operations: 0, issues: 0, reconciliations: 0, histories: 0, roles: false };
+  const summary = {
+    tasks: 0,
+    operations: 0,
+    recentMatches: 0,
+    issues: 0,
+    reconciliations: 0,
+    histories: 0,
+    roles: false,
+  };
   const actualTasks = new Map();
   await parallel(model.rows.tasks, 6, async (expected) => {
     const task = await api.get('/api/tasks/' + expected.id);
@@ -25,6 +33,9 @@ export async function verify(db, model, { fresh = false } = {}) {
   });
   assert.equal(summary.tasks, TASK_COUNT);
   console.log(`Verified ${summary.tasks} task cards.`);
+  const recentTasksByOperation = new Map(
+    model.rows.tasks.slice(-RECENT_TASK_COUNT).map((task) => [task.operation_id, actualTasks.get(task.id)]),
+  );
   await parallel(model.rows.operations, 6, async (expected) => {
     const response = await fetch(db.emulatorUrl + '/operations/' + expected.id, {
       signal: AbortSignal.timeout(10_000),
@@ -35,9 +46,21 @@ export async function verify(db, model, { fresh = false } = {}) {
     assert.equal(value.request.reference, expected.reference);
     assert.equal(value.executions, 1);
     assert.equal(value.result.status, expected.result.status);
+    const task = recentTasksByOperation.get(expected.id);
+    if (task) {
+      assert.equal(task.deliveryStatus, 'ACKNOWLEDGED');
+      assert.equal(task.businessStatus, 'SUCCEEDED');
+      assert.deepEqual(task.request, value.request);
+      assert.equal(task.result.status, value.result.status);
+      assert.equal(Date.parse(task.result.completedAt), Date.parse(value.result.completedAt));
+      summary.recentMatches++;
+    }
     summary.operations++;
   });
-  console.log(`Verified ${summary.operations} external operations.`);
+  assert.equal(summary.recentMatches, RECENT_TASK_COUNT);
+  console.log(
+    `Verified ${summary.operations} external operations, including ${summary.recentMatches} recent matching tasks.`,
+  );
   const issues = new Map();
   await parallel(model.rows.exchange_issues, 6, async (expected) => {
     const issue = await api.get('/api/exchange/issues/' + expected.id);
@@ -109,7 +132,7 @@ export async function verify(db, model, { fresh = false } = {}) {
     'app',
     `SELECT jsonb_object_agg(username,n) FROM (SELECT u.username,count(*) n FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.id IN (${model.rows.tasks.map((task) => literal(task.id)).join(',')}) GROUP BY u.username) counts;`,
   );
-  assert.deepEqual(ownerCounts, { 'initiator.one': 600, 'initiator.two': 600 });
+  assert.deepEqual(ownerCounts, { 'initiator.one': TASK_COUNT / 2, 'initiator.two': TASK_COUNT / 2 });
   for (const name of ['initiator.one', 'initiator.two']) {
     const user = new ApiSession(db.backendUrl);
     const identity = await user.login(name, process.env.SI_DEMO_PASSWORD);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { catalog, id, SCENARIOS, TASK_COUNT } from './catalog.mjs';
+import { catalog, id, RECENT_TASK_COUNT, SCENARIOS, TASK_COUNT } from './catalog.mjs';
 import { dataset } from './dataset.mjs';
 import { insertion, insertDataset } from './postgres.mjs';
 
@@ -14,8 +14,8 @@ test('large catalogue is balanced, diverse and stable across runs', () => {
   assert.equal(new Set(items.map((item) => item.taskId)).size, TASK_COUNT);
   assert.equal(new Set(items.map((item) => item.reference)).size, TASK_COUNT);
   assert.equal(new Set(items.map((item) => item.title)).size, TASK_COUNT);
-  assert.equal(items.filter((item) => item.owner === 'initiator.one').length, 600);
-  assert.equal(items.filter((item) => item.owner === 'initiator.two').length, 600);
+  assert.equal(items.filter((item) => item.owner === 'initiator.one').length, TASK_COUNT / 2);
+  assert.equal(items.filter((item) => item.owner === 'initiator.two').length, TASK_COUNT / 2);
   for (const scenario of SCENARIOS)
     for (const owner of ['initiator.one', 'initiator.two'])
       assert.ok(
@@ -24,6 +24,30 @@ test('large catalogue is balanced, diverse and stable across runs', () => {
       );
   assert.deepEqual(catalog(), items);
   assert.ok(new Set(items.map((item) => item.quantity)).size >= 100);
+});
+
+test('both initiators see a first page of matching completed tasks before diagnostic examples', () => {
+  const external = new Map(rows.operations.map((operation) => [operation.id, operation]));
+  const saved = new Map(rows.reconciliations.map((row) => [row.task_id, row.snapshot]));
+  const ordered = [...rows.tasks].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const expected = RECENT_TASK_COUNT / 2;
+  const recent = new Set(
+    catalog()
+      .filter((item) => item.recent)
+      .map((item) => item.taskId),
+  );
+  assert.equal(recent.size, RECENT_TASK_COUNT);
+  for (const username of ['initiator.one', 'initiator.two']) {
+    const firstPage = ordered.filter((task) => task.owner_id === users[username]).slice(0, expected);
+    assert.equal(firstPage.length, expected);
+    for (const task of firstPage) {
+      assert.ok(recent.has(task.id));
+      assert.equal(task.delivery_status, 'ACKNOWLEDGED');
+      assert.equal(task.business_status, 'SUCCEEDED');
+      assert.deepEqual(task.accepted_result, external.get(task.operation_id).result);
+      assert.equal(saved.get(task.id).outcome, 'MATCH');
+    }
+  }
 });
 
 test('persisted aggregates have valid cross-database identities and business outcomes', () => {
@@ -163,7 +187,7 @@ test('recovery after the external commit inserts only the missing internal stage
   const queries = [];
   const existing = { tasks: [], operations: rows.operations, issues: [], faults: rows.faults };
   const result = insertDataset({ query: (database, sql) => queries.push({ database, sql }) }, model, existing);
-  assert.equal(result.insertedTasks, 1200);
+  assert.equal(result.insertedTasks, TASK_COUNT);
   assert.equal(result.insertedIssues, 150);
   assert.equal(queries[0].database, 'emulator');
   assert.ok(!queries[0].sql.includes('INSERT'));

@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 
 export const SEED_VERSION = 'showcase-v1';
-export const TASK_COUNT = 1200;
 export const SCENARIOS = [
   'success',
   'rejected',
@@ -24,6 +23,10 @@ export const SCENARIOS = [
   'assigned',
   'uncertain',
 ];
+export const STANDARD_TASK_COUNT = 1000;
+export const EXAMPLE_TASK_COUNT = SCENARIOS.length * 10;
+export const RECENT_TASK_COUNT = 40;
+export const TASK_COUNT = STANDARD_TASK_COUNT + EXAMPLE_TASK_COUNT + RECENT_TASK_COUNT;
 
 export function id(name) {
   const hex = createHash('sha256').update(`${SEED_VERSION}/${name}`).digest('hex');
@@ -82,15 +85,23 @@ const actions = ['Комплектация', 'Резервирование', 'П
 
 export function catalog() {
   return Array.from({ length: TASK_COUNT }, (_, index) => {
-    const scenario =
-      index < 1000 ? (index % 7 === 0 ? 'rejected' : 'success') : SCENARIOS[(index - 1000) % SCENARIOS.length];
+    const exampleIndex = index - STANDARD_TASK_COUNT;
+    const scenarioExample = exampleIndex >= 0 && exampleIndex < EXAMPLE_TASK_COUNT;
+    const recent = exampleIndex >= EXAMPLE_TASK_COUNT;
+    const scenario = scenarioExample
+      ? SCENARIOS[exampleIndex % SCENARIOS.length]
+      : index % 7 === 0 && !recent
+        ? 'rejected'
+        : 'success';
     const reference = `REQ-${600001 + index}`;
     const quantity = scenario === 'rejected' ? 101 + ((index * 37) % 900) : 1 + ((index * 17) % 100);
     const title = `${actions[index % actions.length]} ${goods[index % goods.length]} — ${sites[index % sites.length]}, заявка ${reference.slice(4)}`;
-    const ownerIndex = index < 1000 ? index : index + Math.floor((index - 1000) / SCENARIOS.length);
+    const ownerIndex = scenarioExample ? index + Math.floor(exampleIndex / SCENARIOS.length) : index;
     return {
       index,
       scenario,
+      scenarioExample,
+      recent,
       reference,
       quantity,
       title,
