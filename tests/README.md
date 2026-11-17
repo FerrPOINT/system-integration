@@ -101,23 +101,24 @@ API, выдачу собранного JavaScript и проксирование 
 ## Автоматический браузерный сценарий
 
 Поднимите отдельный Compose-проект system-integration-load с
-compose.load.yml по [инструкции запуска](load/README.md#запуск), до шагов
-reset и подготовки 5 000 записей. Из корня репозитория выполните:
+compose.load.yml по [инструкции запуска](load/README.md#запуск) до шагов
+reset и подготовки 5 000 записей. Загрузите QA-пароли из .env в окружение
+по [корневому README](../README.md#сборка-и-проверки). Из корня проекта:
 
 ~~~sh
+corepack pnpm --dir frontend install --frozen-lockfile
+corepack pnpm --dir frontend generate:api
 corepack pnpm --dir tests install --frozen-lockfile
 corepack pnpm --dir tests exec playwright install chromium
 SI_SEED_TARGET=load node --env-file=.env tests/demo.mjs seed
 corepack pnpm --dir tests test:e2e
 ~~~
 
-Загрузите QA-пароли из .env в окружение перед вызовом runner, как указано в
-[корневом README](../README.md#сборка-и-проверки). Seed создаёт
-tests/results/showcase.json в этом checkout. Три showcase-сценария на двух
-ширинах используют этот файл и данные того же QA; запускать их нужно после сида.
-Для повторного прогона загрузка сида сохраняет уже внесённые изменения.
-Приёмочные сценарии запускайте на свежей изолированной БД, чтобы проверить
-исходное состояние примеров. Для обычных si_app/si_emulator этот прогон не применяется.
+Генерация OpenAPI создаёт типы в этом checkout для TypeScript-проверки
+runner. Загрузка сида создаёт tests/results/showcase.json и данные для трёх
+showcase-сценариев на двух ширинах. Для приёмки используйте свежую QA-базу:
+повторная загрузка сохраняет уже внесённые изменения, а сценарии проверяют
+исходное состояние примеров.
 
 Для UI поверх native Vite на 19673 явно задайте
 `SI_UI_FRONTEND_RUNTIME=vite`. Проверка окружения продолжает требовать backend,
