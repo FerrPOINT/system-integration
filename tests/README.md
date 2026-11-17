@@ -46,17 +46,22 @@ JavaScript load/recovery scripts остаются вне строгой пров
 
 ## Демосценарии на QA
 
-`tests/demo.mjs` по умолчанию обращается к обычному стенду на 19580/19581.
-Для проверки кандидата используйте только отдельный load-проект и задайте
-оба адреса явно после проверки его окружения:
+`tests/demo.mjs` по умолчанию обращается к локальному load-проекту на 19680/19681.
+Команда scenarios проверяет принадлежность контейнеров и БД перед записью:
 
 ```sh
 node --input-type=module -e "import {loadEnvironment} from './tests/load/environment.mjs'; loadEnvironment();"
-SI_BACKEND_URL=http://127.0.0.1:19680 SI_EMULATOR_URL=http://127.0.0.1:19681 node tests/demo.mjs seed
+SI_BACKEND_URL=http://127.0.0.1:19680 SI_EMULATOR_URL=http://127.0.0.1:19681 node --env-file=.env tests/demo.mjs scenarios
 ```
 
-Проверьте origin/external и свежие createdAt в `tests/results/demo.json`:
-идемпотентный replay старых заданий не является проверкой нового кандидата.
+Проверьте origin/external, новые ID и observedStates в `tests/results/demo.json`.
+Каждый вызов scenarios создаёт шесть новых операций и проверяет свежий обмен.
+
+Большой исторический набор и его проверка принадлежат [seed/](../seed/README.md).
+Команды `node --env-file=.env tests/demo.mjs seed` и `verify-seed` используют
+только локальный load-проект на 196xx. `corepack pnpm --dir tests test:seed`
+проверяет детерминированность, распределение, связи и допустимые результаты
+каталога без записи в БД.
 ## Production frontend без API/БД
 
 После `frontend: pnpm build` из `tests/` выполните
