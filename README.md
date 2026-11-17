@@ -468,5 +468,6 @@ max-response-size=256KB. Последний ограничивает факти�
 | Контракты REST | [Приложение](contracts/internal-api.openapi.yaml), [эмулятор](contracts/external-exchange.openapi.yaml). |
 | План и состояние работы | [Роадмап](docs/roadmap.md), [задачи](docs/decomposition.md), [текущая стадия](docs/current-stage.md). |
 | Проверки и сдача | [Сценарии приёмки](docs/test-cases.md), [план эксплуатации и комплект сдачи](docs/roadmap.md#эксплуатация-и-сдача). |
+| Общий аудит | [Архитектура, безопасность, данные, runtime и ограничения проверки](docs/general-audit.md). |
 | История решений | [Завершённые планы и аудиты](docs/history.md). |
 | Вклад и безопасность | [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md), [AGENTS](AGENTS.md). |
