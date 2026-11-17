@@ -139,7 +139,6 @@ export function TaskList({ user }: { user: GetSession200 }) {
               {tasksItems.length === 0 ? (
                 <Card>
                   <EmptyState
-                    headingLevel={2}
                     message={
                       missingPage ? 'Страница не найдена' : hasFilters ? 'Ничего не найдено' : 'Заданий пока нет'
                     }

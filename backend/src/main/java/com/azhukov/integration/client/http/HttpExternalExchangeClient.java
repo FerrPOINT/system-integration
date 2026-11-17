@@ -38,7 +38,7 @@ public class HttpExternalExchangeClient implements ExternalExchangeClient {
         this.json = json;
     }
 
-    public ExchangeReply put(UUID id, TaskInput input) {
+    private ExchangeReply put(UUID id, TaskInput input) {
         return send(
                 HttpRequest.newBuilder(base.resolve("/operations/" + id))
                         .header("Content-Type", "application/json")

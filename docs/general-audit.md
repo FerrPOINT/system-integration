@@ -14,11 +14,15 @@ c83b4ca03149e6c4da1fe7b9932a89a60ea4435f после PR #19.
 для произвольной нагрузки и нескольких реплик.
 
 Широкая смена архитектуры, ORM, брокера, кэша или партиционирования не обоснована.
-Остались два небольших адресных замечания и известный долг базового образа.
+На снимке аудита оставались два небольших замечания и долг базового образа.
 
 ## Замечания
 
 ### G01 · P3 · Лишняя утилита с advisory в Java runtime
+
+[PR #24](https://github.com/FerrPOINT/system-integration/pull/24) удалил
+`pebble` из файловой системы новых контейнеров. Исходный бинарник остаётся
+в базовом слое OCI, а приведённый ниже скан относится к исходному кандидату.
 
 [Dockerfile, строка 22](../Dockerfile#L22) использует JRE-образ, содержащий
 /usr/bin/pebble, около 10,6 МБ. Trivy обнаруживает в ней Go stdlib v1.27.3
@@ -40,8 +44,9 @@ healthcheck и повторный image scan. В этом аудите обра�
 
 ### G02 · P3 · Неиспользуемый FormField.error
 
-[form-field.tsx, строки 10–47](../frontend/src/shared/ui/form-field.tsx#L10)
-сохраняет error props, aria-invalid и Notice-ветку без потребителя.
+[PR #24](https://github.com/FerrPOINT/system-integration/pull/24) удалил
+`error` из FormField. На [снимке аудита](https://github.com/FerrPOINT/system-integration/blob/c83b4ca03149e6c4da1fe7b9932a89a60ea4435f/frontend/src/shared/ui/form-field.tsx#L10)
+компонент сохранял error props, aria-invalid и Notice-ветку без потребителя.
 У 12 JSX-вызовов FormField нет error и нет spread props, скрывающих его передачу.
 Ветка не нужна текущим формам; required-ошибка Select имеет отдельного
 действующего владельца.

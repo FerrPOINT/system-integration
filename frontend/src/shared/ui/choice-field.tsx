@@ -8,7 +8,7 @@ import {
   type ButtonHTMLAttributes,
 } from 'react';
 import type { ChoiceOption } from './choice-types';
-import { useUiLabels } from './labels';
+import { choiceLabels } from './labels';
 
 export interface ChoiceFieldProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
@@ -60,7 +60,6 @@ export function ChoiceFormBridge({
   onReset: () => void;
   onInvalid: () => void;
 }) {
-  const ui = useUiLabels();
   const ref = useRef<HTMLSelectElement>(null);
   const reset = useRef({ onReset, resetValue });
   useLayoutEffect(() => {
@@ -119,7 +118,7 @@ export function ChoiceFormBridge({
       ))}
       {missing && (
         <option value={value}>
-          {value} — {ui.unavailableValue}
+          {value} — {choiceLabels.unavailableValue}
         </option>
       )}
     </select>
@@ -196,7 +195,6 @@ export function useChoiceDisabled(trigger: HTMLElement | null, disabled: boolean
 }
 
 export function useChoiceValidation(value: string, required: boolean | undefined, disabled: boolean | undefined) {
-  const labels = useUiLabels();
   const [attempted, setAttempted] = useState(false);
   const errorId = useId();
   const invalid = attempted && required && !disabled && !value;
@@ -205,6 +203,6 @@ export function useChoiceValidation(value: string, required: boolean | undefined
     errorId,
     onInvalid: () => setAttempted(true),
     reset: () => setAttempted(false),
-    message: labels.chooseOne,
+    message: choiceLabels.chooseOne,
   };
 }
