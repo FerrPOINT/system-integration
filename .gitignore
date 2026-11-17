@@ -1,7 +1,8 @@
-/.local/
-/.gradle/
+.local/
+.gradle/
 /build/
 /backend/build/
+/backend/emulator/build/
 /emulator/build/
 /frontend/node_modules/
 /frontend/dist/
@@ -9,5 +10,6 @@
 /tests/results/
 /tests/node_modules/
 .env
-.env.local
+.env.*
+!.env.example
 __pycache__/

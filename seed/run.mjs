@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { dataset } from './dataset.mjs';
 import { id } from './catalog.mjs';
 import { postgres, existingDataset, insertDataset, protectedData, literal } from './postgres.mjs';
 import { verify } from './verify.mjs';
-import { writeShowcase } from './report.mjs';
+import { showcaseDirectory, writeShowcase } from './report.mjs';
 
 const command = process.argv[2];
 const pristine = process.argv[3] === '--pristine';
@@ -29,14 +30,14 @@ const anchor = first.length
 const model = dataset(users, anchor);
 const existing = existingDataset(db, model);
 const before = protectedData(db, model);
-const results = new URL('../tests/results/', import.meta.url);
+const results = showcaseDirectory(db.target);
 await mkdir(results, { recursive: true });
 let inserted = { insertedTasks: 0, insertedIssues: 0 };
 if (command === 'seed') inserted = insertDataset(db, model, existing);
 const after = protectedData(db, model);
 assert.deepEqual(after, before, 'Existing unrelated data changed during seed loading');
 await writeFile(
-  new URL('showcase-preservation.json', results),
+  new URL('preservation.json', results),
   JSON.stringify({ verifiedAt: new Date().toISOString(), before, after }, null, 2),
 );
 console.log(
@@ -71,4 +72,4 @@ const result = {
 };
 await writeShowcase(result);
 console.log(JSON.stringify(summary));
-console.log('Existing data preserved. Scenario links: tests/results/showcase.md and showcase.json');
+console.log('Existing data preserved. Scenario links: ' + fileURLToPath(new URL('showcase.md', results)));

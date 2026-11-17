@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks';
-import { setTimeout as pause } from 'node:timers/promises';
+import timers from 'node:timers/promises';
 
 // One clock and one in-flight set span every phase. Response tails join only after
 // the full schedule, so neither a phase boundary nor observation pauses arrivals.
@@ -56,7 +56,7 @@ export async function runSteadyArrivals({ phases, maxInFlight, perform, shouldSt
       for (let index = 0; index < phase.planned; index++) {
         const due = phaseStart + (index * 1000) / phase.rate;
         const wait = due - performance.now();
-        if (wait > 0) await pause(wait);
+        if (wait > 0) await timers.setTimeout(wait);
         stoppedFor = shouldStop() || null;
         if (!stoppedFor && performance.now() >= phaseStart + phase.plannedDurationMs)
           stoppedFor = 'generator-window-overrun';
@@ -87,7 +87,7 @@ export async function runSteadyArrivals({ phases, maxInFlight, perform, shouldSt
         phase.peakInFlight = Math.max(phase.peakInFlight, active.size);
       }
     }
-    if (!stoppedFor && !failure) await pause(Math.max(0, began + offset - performance.now()));
+    if (!stoppedFor && !failure) await timers.setTimeout(Math.max(0, began + offset - performance.now()));
   } finally {
     await Promise.all(active);
   }

@@ -115,7 +115,7 @@ corepack pnpm --dir tests test:e2e
 ~~~
 
 Генерация OpenAPI создаёт типы в этом checkout для TypeScript-проверки
-runner. Загрузка сида создаёт tests/results/showcase.json и данные для трёх
+runner. Загрузка сида создаёт tests/results/showcase/load/showcase.json и данные для трёх
 showcase-сценариев на двух ширинах. Для приёмки используйте свежую QA-базу:
 повторная загрузка сохраняет уже внесённые изменения, а сценарии проверяют
 исходное состояние примеров.

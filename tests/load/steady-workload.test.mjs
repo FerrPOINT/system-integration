@@ -1,37 +1,59 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { setTimeout as pause } from 'node:timers/promises';
+import { performance } from 'node:perf_hooks';
+import timers, { setImmediate as flush } from 'node:timers/promises';
 import { runSteadyArrivals } from './steady-workload.mjs';
 
-test('arrival times are independent of response completion with explicit bounded missed arrivals', async () => {
-  let active = 0,
-    peak = 0;
-  const result = await runSteadyArrivals({
-    phases: [{ rate: 100, durationMs: 100 }],
-    maxInFlight: 2,
-    perform: async () => {
-      peak = Math.max(peak, ++active);
-      await pause(150);
-      active--;
-    },
+function testWithClock(name, run) {
+  test(name, async (t) => {
+    t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 });
+    t.mock.method(performance, 'now', Date.now);
+    let finished = false;
+    const result = run(t).finally(() => {
+      finished = true;
+    });
+    // Let promise callbacks settle between timer ticks, as on the real event loop.
+    for (let elapsed = 0; elapsed < 2000 && !finished; elapsed += 5) {
+      await Promise.race([result, flush()]);
+      if (!finished) t.mock.timers.tick(5);
+    }
+    assert.ok(finished, 'Test exceeded its virtual time budget');
+    await result;
   });
-  assert.equal(result.planned, 10);
-  assert.equal(result.scheduled, 10);
-  assert.equal(result.started, 2);
-  assert.equal(result.missed, 8);
-  assert.equal(result.notOffered, 0);
-  assert.equal(result.peakInFlight, 2);
-  assert.equal(peak, 2);
-  assert.equal(active, 0);
-});
+}
 
-test('a normal fixed-rate window completes every arrival and joins its response tail', async () => {
+testWithClock(
+  'arrival times are independent of response completion with explicit bounded missed arrivals',
+  async () => {
+    let active = 0,
+      peak = 0;
+    const result = await runSteadyArrivals({
+      phases: [{ rate: 100, durationMs: 100 }],
+      maxInFlight: 2,
+      perform: async () => {
+        peak = Math.max(peak, ++active);
+        await timers.setTimeout(150);
+        active--;
+      },
+    });
+    assert.equal(result.planned, 10);
+    assert.equal(result.scheduled, 10);
+    assert.equal(result.started, 2);
+    assert.equal(result.missed, 8);
+    assert.equal(result.notOffered, 0);
+    assert.equal(result.peakInFlight, 2);
+    assert.equal(peak, 2);
+    assert.equal(active, 0);
+  },
+);
+
+testWithClock('a normal fixed-rate window completes every arrival and joins its response tail', async () => {
   let completed = 0;
   const result = await runSteadyArrivals({
     phases: [{ rate: 100, durationMs: 100 }],
     maxInFlight: 10,
     perform: async () => {
-      await pause(30);
+      await timers.setTimeout(30);
       completed++;
     },
   });
@@ -42,7 +64,7 @@ test('a normal fixed-rate window completes every arrival and joins its response 
   assert.ok(result.elapsedIncludingTailMs >= 100);
 });
 
-test('a safety stop and an operation failure do not leave in-flight work behind', async () => {
+testWithClock('a safety stop and an operation failure do not leave in-flight work behind', async () => {
   let completed = 0;
   const result = await runSteadyArrivals({
     phases: [{ rate: 100, durationMs: 200 }],
@@ -64,7 +86,7 @@ test('a safety stop and an operation failure do not leave in-flight work behind'
         perform: async (index) => {
           unfinished++;
           try {
-            await pause(30);
+            await timers.setTimeout(30);
             if (index === 0) throw new Error('probe-failure');
           } finally {
             unfinished--;
@@ -76,7 +98,7 @@ test('a safety stop and an operation failure do not leave in-flight work behind'
   assert.equal(unfinished, 0);
 });
 
-test('different phase rates retain ordered arrivals on one timeline', async () => {
+testWithClock('different phase rates retain ordered arrivals on one timeline', async () => {
   const offered = [];
   const result = await runSteadyArrivals({
     phases: [
@@ -102,7 +124,7 @@ test('different phase rates retain ordered arrivals on one timeline', async () =
   assert.equal(result.notOffered, 0);
 });
 
-test('stopping a phase accounts for all later unoffered arrivals', async () => {
+testWithClock('stopping a phase accounts for all later unoffered arrivals', async () => {
   let completed = 0;
   const result = await runSteadyArrivals({
     phases: [
@@ -121,7 +143,7 @@ test('stopping a phase accounts for all later unoffered arrivals', async () => {
   assert.equal(result.phases[1].stoppedFor, 'probe-stop');
 });
 
-test('callback failures are propagated even when their rejection value is falsy', async () => {
+testWithClock('callback failures are propagated even when their rejection value is falsy', async () => {
   for (const reason of [null, undefined, 0]) {
     await assert.rejects(
       () =>
@@ -137,7 +159,7 @@ test('callback failures are propagated even when their rejection value is falsy'
   }
 });
 
-test('a phase boundary neither drains pending responses nor resets global concurrency', async () => {
+testWithClock('a phase boundary neither drains pending responses nor resets global concurrency', async () => {
   const first = Promise.withResolvers();
   let firstFinished = false,
     crossed = false;
@@ -174,10 +196,22 @@ test('a phase boundary neither drains pending responses nor resets global concur
       { rate: 100, durationMs: 100 },
     ],
     maxInFlight: 1,
-    perform: () => pause(250),
+    perform: () => timers.setTimeout(250),
   });
   assert.equal(capped.started, 1);
   assert.equal(capped.missed, 19);
   assert.equal(capped.phases[1].missed, 10);
   assert.equal(capped.peakInFlight, 1);
+});
+
+testWithClock('an event-loop stall accounts for unoffered arrivals without extending the window', async (t) => {
+  const result = await runSteadyArrivals({
+    phases: [{ rate: 100, durationMs: 100 }],
+    maxInFlight: 2,
+    perform: async () => t.mock.timers.tick(100),
+  });
+  assert.equal(result.stoppedFor, 'generator-window-overrun');
+  assert.equal(result.started, 1);
+  assert.equal(result.missed, 0);
+  assert.equal(result.notOffered, 9);
 });

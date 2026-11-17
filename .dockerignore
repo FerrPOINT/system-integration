@@ -2,7 +2,7 @@
 **/.env.*
 !**/.env.example
 .git
-.local
+**/.local
 **/node_modules
 **/build
 **/.gradle
