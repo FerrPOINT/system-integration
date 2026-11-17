@@ -180,7 +180,7 @@ export function IssueList() {
                             <Link
                               data-issue-link
                               className="ui-truncate"
-                              title={kinds[issue.kind]}
+                              title={issue.summary}
                               to={'/issues/' + issue.issueId}
                             >
                               {kinds[issue.kind]}
@@ -190,11 +190,10 @@ export function IssueList() {
                                 {issue.requestReference} · {issue.taskTitle}
                               </small>
                             ) : (
-                              <small>Общая проблема ленты</small>
+                              <small className="ui-truncate" title={issue.summary}>
+                                Лента · {issue.summary}
+                              </small>
                             )}
-                            <small className="ui-truncate" title={issue.summary}>
-                              {issue.summary}
-                            </small>
                           </td>
                           <td>
                             <span
