@@ -9,8 +9,8 @@
 
 Нужны Node 26, запущенный локальный `system-integration-load` из
 compose.yml + compose.load.yml, текущие миграции и три демоучётки.
-Используются только loopback-порты 19680/19681/19673 и отдельные БД
-si_test/si_emulator_test. Другая установка явно отклоняется до записи.
+По умолчанию используются loopback-порты 19680/19681/19673 и отдельные БД
+si_test/si_emulator_test. Целевая установка проверяется до записи.
 Пароль передаётся через существующий приватный `.env`; в отчёт не записывается.
 
 Из корня репозитория:
@@ -22,6 +22,21 @@ node --env-file=.env tests/demo.mjs verify-seed --pristine
 node --test seed/dataset.test.mjs
 node --env-file=.env seed/check-import.mjs
 ```
+
+Для обычной демонстрационной установки `system-integration` на 195xx
+нужен явный выбор целевой среды:
+
+```sh
+SI_SEED_TARGET=demo node --env-file=.env tests/demo.mjs seed
+SI_SEED_TARGET=demo node --env-file=.env tests/demo.mjs verify-seed --pristine
+```
+
+Этот режим проверяет принадлежность четырёх контейнеров проекту, loopback-порты
+и подключения backend/emulator к si_app/si_emulator. Адреса API берутся из
+проверенных контейнеров. Неподдерживаемая цель или чужие БД останавливают
+команду до записи. Без SI_SEED_TARGET команда по-прежнему выбирает только load.
+`scenarios`, `check-import` и изменяющие автотесты остаются на отдельном load-стенде;
+SI_SEED_TARGET не переключает их в демонстрационную установку.
 
 Загрузка добавляет записи, затем проверяет их через настоящий API. Результат и
 прямые ссылки на примеры: ignored `tests/results/showcase.md` и `showcase.json`.

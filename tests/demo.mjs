@@ -39,19 +39,19 @@ if (command === 'seed' || command === 'verify-seed') {
   console.log(JSON.stringify(await response.json(), null, 2));
 } else if (command === 'scenarios') {
   const { postgres } = await import('../seed/postgres.mjs');
-  const db = postgres();
+  const db = postgres('load');
   const firstReference = randomInt(700000, 789994);
   const occupied =
     db.read(
-      'si_test',
+      'app',
       `SELECT to_jsonb(count(*)) FROM tasks WHERE request_reference BETWEEN 'REQ-${firstReference}' AND 'REQ-${firstReference + 5}';`,
     ) +
     db.read(
-      'si_emulator_test',
+      'emulator',
       `SELECT to_jsonb(count(*)) FROM faults WHERE reference BETWEEN 'REQ-${firstReference}' AND 'REQ-${firstReference + 5}';`,
     ) +
     db.read(
-      'si_emulator_test',
+      'emulator',
       `SELECT to_jsonb(count(*)) FROM operations WHERE reference BETWEEN 'REQ-${firstReference}' AND 'REQ-${firstReference + 5}';`,
     );
   if (occupied) throw new Error('Live scenario reference range is occupied; start a new run');
@@ -121,7 +121,7 @@ if (command === 'seed' || command === 'verify-seed') {
   }
   const duplicate = cases.find((item) => item.fault === 'DUPLICATE_RESULT');
   duplicate.publishedCopies = db.read(
-    'si_emulator_test',
+    'emulator',
     `SELECT to_jsonb(count(*)) FROM result_events WHERE operation_id='${duplicate.task.operationId}'::uuid AND version=2 AND cursor IS NOT NULL;`,
   );
   if (duplicate.publishedCopies !== 2) throw new Error('Expected both publications of the duplicated result');

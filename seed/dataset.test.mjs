@@ -165,8 +165,8 @@ test('recovery after the external commit inserts only the missing internal stage
   const result = insertDataset({ query: (database, sql) => queries.push({ database, sql }) }, model, existing);
   assert.equal(result.insertedTasks, 1200);
   assert.equal(result.insertedIssues, 150);
-  assert.equal(queries[0].database, 'si_emulator_test');
+  assert.equal(queries[0].database, 'emulator');
   assert.ok(!queries[0].sql.includes('INSERT'));
-  assert.equal(queries[1].database, 'si_test');
+  assert.equal(queries[1].database, 'app');
   assert.ok(queries[1].sql.includes('INSERT INTO tasks'));
 });

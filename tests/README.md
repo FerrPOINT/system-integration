@@ -59,7 +59,9 @@ SI_BACKEND_URL=http://127.0.0.1:19680 SI_EMULATOR_URL=http://127.0.0.1:19681 nod
 
 Большой исторический набор и его проверка принадлежат [seed/](../seed/README.md).
 Команды `node --env-file=.env tests/demo.mjs seed` и `verify-seed` используют
-только локальный load-проект на 196xx. `corepack pnpm --dir tests test:seed`
+по умолчанию локальный load-проект на 196xx. Явный `SI_SEED_TARGET=demo`
+переключает только большой набор и его проверку на обычную демонстрацию;
+живые сценарии и автотесты остаются изолированными. `corepack pnpm --dir tests test:seed`
 проверяет детерминированность, распределение, связи и допустимые результаты
 каталога без записи в БД.
 ## Production frontend без API/БД
