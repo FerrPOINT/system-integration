@@ -1,4 +1,3 @@
-import type { RefObject } from 'react';
 import { reasonCodePointLimit, reasonMaxLength } from '../../../shared/lib/form-rules';
 import type { Issue } from '../../../../build/generated/openapi/client';
 import { ActionGroup } from '../../../shared/ui/action-group';
@@ -12,15 +11,7 @@ import { CommandRefresh } from '../../../shared/ui/command-refresh';
 import { actionLabels, type DecisionAction } from '../model/decision';
 import type { IssueDecisionModel } from '../model/use-issue-decision';
 
-export function DecisionForm({
-  issue,
-  model,
-  reasonInput,
-}: {
-  issue: Issue;
-  model: IssueDecisionModel;
-  reasonInput: RefObject<HTMLTextAreaElement | null>;
-}) {
+export function DecisionForm({ issue, model }: { issue: Issue; model: IssueDecisionModel }) {
   const { action, reason, command, update, actions } = model;
   if (command.isSuccess)
     return (
@@ -44,7 +35,7 @@ export function DecisionForm({
     >
       {model.stale && (
         <Notice tone="warning" role="alert">
-          <p>Разбор или доступные действия изменились. Черновик сохранён.</p>
+          <p>Разбор или доступные действия изменились. Введённая причина осталась в форме.</p>
           {issue.status === 'OPEN' && (issue.latestReconciliationId || !issue.taskId) && (
             <Button type="button" disabled={model.busy} onClick={model.rebase}>
               Использовать актуальные данные
@@ -92,7 +83,6 @@ export function DecisionForm({
           {(attrs) => (
             <Textarea
               {...attrs}
-              ref={reasonInput}
               value={reason}
               maxLength={reasonMaxLength}
               rows={3}

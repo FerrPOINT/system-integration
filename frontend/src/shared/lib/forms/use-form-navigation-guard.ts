@@ -50,7 +50,6 @@ export function useFormNavigationGuard({ dirty, pending }: { dirty: boolean; pen
     ),
   );
   return {
-    navigating: blocker.state === 'blocked' || Boolean(localClose?.leaving),
     exitFocusRef: localClose?.leaving ? exitFocus : undefined,
     open: !pending && (blocker.state === 'blocked' || localClose !== null),
     release() {

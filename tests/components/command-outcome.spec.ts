@@ -22,6 +22,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     logouts: 0,
     assigned: false,
     decisionAvailable: true,
+    evidenceReason: undefined as string | undefined,
     externalResultAvailable: false,
     resolved: false,
     generalIssue: false,
@@ -74,6 +75,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     kind: 'RECONCILIATION_DIFFERENCE',
     status: state.resolved ? 'RESOLVED' : 'OPEN',
     summary: 'Fixture discrepancy',
+    evidence: state.evidenceReason ? { reason: state.evidenceReason } : undefined,
     taskTitle: state.title,
     requestReference: 'REQ-000001',
     openedAt: '2026-11-14T00:00:00Z',
@@ -670,19 +672,67 @@ test('decision requires a choice only while several actions are available', asyn
   ]);
 });
 
-test('operator decision draft survives cancelled departure and requires explicit discard', async ({ page }) => {
-  await mockApi(page, 'OPERATOR');
+test('operator decision draft allows departure without a confirmation or command', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  await page.goto('/tests/command-outcome.html?screen=issue');
+  await page.getByRole('textbox', { name: 'Причина решения', exact: true }).fill('Unsubmitted explanation');
+  await page.getByRole('link', { name: 'Задания', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Все задания', exact: true })).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  expect(state.commands).toHaveLength(0);
+});
+
+test('operator decision blocks departure only while the submitted command is pending', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  let release = () => {};
+  state.holdWrite = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   await page.goto('/tests/command-outcome.html?screen=issue');
   const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
-  await reason.fill('Unsubmitted explanation');
+  await reason.fill('Submitted decision');
+  await page.getByRole('button', { name: 'Завершить разбор', exact: true }).click();
+  try {
+    await expect(page.getByRole('button', { name: 'Сохраняем решение…', exact: true })).toBeDisabled();
+    await page.getByRole('link', { name: 'Задания', exact: true }).click();
+    await expect(reason).toBeVisible();
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await expect(page.getByRole('alert').filter({ hasText: 'Решение сохранено.' })).toBeVisible();
+  state.failRead = false;
   await page.getByRole('link', { name: 'Задания', exact: true }).click();
-  await expect(page.getByRole('alertdialog')).toBeVisible();
-  await page.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
-  await expect(reason).toHaveValue('Unsubmitted explanation');
-  await expect(reason).toBeFocused();
-  await page.getByRole('link', { name: 'Задания', exact: true }).click();
-  await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Все задания', exact: true })).toBeVisible();
+  expect(state.commands).toHaveLength(1);
+});
+
+test('issue diagnostics and operator actions have equal cards on wide screens and stack on narrow screens', async ({
+  page,
+}) => {
+  const state = await mockApi(page, 'OPERATOR');
+  state.evidenceReason = 'Подробности первого события. '.repeat(70);
+  await page.goto('/tests/command-outcome.html?screen=issue');
+  const diagnostics = page.getByRole('region', { name: 'Диагностика первого события', exact: true });
+  const actions = page.getByRole('region', { name: 'Действия оператора', exact: true });
+  await expect(diagnostics).toBeVisible();
+  await expect(actions).toBeVisible();
+  const widths = test.info().project.name === 'desktop' ? [1440, 1024, 901, 900] : [390, 320];
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 844 });
+    const a = (await diagnostics.boundingBox())!;
+    const b = (await actions.boundingBox())!;
+    expect(a.width).toBeCloseTo(b.width, 0);
+    if (width > 900) {
+      expect(a.y).toBeCloseTo(b.y, 0);
+      expect(a.height).toBeCloseTo(b.height, 0);
+      expect(b.x).toBeGreaterThan(a.x + a.width);
+    } else {
+      expect(a.x).toBeCloseTo(b.x, 0);
+      expect(b.y).toBeGreaterThan(a.y + a.height);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
 });
 
 test('refetch preserves a decision draft and requires explicit adoption of the new basis', async ({ page }) => {
@@ -692,7 +742,7 @@ test('refetch preserves a decision draft and requires explicit adoption of the n
   state.revision = 2;
   state.latestSnapshot = 'new-snapshot';
   await page.getByRole('button', { name: 'Обновить', exact: true }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'Черновик сохранён.' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'Введённая причина осталась в форме.' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Причина решения', exact: true })).toHaveValue(
     'Preserved explanation',
   );
@@ -719,11 +769,8 @@ test('external resolution keeps an unsubmitted draft until the operator clears t
   await page.getByRole('button', { name: 'Обновить', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
   await expect(reason).toHaveValue('Unsubmitted explanation');
-  await expect(page.getByRole('alert').filter({ hasText: 'Черновик сохранён.' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'Введённая причина осталась в форме.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Завершить разбор', exact: true })).toBeDisabled();
-  await page.getByRole('link', { name: 'Задания', exact: true }).click();
-  await page.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
-  await expect(reason).toBeFocused();
   await reason.fill('');
   await expect(reason).toHaveCount(0);
   expect(state.commands).toHaveLength(0);
@@ -960,7 +1007,7 @@ test('an issue without decision fields still protects an uncertain reconciliatio
   expect(state.commands[1].key).not.toBe(state.commands[0].key);
 });
 
-test('one issue guard preserves a decision draft while reconciliation is recovered', async ({ page }) => {
+test('unresolved reconciliation prompts independently of an unsubmitted decision', async ({ page }) => {
   const state = await mockApi(page, 'OPERATOR');
   state.badSnapshotReceipt = {};
   await page.goto('/tests/command-outcome.html?screen=issue');
@@ -977,14 +1024,10 @@ test('one issue guard preserves a decision draft while reconciliation is recover
   await expect(page.getByRole('alert').filter({ hasText: 'Сверка сохранена.' })).toBeVisible();
   state.failRead = false;
   await page.getByRole('button', { name: 'Повторить обновление', exact: true }).click();
-  await expect(page.getByRole('alertdialog', { name: 'Закрыть форму?' })).toBeVisible();
-  await page.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
-  await expect(reason).toHaveValue('Draft must survive reconciliation');
-  await expect(reason).toBeFocused();
-  await page.getByRole('link', { name: 'Задания', exact: true }).click();
-  await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Все задания', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Сохранённая сверка', exact: true })).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   expect(state.commands).toHaveLength(2);
+  expect(state.commands[1]).toEqual(state.commands[0]);
 });
 
 test('a definitive reconciliation 404 remains a rejection', async ({ page }) => {
@@ -1388,28 +1431,16 @@ test('general feed decision validates Unicode and submits no fabricated reconcil
   await expect(page.getByRole('link', { name: 'Сверка, на которой основано решение' })).toHaveCount(0);
 });
 
-test('general issue draft survives cancelled logout and retains its command contract', async ({ page }) => {
+test('general issue draft allows logout without submitting a decision', async ({ page }) => {
   const state = await mockApi(page, 'OPERATOR');
   state.generalIssue = true;
   await page.goto('/tests/command-outcome.html?screen=issue');
-  const reason = 'Проверена общая проблема ленты 🧪';
-  await page.getByRole('textbox', { name: 'Причина решения', exact: true }).fill(reason);
+  await page.getByRole('textbox', { name: 'Причина решения', exact: true }).fill('Несохранённая причина');
   await openAccountMenu(page);
-  const logout = page.getByRole('button', { name: 'Выйти', exact: true });
-  await logout.click();
-  await expect(page.getByRole('alertdialog')).toBeVisible();
-  await page.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
-  await expect(logout).toBeFocused();
-  expect(state.logouts).toBe(0);
-  if (test.info().project.name === 'mobile') await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'Причина решения', exact: true })).toHaveValue(reason);
-  await page.getByRole('button', { name: 'Закрыть общую проблему', exact: true }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'Решение сохранено.' })).toBeVisible();
-  expect(state.commands).toHaveLength(1);
-  expect(state.commands[0].body).toEqual({ action: 'ACKNOWLEDGE_FEED_ISSUE', expectedIssueRevision: 1, reason });
-  await openAccountMenu(page);
-  await logout.click();
+  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  expect(state.commands).toHaveLength(0);
   expect(state.logouts).toBe(1);
 });
 

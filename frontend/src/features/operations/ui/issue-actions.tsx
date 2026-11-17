@@ -23,10 +23,8 @@ export function IssueActions({ issue }: { issue: Issue }) {
     pending: take.isPending || reconciliation.command.isPending,
     unresolved: reconciliation.unresolved,
   });
-  const reasonInput = useRef<HTMLTextAreaElement>(null);
   const reconcileTrigger = useRef<HTMLButtonElement>(null);
   const { guard } = model;
-  const leavingUnresolved = guard.navigating && reconciliation.unresolved;
   const refreshOwnership = () =>
     update.mutate({ issueId: issue.issueId, taskId: issue.taskId }, { onSuccess: () => take.reset() });
   const conflict = take.error instanceof ApiError && take.error.status === 409;
@@ -72,9 +70,7 @@ export function IssueActions({ issue }: { issue: Issue }) {
                     disabled={take.isPending || model.command.isPending}
                     onStart={() => {
                       guard.protect();
-                      reconciliation.run(() => {
-                        if (!model.dirty) guard.release();
-                      });
+                      reconciliation.run(guard.release);
                     }}
                   />
                 )}
@@ -86,7 +82,7 @@ export function IssueActions({ issue }: { issue: Issue }) {
               pending={update.isPending}
               onRetry={refreshOwnership}
             />
-            <DecisionForm issue={issue} model={model} reasonInput={reasonInput} />
+            <DecisionForm issue={issue} model={model} />
             {issue.status === 'OPEN' && !model.actions.length && !model.dirty && (
               <Notice appearance="inline">
                 {issue.taskId
@@ -99,17 +95,13 @@ export function IssueActions({ issue }: { issue: Issue }) {
       </Card>
       <DiscardDialog
         open={guard.open}
-        returnFocusRef={guard.exitFocusRef ?? (leavingUnresolved ? reconcileTrigger : reasonInput)}
+        returnFocusRef={guard.exitFocusRef ?? reconcileTrigger}
         onCancel={guard.cancel}
         onDiscard={guard.discard}
-        title={leavingUnresolved ? 'Уйти без проверки сверки?' : undefined}
-        description={
-          leavingUnresolved
-            ? 'Сверка могла сохраниться. При уходе со страницы вы потеряете возможность безопасно повторить исходную команду. Несохранённый черновик также будет потерян.'
-            : undefined
-        }
-        discardLabel={leavingUnresolved ? 'Уйти без проверки' : undefined}
-        cancelLabel={leavingUnresolved ? 'Вернуться к проверке' : undefined}
+        title="Уйти без проверки сверки?"
+        description="Сверка могла сохраниться. При уходе со страницы вы потеряете возможность безопасно повторить исходную команду."
+        discardLabel="Уйти без проверки"
+        cancelLabel="Вернуться к проверке"
       />
     </>
   );
