@@ -240,7 +240,7 @@ test('UI-15: issue table and mobile cards use the same server window without los
   }
 });
 
-test('UI-15: history fits its panel and exposes every saved event', async ({ page }, info) => {
+test('UI-15: history keeps page boundaries and exposes every saved event', async ({ page }, info) => {
   loadUiEnvironment();
   await login(page);
   const id = await create(page, 'E2E история с адаптивной пагинацией');
@@ -264,45 +264,34 @@ test('UI-15: history fits its panel and exposes every saved event', async ({ pag
   const region = page.locator('.history-panel .paged-list');
   await expect(region.locator('[data-page-item]').first()).toBeVisible();
   await page.locator('.history-panel').scrollIntoViewIfNeeded();
-  const seen = new Set<string>();
   if (info.project.name === 'mobile') {
     await expect(region.locator('time').first()).toHaveText(/ UTC$/);
     expect(await collectFeed(region, '[data-page-item]', 'data-event-id')).toEqual(new Set(expected));
     await fits(page, region);
     return;
   }
-  const windows: { page: number; size: number; ids: string[] }[] = [];
-  let previousEnd = 0;
-  let previousSize: number | undefined;
-  for (let attempt = 0; attempt < 100; attempt++) {
+  await settled(page, region);
+  const size = Number(new URL(page.url()).searchParams.get('size'));
+  const pageCount = Math.ceil(expected.length / size);
+  const rows = region.locator('[data-page-item]');
+  const next = region.getByRole('button', { name: 'Далее →', exact: true });
+  for (let index = 0; index < pageCount; index++) {
     await settled(page, region);
-    await region.scrollIntoViewIfNeeded();
-    await fits(page, region);
     const search = new URL(page.url()).searchParams;
-    const ids = await region
-      .locator('[data-page-item]')
-      .evaluateAll((elements) => elements.map((element) => element.getAttribute('data-event-id')!));
-    const window = { page: Number(search.get('page') ?? 0), size: Number(search.get('size')), ids };
-    windows.push(window);
-    const start = window.page * window.size;
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(ids, JSON.stringify(windows)).toEqual(expected.slice(start, start + window.size));
-    // A taller event can shrink size and re-anchor the page around its old first record.
-    // The new window may overlap, but must advance without skipping any unseen records.
-    expect(start).toBeLessThanOrEqual(previousEnd);
-    if (previousSize === window.size) expect(start).toBe(previousEnd);
-    expect(start + ids.length).toBeGreaterThan(previousEnd);
-    previousEnd = start + ids.length;
-    previousSize = window.size;
-    for (const id of ids) seen.add(id);
-    const next = region.getByRole('button', { name: 'Далее →', exact: true });
-    if (!(await next.count()) || !(await next.isEnabled())) break;
-    const previous = new URL(page.url()).searchParams.get('page') || '0';
-    await next.click();
-    await expect.poll(() => new URL(page.url()).searchParams.get('page')).not.toBe(previous);
+    expect(Number(search.get('page') ?? 0)).toBe(index);
+    expect(Number(search.get('size'))).toBe(size);
+    await expect(region.locator('.pagination-footer')).toBeInViewport();
+    await expect(rows.first()).toBeInViewport();
+    await rows.last().scrollIntoViewIfNeeded();
+    await expect(rows.last()).toBeInViewport();
+    const ids = await rows.evaluateAll((elements) => elements.map((element) => element.getAttribute('data-event-id')));
+    expect(ids).toEqual(expected.slice(index * size, (index + 1) * size));
+    if (index + 1 < pageCount) {
+      await next.click();
+      await expect.poll(() => new URL(page.url()).searchParams.get('page')).toBe(String(index + 1));
+    }
   }
-  await info.attach('history-windows', { body: JSON.stringify(windows), contentType: 'application/json' });
-  expect(seen).toEqual(new Set(expected));
+  await expect(next).toBeDisabled();
   await expect(region).toContainText('Задание принято и поставлено в очередь');
   await page.screenshot({ path: info.outputPath('adaptive-history.png') });
 });

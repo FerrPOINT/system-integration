@@ -28,6 +28,7 @@ async function mockApi(
     signedIn?: boolean;
     technicalHistory?: boolean;
     historyActions?: boolean;
+    tallHistoryFrom?: number;
   } = {},
 ) {
   const reads: string[] = [];
@@ -86,6 +87,12 @@ async function mockApi(
               summary: control.technicalHistory
                 ? 'Попытка ' + (pageNumber * size + n + 1) + ': PUT'
                 : 'History event ' + (pageNumber * size + n),
+              ...(control.tallHistoryFrom !== undefined && pageNumber * size + n >= control.tallHistoryFrom
+                ? {
+                    summary:
+                      'History event ' + (pageNumber * size + n) + '. ' + 'Подробное описание обмена. '.repeat(16),
+                  }
+                : {}),
               ...(control.historyActions && pageNumber * size + n === 0
                 ? {
                     actor: 'USER',
@@ -314,6 +321,47 @@ test('mixed-height history fits all nine entries and separates the two event lin
       await page.evaluate(() => document.documentElement.clientWidth),
     );
   }
+});
+
+test('history page boundaries stay fixed when a later page has taller events @desktop', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const total = 35;
+  await mockApi(page, 'OPERATOR', total, { tallHistoryFrom: 6 });
+  await page.goto('/tasks/' + taskId + '?size=5&page=0');
+  const history = page.getByRole('region', { name: 'История', exact: true });
+  const viewport = history.locator('.paged-viewport');
+  const events = history.locator('[data-page-item]');
+  const search = () => new URL(page.url()).searchParams;
+  const next = history.getByRole('button', { name: 'Далее →', exact: true });
+  await expect(next).toBeEnabled();
+  await expect.poll(() => Number(search().get('size'))).toBe(6);
+  await expect(events).toHaveCount(6);
+  await expect(next).toBeEnabled();
+
+  await next.click();
+  await expect(events.first()).toContainText('History event 6.');
+  await expect.poll(() => viewport.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
+  expect(search().get('size')).toBe('6');
+  expect(search().get('page')).toBe('1');
+  await expect(events).toHaveCount(6);
+  await expect(history.getByText('7–12 из 35', { exact: true })).toBeVisible();
+  await expect(history.getByRole('button', { name: 'Страница 6', exact: true })).toBeVisible();
+  await events.last().scrollIntoViewIfNeeded();
+  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+  await history.getByRole('button', { name: 'Страница 6', exact: true }).click();
+  await expect(events.first()).toContainText('History event 30.');
+  await expect(history.getByText('31–35 из 35', { exact: true })).toBeVisible();
+  await expect(events).toHaveCount(5);
+  await expect(next).toBeDisabled();
+  expect(search().get('size')).toBe('6');
+
+  await history.getByRole('button', { name: 'Страница 1', exact: true }).click();
+  await expect(history.getByText('1–6 из 35', { exact: true })).toBeVisible();
+  expect(search().get('size')).toBe('6');
 });
 
 test('failed history polling retains its window and the next ordinary poll can recover @desktop', async ({ page }) => {
