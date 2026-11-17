@@ -22,6 +22,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     logouts: 0,
     assigned: false,
     decisionAvailable: true,
+    externalResultAvailable: false,
     resolved: false,
     generalIssue: false,
     revision: 1,
@@ -86,6 +87,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
             ...(state.assigned ? [] : ['TAKE_OWNERSHIP']),
             'RECONCILE',
             ...(state.decisionAvailable ? ['ACKNOWLEDGE_DIFFERENCE'] : []),
+            ...(state.externalResultAvailable ? ['APPLY_EXTERNAL_RESULT'] : []),
           ],
     resolution: state.resolved
       ? {
@@ -544,28 +546,28 @@ test('conflict recovery freezes the rename fields until the read closes the form
 });
 
 for (const general of [false, true]) {
-  test('closing an accepted decision preserves read recovery for ' + (general ? 'feed' : 'task'), async ({ page }) => {
-    const state = await mockApi(page, 'OPERATOR');
-    state.generalIssue = general;
-    state.assigned = true;
-    await page.goto('/tests/command-outcome.html?screen=issue');
-    const label = general ? 'Закрыть общую проблему' : 'Завершить разбор';
-    await selectChoice(page, 'Действие', label);
-    const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
-    await reason.fill('Accepted decision');
-    await page.getByRole('button', { name: label, exact: true }).click();
-    await expect(page.getByRole('alert').filter({ hasText: 'Решение сохранено.' })).toBeVisible();
-    await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
-    await expect(reason).toHaveValue('');
-    await expect(reason).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Применить решение', exact: true })).toBeDisabled();
-    expect(state.commands).toHaveLength(1);
-    state.failRead = false;
-    await page.getByRole('button', { name: 'Повторить обновление', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
-    await expect(reason).toHaveCount(0);
-    expect(state.commands).toHaveLength(1);
-  });
+  test(
+    'an accepted decision closes the form and preserves read recovery for ' + (general ? 'feed' : 'task'),
+    async ({ page }) => {
+      const state = await mockApi(page, 'OPERATOR');
+      state.generalIssue = general;
+      state.assigned = true;
+      await page.goto('/tests/command-outcome.html?screen=issue');
+      const label = general ? 'Закрыть общую проблему' : 'Завершить разбор';
+      const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
+      await reason.fill('Accepted decision');
+      await page.getByRole('button', { name: label, exact: true }).click();
+      await expect(page.getByRole('alert').filter({ hasText: 'Решение сохранено.' })).toBeVisible();
+      await expect(reason).toHaveCount(0);
+      await expect(page.getByRole('form', { name: 'Решение оператора' })).toHaveCount(0);
+      expect(state.commands).toHaveLength(1);
+      state.failRead = false;
+      await page.getByRole('button', { name: 'Повторить обновление', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
+      await expect(reason).toHaveCount(0);
+      expect(state.commands).toHaveLength(1);
+    },
+  );
 }
 
 test('accepted rename and repeated read failures never resubmit PATCH', async ({ page }) => {
@@ -611,26 +613,76 @@ test('accepted ownership is not repeated to recover a failed issue read', async 
   expect(state.commands).toHaveLength(1);
 });
 
-test('accepted decision is preserved when refresh fails and recovery performs no second POST', async ({ page }) => {
+test('decision actions stay distinct and reset only the unsaved fields', async ({ page }) => {
   const state = await mockApi(page, 'OPERATOR');
   await page.goto('/tests/command-outcome.html?screen=issue');
-  await selectChoice(page, 'Действие', 'Завершить разбор');
-  await page.getByRole('textbox', { name: 'Причина решения', exact: true }).fill('Verified fixture');
+  const form = page.getByRole('form', { name: 'Решение оператора', exact: true });
+  const reason = form.getByRole('textbox', { name: 'Причина решения', exact: true });
+  const reset = form.getByRole('button', { name: 'Сбросить черновик', exact: true });
+  await expect(form.getByRole('combobox', { name: 'Действие', exact: true })).toHaveCount(0);
+  await expect(form).toContainText('Результат в приложении сохранится.');
+  await expect(reset).toHaveCount(0);
+  const submit = form.getByRole('button', { name: 'Завершить разбор', exact: true });
+  await expect(submit).toBeDisabled();
+  await reason.fill('Unsaved decision');
+  await expect(submit).toBeEnabled();
+  await expect(submit).toHaveAttribute('data-variant', 'default');
+  await expect(reset).toHaveAttribute('data-variant', 'outline');
+  const widths = test.info().project.name === 'mobile' ? [390, 320] : [1440, 1000];
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 844 });
+    const [a, b] = await Promise.all([submit.boundingBox(), reset.boundingBox()]);
+    expect(a && b && Math.max(b.x - a.x - a.width, b.y - a.y - a.height)).toBeGreaterThanOrEqual(8);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
+  await reset.click();
+  const confirm = page.getByRole('alertdialog', { name: 'Сбросить черновик?', exact: true });
+  await expect(confirm).toContainText('Сбросятся выбранное действие и введённая причина.');
+  await confirm.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
+  await expect(reason).toHaveValue('Unsaved decision');
+  await reset.click();
+  await confirm.getByRole('button', { name: 'Сбросить', exact: true }).click();
+  await expect(reason).toHaveValue('');
+  await expect(submit).toBeDisabled();
+  await expect(reset).toHaveCount(0);
+  expect(state.commands).toHaveLength(0);
+});
+
+test('decision requires a choice only while several actions are available', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  state.externalResultAvailable = true;
+  await page.goto('/tests/command-outcome.html?screen=issue');
+  const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
+  await reason.fill('Verified external result');
+  await expect(page.getByRole('button', { name: 'Сохранить решение', exact: true })).toBeDisabled();
+  await selectChoice(page, 'Действие', 'Принять внешний результат');
+  const accept = page.getByRole('button', { name: 'Принять внешний результат', exact: true });
+  await expect(accept).toBeEnabled();
+
+  state.externalResultAvailable = false;
+  state.revision = 2;
+  await page.getByRole('button', { name: 'Обновить', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Действие', exact: true })).toHaveCount(0);
+  await expect(accept).toBeDisabled();
+  expect(state.commands).toHaveLength(0);
+
+  await page.getByRole('button', { name: 'Использовать актуальные данные' }).click();
+  await expect(reason).toHaveValue('Verified external result');
   await page.getByRole('button', { name: 'Завершить разбор', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Решение сохранено.' })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Причина решения', exact: true })).toHaveValue('Verified fixture');
-  await expect(page.getByRole('textbox', { name: 'Причина решения', exact: true })).toBeDisabled();
-  expect(state.commands).toHaveLength(1);
-  state.failRead = false;
-  await page.getByRole('button', { name: 'Повторить обновление' }).click();
-  await expect(page.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
-  expect(state.commands).toHaveLength(1);
+  expect(state.commands.map((command) => command.body)).toEqual([
+    {
+      expectedIssueRevision: 2,
+      reconciliationId: snapshotId,
+      action: 'ACKNOWLEDGE_DIFFERENCE',
+      reason: 'Verified external result',
+    },
+  ]);
 });
 
 test('operator decision draft survives cancelled departure and requires explicit discard', async ({ page }) => {
   await mockApi(page, 'OPERATOR');
   await page.goto('/tests/command-outcome.html?screen=issue');
-  await selectChoice(page, 'Действие', 'Завершить разбор');
   const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
   await reason.fill('Unsubmitted explanation');
   await page.getByRole('link', { name: 'Задания', exact: true }).click();
@@ -646,7 +698,6 @@ test('operator decision draft survives cancelled departure and requires explicit
 test('refetch preserves a decision draft and requires explicit adoption of the new basis', async ({ page }) => {
   const state = await mockApi(page, 'OPERATOR');
   await page.goto('/tests/command-outcome.html?screen=issue');
-  await selectChoice(page, 'Действие', 'Завершить разбор');
   await page.getByRole('textbox', { name: 'Причина решения', exact: true }).fill('Preserved explanation');
   state.revision = 2;
   state.latestSnapshot = 'new-snapshot';
@@ -671,7 +722,6 @@ test('refetch preserves a decision draft and requires explicit adoption of the n
 test('external resolution keeps an unsubmitted draft until the operator discards it', async ({ page }) => {
   const state = await mockApi(page, 'OPERATOR');
   await page.goto('/tests/command-outcome.html?screen=issue');
-  await selectChoice(page, 'Действие', 'Завершить разбор');
   const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
   await reason.fill('Unsubmitted explanation');
   state.resolved = true;
@@ -681,11 +731,11 @@ test('external resolution keeps an unsubmitted draft until the operator discards
   await expect(reason).toHaveValue('Unsubmitted explanation');
   await expect(page.getByRole('alert').filter({ hasText: 'Черновик сохранён.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Завершить разбор', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Закрыть черновик', exact: true }).click();
+  await page.getByRole('button', { name: 'Сбросить черновик', exact: true }).click();
   await page.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
   await expect(reason).toBeFocused();
-  await page.getByRole('button', { name: 'Закрыть черновик', exact: true }).click();
-  await page.getByRole('button', { name: 'Не сохранять', exact: true }).click();
+  await page.getByRole('button', { name: 'Сбросить черновик', exact: true }).click();
+  await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
   await expect(reason).toHaveCount(0);
   expect(state.commands).toHaveLength(0);
 });
@@ -925,7 +975,6 @@ test('one issue guard preserves a decision draft while reconciliation is recover
   const state = await mockApi(page, 'OPERATOR');
   state.badSnapshotReceipt = {};
   await page.goto('/tests/command-outcome.html?screen=issue');
-  await selectChoice(page, 'Действие', 'Завершить разбор');
   const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
   await reason.fill('Draft must survive reconciliation');
   await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
@@ -1326,7 +1375,6 @@ test('general feed decision validates Unicode and submits no fabricated reconcil
   const state = await mockApi(page, 'OPERATOR');
   state.generalIssue = true;
   await page.goto('/tests/command-outcome.html?screen=issue');
-  await selectChoice(page, 'Действие', 'Закрыть общую проблему');
   const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
   const submit = page.getByRole('button', { name: 'Закрыть общую проблему', exact: true });
   await reason.fill('\u0085');
@@ -1355,7 +1403,6 @@ test('general issue draft survives cancelled logout and retains its command cont
   const state = await mockApi(page, 'OPERATOR');
   state.generalIssue = true;
   await page.goto('/tests/command-outcome.html?screen=issue');
-  await selectChoice(page, 'Действие', 'Закрыть общую проблему');
   const reason = 'Проверена общая проблема ленты 🧪';
   await page.getByRole('textbox', { name: 'Причина решения', exact: true }).fill(reason);
   await openAccountMenu(page);

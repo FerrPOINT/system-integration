@@ -1,6 +1,7 @@
 import type { RefObject } from 'react';
 import { reasonCodePointLimit, reasonMaxLength } from '../../../shared/lib/form-rules';
 import type { Issue } from '../../../../build/generated/openapi/client';
+import { ActionGroup } from '../../../shared/ui/action-group';
 import { Button } from '../../../shared/ui/button';
 import { Notice } from '../../../shared/ui/notice';
 import { FormField } from '../../../shared/ui/form-field';
@@ -21,28 +22,38 @@ export function DecisionForm({
   reasonInput: RefObject<HTMLTextAreaElement | null>;
 }) {
   const { action, reason, command, update, actions } = model;
-  if (!actions.length && !model.dirty && !command.isPending && !command.isSuccess) return null;
+  if (command.isSuccess)
+    return (
+      <CommandRefresh
+        message="Решение сохранено."
+        error={update.error}
+        pending={update.isPending}
+        onRetry={model.refresh}
+      />
+    );
+  if (!actions.length && !model.dirty && !command.isPending) return null;
   return (
-    <>
-      <form
-        aria-label="Решение оператора"
-        aria-busy={command.isPending}
-        onSubmit={(event) => {
-          event.preventDefault();
-          model.submit();
-        }}
-      >
-        {model.stale && !command.isSuccess && (
-          <Notice tone="warning" role="alert">
-            <p>Разбор или доступные действия изменились. Черновик сохранён.</p>
-            {issue.status === 'OPEN' && (issue.latestReconciliationId || !issue.taskId) && (
-              <Button type="button" disabled={model.busy} onClick={model.rebase}>
-                Использовать актуальные данные
-              </Button>
-            )}
-          </Notice>
-        )}
-        <fieldset className="ui-form-fieldset ui-form" disabled={model.busy || command.isSuccess}>
+    <form
+      className="ui-form"
+      aria-label="Решение оператора"
+      aria-busy={command.isPending}
+      onSubmit={(event) => {
+        event.preventDefault();
+        model.submit();
+      }}
+    >
+      {model.stale && (
+        <Notice tone="warning" role="alert">
+          <p>Разбор или доступные действия изменились. Черновик сохранён.</p>
+          {issue.status === 'OPEN' && (issue.latestReconciliationId || !issue.taskId) && (
+            <Button type="button" disabled={model.busy} onClick={model.rebase}>
+              Использовать актуальные данные
+            </Button>
+          )}
+        </Notice>
+      )}
+      <fieldset className="ui-form-fieldset ui-form" disabled={model.busy}>
+        {actions.length > 1 && (
           <FormField id="decision-action" label="Действие" required>
             {(attrs) => (
               <Select
@@ -54,57 +65,53 @@ export function DecisionForm({
               />
             )}
           </FormField>
-          {action === 'RETRY' && (
-            <Notice appearance="inline">Обмен продолжится с тем же ID операции и исходным запросом.</Notice>
+        )}
+        {action === 'RETRY' && (
+          <Notice appearance="inline">Обмен продолжится с тем же ID операции и исходным запросом.</Notice>
+        )}
+        {action === 'APPLY_EXTERNAL_RESULT' && (
+          <Notice appearance="inline">Результат выбранной сверки будет применён к заданию, разбор завершится.</Notice>
+        )}
+        {action === 'ACKNOWLEDGE_DIFFERENCE' && (
+          <Notice>
+            Результат в приложении сохранится. Если отправка приостановлена, она будет окончательно остановлена.
+          </Notice>
+        )}
+        {action === 'ACKNOWLEDGE_FEED_ISSUE' && (
+          <Notice>
+            Закрытие фиксирует ваше решение. Оно не исправляет внешний источник и не возобновляет приостановленную
+            ленту.
+          </Notice>
+        )}
+        <FormField
+          id="decision-reason"
+          label="Причина решения"
+          required
+          hint={`До ${reasonCodePointLimit} символов. Укажите, что проверили и почему выбрали это действие.`}
+        >
+          {(attrs) => (
+            <Textarea
+              {...attrs}
+              ref={reasonInput}
+              value={reason}
+              maxLength={reasonMaxLength}
+              rows={3}
+              onChange={(event) => model.changeReason(event.target.value)}
+            />
           )}
-          {action === 'APPLY_EXTERNAL_RESULT' && (
-            <Notice appearance="inline">Результат выбранной сверки будет применён к заданию, разбор завершится.</Notice>
-          )}
-          {action === 'ACKNOWLEDGE_DIFFERENCE' && (
-            <Notice>
-              Локальный результат сохранится. Если доставка приостановлена, она будет окончательно остановлена.
-            </Notice>
-          )}
-          {action === 'ACKNOWLEDGE_FEED_ISSUE' && (
-            <Notice>
-              Закрытие фиксирует ваше решение. Оно не исправляет внешний источник и не возобновляет приостановленную
-              ленту.
-            </Notice>
-          )}
-          <FormField
-            id="decision-reason"
-            label="Причина решения"
-            required
-            hint={`До ${reasonCodePointLimit} символов. Укажите, что проверили и почему выбрали это действие.`}
-          >
-            {(attrs) => (
-              <Textarea
-                {...attrs}
-                ref={reasonInput}
-                value={reason}
-                maxLength={reasonMaxLength}
-                rows={3}
-                onChange={(event) => model.changeReason(event.target.value)}
-              />
-            )}
-          </FormField>
-          <ErrorMessage error={command.error} />
-          <Button variant="default" disabled={!model.canSubmit}>
-            {command.isPending ? 'Сохраняем решение…' : action ? actionLabels[action] : 'Применить решение'}
-          </Button>
-        </fieldset>
-        <CommandRefresh
-          message="Решение сохранено."
-          error={update.error}
-          pending={update.isPending}
-          onRetry={model.refresh}
-        />
+        </FormField>
+        <ErrorMessage error={command.error} />
+      </fieldset>
+      <ActionGroup align="start">
+        <Button type="submit" variant="default" disabled={!model.canSubmit}>
+          {command.isPending ? 'Сохраняем решение…' : action ? actionLabels[action] : 'Сохранить решение'}
+        </Button>
         {model.dirty && (
-          <Button type="button" disabled={model.busy} onClick={model.close}>
-            {command.isSuccess ? 'Закрыть' : 'Закрыть черновик'}
+          <Button type="button" disabled={model.busy} onClick={model.resetDraft}>
+            Сбросить черновик
           </Button>
         )}
-      </form>
-    </>
+      </ActionGroup>
+    </form>
   );
 }

@@ -54,7 +54,7 @@ test('TC-03 / TC-07: lost reply, independent execution, reconciliation and opera
   const evidence = page.getByRole('region', { name: 'Диагностика первого события', exact: true });
   await expect(evidence).toContainText('Сохранённые данные на момент ошибки');
   await expect(page.getByRole('link', { name: 'Открыть последнюю сверку', exact: true })).toHaveCount(1);
-  await expect(actions.getByRole('button', { name: 'Применить решение', exact: true })).toBeDisabled();
+  await expect(actions.getByRole('button', { name: 'Сохранить решение', exact: true })).toBeDisabled();
   const panels = await page.locator('.issue-workspace').evaluate((el) =>
     Array.from(el.children).map((child) => {
       const { top, bottom, left, right } = child.getBoundingClientRect();
@@ -150,8 +150,8 @@ test('TC-06 / TC-07: conflicting external input is stopped explicitly without ac
   await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Обнаружено расхождение' })).toBeVisible();
   await page.getByRole('link', { name: 'Перейти к разбору и решению' }).click();
-  await expect(page.getByRole('option', { name: 'Принять внешний результат', exact: true })).toHaveCount(0);
-  await selectChoice(page, 'Действие', 'Завершить разбор');
+  await expect(page.getByRole('combobox', { name: 'Действие', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Завершить разбор', exact: true })).toBeDisabled();
   await page
     .getByLabel('Причина решения *', { exact: true })
     .fill('ID занят операцией с другим запросом, прекращаю отправку');

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { login, selectChoice } from './support';
+import { login } from './support';
 import { loadUiEnvironment } from '../load/environment.mjs';
 import { showcaseDirectory } from '../../seed/report.mjs';
 
@@ -88,7 +88,7 @@ test('showcase: operator sees assigned issues, saved decisions and general feed 
   }
   await page.goto('/issues/' + data.generalIssues.find((item) => item.status === 'OPEN')!.issueId);
   await expect(page.getByText('Общая проблема ленты', { exact: true })).toBeVisible();
-  await selectChoice(page, 'Действие', 'Закрыть общую проблему');
+  await expect(page.getByRole('combobox', { name: 'Действие', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Закрыть общую проблему', exact: true })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
