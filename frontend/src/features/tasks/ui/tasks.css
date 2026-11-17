@@ -97,6 +97,9 @@
   min-width: 0;
   min-height: 0;
 }
+.history-panel .paged-viewport {
+  scrollbar-width: none;
+}
 @media (max-width: 760px) {
   .app-shell > main > .task-workspace {
     flex: none;
