@@ -27,6 +27,7 @@ async function mockApi(
     totalTasks?: number;
     signedIn?: boolean;
     technicalHistory?: boolean;
+    historyActions?: boolean;
   } = {},
 ) {
   const reads: string[] = [];
@@ -85,6 +86,17 @@ async function mockApi(
               summary: control.technicalHistory
                 ? 'Попытка ' + (pageNumber * size + n + 1) + ': PUT'
                 : 'History event ' + (pageNumber * size + n),
+              ...(control.historyActions && pageNumber * size + n === 0
+                ? {
+                    actor: 'USER',
+                    actorUserId: userId,
+                    actorUsername: 'operator',
+                    type: 'RECONCILED',
+                    summary: 'Сверка обнаружила расхождение',
+                    reconciliationId: snapshotId,
+                    issueId: taskId,
+                  }
+                : {}),
             })),
             page: pageNumber,
             totalItems: historyCount,
@@ -268,6 +280,40 @@ test('task history exposes descriptions and adapts the left pane to viewport hei
   await expect(page).toHaveURL(/page=1/);
   await settledSize();
   await fits();
+});
+
+test('mixed-height history fits all nine entries and separates the two event links', async ({ page }, info) => {
+  const desktop = info.project.name === 'desktop';
+  await page.setViewportSize(desktop ? { width: 1513, height: 1243 } : { width: 320, height: 720 });
+  await mockApi(page, 'OPERATOR', 9, { technicalHistory: true, historyActions: true });
+  await page.goto('/tasks/' + taskId + '?size=8&page=0');
+  const history = page.getByRole('region', { name: 'История', exact: true });
+  const event = history.locator('[data-page-item]').filter({
+    has: page.getByRole('link', { name: 'Открыть сохранённую сверку', exact: true }),
+  });
+  const reconciliation = event.getByRole('link', { name: 'Открыть сохранённую сверку', exact: true });
+  const issue = event.getByRole('link', { name: 'Открыть разбор', exact: true });
+  await expect(reconciliation).toHaveAttribute('href', '/tasks/' + taskId + '/reconciliations/' + snapshotId);
+  await expect(issue).toHaveAttribute('href', '/issues/' + taskId);
+
+  const first = (await reconciliation.boundingBox())!;
+  const second = (await issue.boundingBox())!;
+  const gap = second.y >= first.y + first.height ? second.y - first.y - first.height : second.x - first.x - first.width;
+  expect.soft(gap).toBeGreaterThanOrEqual(6);
+  await expect(history.locator('[data-page-item]')).toHaveCount(9);
+  if (desktop) {
+    await expect(history.getByText('Всего: 9', { exact: true })).toBeVisible();
+    expect(
+      await history
+        .locator('.paged-viewport')
+        .evaluate((viewport) => viewport.scrollHeight <= viewport.clientHeight + 1),
+    ).toBe(true);
+  } else {
+    await expect(history.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      await page.evaluate(() => document.documentElement.clientWidth),
+    );
+  }
 });
 
 test('failed history polling retains its window and the next ordinary poll can recover @desktop', async ({ page }) => {
