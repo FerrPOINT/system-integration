@@ -15,9 +15,11 @@ test(
     mkdirSync(join(root, '.local'), { recursive: true });
     using directory = mkdtempDisposableSync(join(root, '.local', 'gradle-check-'));
     const fixture = directory.path;
+    const javaExecutable = process.platform === 'win32' ? 'java.exe' : 'java';
+    const java = process.env.JAVA_HOME ? join(process.env.JAVA_HOME, 'bin', javaExecutable) : javaExecutable;
     const run = (...args) =>
       execFileSync(
-        'java',
+        java,
         [
           '-Xmx64m',
           '-jar',

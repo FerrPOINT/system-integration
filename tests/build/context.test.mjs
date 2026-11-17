@@ -27,6 +27,8 @@ test('Docker COPY excludes private env variants and local artifacts at every dep
     '.git/.env.example',
     'frontend/node_modules/vendor/.env.example',
     'backend/build/.env.example',
+    'tests/build/.env.production',
+    'tests/build/.local/probe',
     'backend/.gradle/.env.example',
   ];
   const retained = [
@@ -35,6 +37,7 @@ test('Docker COPY excludes private env variants and local artifacts at every dep
     'nested/deep/.env.example',
     'frontend/src/probe.ts',
     'backend/src/Probe.java',
+    'tests/build/gradle.test.mjs',
   ];
   mkdirSync(context);
   for (const name of [...excluded, ...retained]) {
