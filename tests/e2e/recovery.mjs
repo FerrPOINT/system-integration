@@ -430,9 +430,12 @@ try {
     assert.match(shutdownLog, /HikariPool-1 - Shutdown completed/, service + ' database pool did not close');
     return { service, exitCode: state.ExitCode, httpShutdownComplete: true, databasePoolClosed: true };
   });
-  composeRun(['up', '-d', '--no-build', '--no-deps', '--wait', 'backend', 'emulator']);
-  api = await login();
+  // Restore the dependency before restarting the sender so due jobs cannot spend
+  // another attempt on the simulated outage while the test is clearing it.
+  composeRun(['up', '-d', '--no-build', '--no-deps', '--wait', 'emulator']);
   for (const item of burst) await fault(item.operationId);
+  composeRun(['up', '-d', '--no-build', '--no-deps', '--wait', 'backend']);
+  api = await login();
   for (const item of burst) {
     // Recovery can require GET then PUT, each after the contractual 60 s maximum backoff.
     await completed(item, 150_000);
