@@ -1,11 +1,10 @@
 import { lazy } from 'react';
-import { Navigate, Outlet, useOutletContext, type RouteObject } from 'react-router-dom';
+import { Link, Navigate, Outlet, useOutletContext, type RouteObject } from 'react-router-dom';
 import { App } from './app';
 import { RootErrorBoundary, RouteErrorBoundary } from './root-error-boundary';
 import type { SessionRouteContext } from './route-context';
 import type { TaskRouteContext } from '../features/tasks/ui/task-route-context';
 import { PageHeader } from '../shared/ui/page-header';
-import { BackLink } from '../shared/ui/back-link';
 
 const TaskList = lazy(() =>
   import('../features/tasks/ui/task-list-page').then((module) => ({ default: module.TaskList })),
@@ -67,7 +66,7 @@ export const appRoutes: RouteObject[] = [
             path: '*',
             element: (
               <section>
-                <PageHeader title="Страница не найдена" back={<BackLink to="/tasks">К заданиям</BackLink>} />
+                <PageHeader title="Страница не найдена" actions={<Link to="/tasks">К заданиям</Link>} />
               </section>
             ),
           },

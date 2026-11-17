@@ -9,7 +9,7 @@ import { PageHeader } from '../../../shared/ui/page-header';
 import { Button } from '../../../shared/ui/button';
 import { Plus } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet } from 'react-router-dom';
 import type { GetSession200 } from '../../../../build/generated/openapi/client';
 import { Loading, Pagination, RefreshButton } from '../../../shared/ui/feedback';
 import { useMediaQuery } from '../../../shared/ui/use-media-query';
@@ -22,8 +22,6 @@ import type { TaskRouteContext } from './task-route-context';
 export function TaskList({ user }: { user: GetSession200 }) {
   const createTrigger = useRef<HTMLAnchorElement>(null);
   const mobile = useMediaQuery('(max-width: 760px)');
-  const location = useLocation();
-  const returnState = { returnTo: location.pathname + location.search };
   const { search, pagination, filters, validParameters, valid, collection, changeFilters, resetFilters } =
     useTaskList(mobile);
   const { page, size, valid: validPage, changePage } = pagination;
@@ -161,7 +159,7 @@ export function TaskList({ user }: { user: GetSession200 }) {
                   />
                 </Card>
               ) : (
-                <TaskRecords items={tasksItems} size={size} mobile={mobile} returnState={returnState} />
+                <TaskRecords items={tasksItems} size={size} mobile={mobile} />
               )}
             </>
           )}

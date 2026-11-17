@@ -28,7 +28,6 @@ export function IssueList() {
   const [search, setSearch] = useSearchParams();
   const mobile = useMediaQuery('(max-width: 760px)');
   const location = useLocation();
-  const returnState = { returnTo: location.pathname + location.search };
   const { page, size, valid: validPage, viewportRef, changePage } = usePagination(mobile ? 'feed' : 'pages');
   const status = search.get('status') || 'OPEN';
   const valid = validPage && ['OPEN', 'RESOLVED'].includes(status);
@@ -130,12 +129,7 @@ export function IssueList() {
                   {issuesItems.map((issue) => (
                     <Card asChild key={issue.issueId} data-page-item>
                       <li data-record-id={issue.issueId}>
-                        <Link
-                          data-issue-link
-                          className="mobile-card-link"
-                          to={'/issues/' + issue.issueId}
-                          state={returnState}
-                        >
+                        <Link data-issue-link className="mobile-card-link" to={'/issues/' + issue.issueId}>
                           <CardContent density="compact" className="mobile-card-content">
                             <div className="mobile-card-heading">
                               <CardTitle asChild className="ui-truncate">
@@ -188,7 +182,6 @@ export function IssueList() {
                               className="ui-truncate"
                               title={kinds[issue.kind]}
                               to={'/issues/' + issue.issueId}
-                              state={returnState}
                             >
                               {kinds[issue.kind]}
                             </Link>

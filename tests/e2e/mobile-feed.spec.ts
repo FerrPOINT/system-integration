@@ -88,7 +88,7 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
     expect(requests.filter((window) => !aborted.has(window)).map((window) => window.page)).toEqual([0, 1, 1, 2]);
     expect(requests.every((window) => window.size === 20)).toBe(true);
 
-    // A whole card is a native link; both browser Back and the detail arrow keep the feed and position.
+    // A whole card is a native link; browser Back keeps the feed and position.
     const target = items[25];
     await page.route('**/api/tasks/' + target.taskId, (route) => route.fulfill({ json: target }));
     await page.route('**/api/tasks/' + target.taskId + '/history?*', (route) =>
@@ -105,17 +105,14 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
     const link = page.getByRole('link', { name: target.title, exact: true });
     await link.scrollIntoViewIfNeeded();
     const offset = await page.evaluate(() => scrollY);
-    for (const arrow of [false, true]) {
-      await link.click();
-      await expect(page.locator('main h1')).toHaveText(target.title);
-      expect(await page.evaluate(() => scrollY)).toBe(0);
-      expect((await page.locator('main h1').boundingBox())!.width).toBeGreaterThan(page.viewportSize()!.width - 40);
-      if (arrow) await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
-      else await page.goBack();
-      await expect(cards).toHaveCount(45);
-      expect(new URL(page.url()).searchParams.get('createdFrom')).toBe('2026-01-01T00:00:00Z');
-      await expect.poll(() => page.evaluate(() => scrollY)).toBeCloseTo(offset, 0);
-    }
+    await link.click();
+    await expect(page.locator('main h1')).toHaveText(target.title);
+    expect(await page.evaluate(() => scrollY)).toBe(0);
+    expect((await page.locator('main h1').boundingBox())!.width).toBeGreaterThan(page.viewportSize()!.width - 40);
+    await page.goBack();
+    await expect(cards).toHaveCount(45);
+    expect(new URL(page.url()).searchParams.get('createdFrom')).toBe('2026-01-01T00:00:00Z');
+    await expect.poll(() => page.evaluate(() => scrollY)).toBeCloseTo(offset, 0);
     await page.getByRole('button', { name: 'Фильтры заданий', exact: true }).click();
     await selectChoice(page, 'Результат', 'Отклонено');
     await page.getByRole('button', { name: 'Готово', exact: true }).click();
