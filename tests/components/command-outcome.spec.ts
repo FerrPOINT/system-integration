@@ -11,6 +11,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     username: 'fixture',
     rejectHeldWrite: false,
     failRead: false,
+    failReadAfterWrite: true,
     emptyIssues: false,
     issueReads: [] as string[],
     failSession: false,
@@ -181,7 +182,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
               title: state.reconciliationStatus === 404 ? 'Задание не найдено' : 'Сервис недоступен',
             },
           });
-        state.failRead = true;
+        state.failRead = state.failReadAfterWrite;
         if (path.endsWith('/take')) {
           state.assigned = true;
           return route.fulfill({ json: issue() });
@@ -587,6 +588,40 @@ test('accepted rename and repeated read failures never resubmit PATCH', async ({
   await page.getByRole('button', { name: 'Повторить обновление' }).click();
   await expect(page.getByRole('heading', { name: 'Accepted title', exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Новое название' })).toHaveCount(0);
+  expect(state.commands).toHaveLength(1);
+});
+
+test('accepted reconciliation stays on the source screen until the saved view can render', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  state.failReadAfterWrite = false;
+  const path = '/api/tasks/' + taskId + '/reconciliations/' + snapshotId;
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**' + path, async (route) => {
+    await ready;
+    await route.fallback();
+  });
+
+  await page.goto('/tests/command-outcome.html');
+  const start = page.getByRole('button', { name: 'Выполнить сверку', exact: true });
+  const oldTitle = page.getByRole('heading', { name: 'Original task', exact: true });
+  const resultTitle = page.getByRole('heading', { name: 'Сохранённая сверка', exact: true });
+  try {
+    const read = page.waitForRequest('**' + path);
+    await start.click();
+    await read;
+    await expect(oldTitle).toBeVisible();
+    await expect(start).toBeDisabled();
+    await expect(resultTitle).toHaveCount(0);
+    await expect(page.getByText('Сверка сохранена.', { exact: false })).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await expect(resultTitle).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Сверка недоступна', exact: true })).toBeVisible();
+  expect(state.reads.filter((read) => read === path)).toHaveLength(1);
   expect(state.commands).toHaveLength(1);
 });
 
