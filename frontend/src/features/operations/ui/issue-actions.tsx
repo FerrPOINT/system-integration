@@ -102,15 +102,13 @@ export function IssueActions({ issue }: { issue: Issue }) {
         returnFocusRef={guard.exitFocusRef ?? (leavingUnresolved ? reconcileTrigger : reasonInput)}
         onCancel={guard.cancel}
         onDiscard={guard.discard}
-        title={leavingUnresolved ? 'Уйти без проверки сверки?' : guard.navigating ? undefined : 'Сбросить черновик?'}
+        title={leavingUnresolved ? 'Уйти без проверки сверки?' : undefined}
         description={
           leavingUnresolved
             ? 'Сверка могла сохраниться. При уходе со страницы вы потеряете возможность безопасно повторить исходную команду. Несохранённый черновик также будет потерян.'
-            : guard.navigating
-              ? undefined
-              : 'Сбросятся выбранное действие и введённая причина.'
+            : undefined
         }
-        discardLabel={leavingUnresolved ? 'Уйти без проверки' : guard.navigating ? undefined : 'Сбросить'}
+        discardLabel={leavingUnresolved ? 'Уйти без проверки' : undefined}
         cancelLabel={leavingUnresolved ? 'Вернуться к проверке' : undefined}
       />
     </>

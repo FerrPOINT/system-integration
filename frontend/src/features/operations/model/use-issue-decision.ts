@@ -26,23 +26,15 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
   const busy = command.isPending || otherCommand.pending;
   const guard = useFormNavigationGuard({ dirty: dirty || otherCommand.unresolved, pending: busy });
   const stale = isDecisionStale(basis, issue) || Boolean(action && !actions.includes(action));
-  const discardDraft = () => {
+  const clearDraft = () => {
     resetCommand();
     setDraft(null);
   };
-  const refresh = () =>
-    update.mutate(
-      { issueId: issue.issueId, taskId: issue.taskId },
-      {
-        onSuccess: () => {
-          resetCommand();
-          setDraft(null);
-        },
-      },
-    );
+  const refresh = () => update.mutate({ issueId: issue.issueId, taskId: issue.taskId }, { onSuccess: clearDraft });
   function editDraft(nextAction: DecisionAction | '', nextReason: string) {
-    if (!stale && nextAction === singleAction && !nextReason) {
-      discardDraft();
+    const hasSelection = actions.length > 1 && nextAction && actions.includes(nextAction);
+    if (!nextReason && !hasSelection) {
+      clearDraft();
       return;
     }
     guard.protect();
@@ -80,7 +72,6 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
     canSubmit: input !== null,
     changeAction: (value: DecisionAction) => editDraft(value, reason),
     changeReason: (value: string) => editDraft(action, value),
-    resetDraft: () => guard.requestClose(discardDraft),
     rebase() {
       if (!draft || issue.status !== 'OPEN' || (!issue.latestReconciliationId && issue.taskId)) return;
       const nextAction = action && actions.includes(action) ? action : singleAction;
