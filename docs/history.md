@@ -38,3 +38,9 @@ Frontend-аудит и интеграция PR #15: [аудит](https://github.
 Слияние PR #18, локальная квалификация его кандидата 2fcdc18 и границы
 неповторённых проверок — в [стадии main 633bcbd](https://github.com/FerrPOINT/system-integration/blob/633bcbd6cb45cf65e2c07386e94df79650d4afae/docs/current-stage.md).
 Последующая подготовка к приёмке не переносит эти результаты на другой commit.
+
+Публичная квалификация V13 и проверка первичной публикации сохранены
+в [снимке после PR #23](https://github.com/FerrPOINT/system-integration/blob/d2a6da70890c65805569c8f32e00a218f3127ef1/docs/current-stage.md).
+Результаты изменений сборки, сида и внешнего генератора приведены в
+[PR #24](https://github.com/FerrPOINT/system-integration/pull/24) и
+[PR #25](https://github.com/FerrPOINT/system-integration/pull/25).

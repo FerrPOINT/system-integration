@@ -35,18 +35,17 @@ V13 выделяет остановки чтения ленты в отдель�
 не должен работать одновременно с новой политикой и миграциями.
 Применённые Flyway-миграции не редактируются и не удаляются.
 
-Команды выполняются после подготовки точных образов и image override.
-В текущей установке runtime inputs находятся в /opt/dev/system-integration/.local/runtime,
-а приватный environment file — отдельно в /opt/dev/system-integration/.env.
-Перед запуском на другой установке уточните оба пути по Compose labels.
-Ниже images.yml — уже проверенный файл выбранной установки:
+Укажите абсолютные пути к каталогу выбранной установки и её приватному
+environment file в `SI_RUNTIME_DIR` и `SI_RUNTIME_ENV_FILE`. Сверьте реальные
+Compose labels и подготовьте `images.yml` с точными тегами проверенных образов.
+Следующие команды применяются на существующей установке с исправным PostgreSQL.
 
 ~~~sh
-cd /opt/dev/system-integration/.local/runtime
-export SI_RUNTIME_ENV_FILE=/opt/dev/system-integration/.env
+cd "$SI_RUNTIME_DIR" || exit 1
+test -f "$SI_RUNTIME_ENV_FILE" || exit 1
 docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app config --quiet
 docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app stop backend emulator
-docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app up -d --no-build --wait
+docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app up -d --no-build --no-deps --wait backend emulator frontend
 systemctl status system-integration-tunnel.service
 ~~~
 
