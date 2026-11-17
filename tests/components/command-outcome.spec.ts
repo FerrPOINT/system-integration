@@ -593,9 +593,22 @@ test('accepted rename and repeated read failures never resubmit PATCH', async ({
 test('accepted reconciliation retries reads and opens the same saved snapshot', async ({ page }) => {
   const state = await mockApi(page, 'OPERATOR');
   await page.goto('/tests/command-outcome.html');
-  await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
+  const start = page.getByRole('button', { name: 'Выполнить сверку', exact: true });
+  await expect(start).toBeVisible();
+  let releaseRead!: () => void;
+  state.holdRead = new Promise<void>((resolve) => {
+    releaseRead = resolve;
+  });
+  try {
+    await start.click();
+    await expect(page.getByRole('status').filter({ hasText: 'Сверка сохранена.' })).toBeVisible();
+    await expect(start).toHaveCount(0);
+    expect(state.commands).toHaveLength(1);
+  } finally {
+    releaseRead();
+  }
   await expect(page.getByRole('alert').filter({ hasText: 'Сверка сохранена.' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Выполнить сверку', exact: true })).toBeDisabled();
+  await expect(start).toHaveCount(0);
   state.failRead = false;
   await page.getByRole('button', { name: 'Повторить обновление' }).click();
   await expect(page.getByRole('heading', { name: 'Сохранённая сверка', exact: true })).toBeVisible();
