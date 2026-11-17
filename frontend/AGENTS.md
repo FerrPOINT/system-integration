@@ -59,6 +59,10 @@ build/test gate выполняется на интегрированном эт�
 разрешены, generated requests принадлежат API, а URL parser получает только
 канонический BusinessStatus enum. Narrow public paths закреплены в eslint.config.js.
 StrictMode остаётся включённым; исправляйте cleanup/lifecycle, а не отключайте его.
+Команда привязана к текущему session scope до первого await и проверяет владельца
+CSRF перед POST; ключ фиксируется до ожидания токена. Ритм refetch той же identity
+не меняет поколение. Ошибка подгрузки сохраняется до явного успешного retry/refresh,
+штатный poll не снимает её. Детали и владельцы — в разделе кэша архитектуры.
 useMediaQuery подписывается на обязательный browser API matchMedia. Приложение
 не использует SSR; отсутствующий API вызывает явную ошибку, а не desktop default.
 

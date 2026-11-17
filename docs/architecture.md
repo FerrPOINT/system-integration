@@ -632,7 +632,7 @@ FOR UPDATE (до 100 операций). Локальная map живёт тол
 [Gradle Wrapper](../gradle/wrapper/gradle-wrapper.properties) и
 [package.json](../frontend/package.json). Версии библиотек Spring и
 управляемых зависимостей определяет BOM Spring Boot. Для базы выбран
-PostgreSQL 18.6. Образ `postgres:18.6-alpine` закреплён в
+PostgreSQL 18.7. Образ `postgres:18.7-alpine` закреплён в
 [Compose](../compose.yml). Порты и запуск описаны в [README](../README.md#локальный-запуск).
 
 Получение пользователя для входа различает ошибку учётных данных (401)
@@ -673,7 +673,7 @@ SpringDataTaskReadRepository объединяет узкие TaskRows/HistoryRow
 без пагинации. V8 добавляет узкий tasks(owner_id,business_status) для точного
 COUNT без периода; V6 сохраняет порядок страниц. Индекс не хранит готовый total,
 увеличивает цену записи и не обещает одинаковый выигрыш при любом churn.
-V9 снижает только tasks.autovacuum_vacuum_scale_factor до0,05: чаще допускается
+V9 снижает только tasks.autovacuum_vacuum_scale_factor до 0,05: чаще допускается
 обычный autovacuum при частых изменениях задач. Глобальные интервалы/пороги,
 ресурсы, durability и остальные таблицы не меняются. Это обслуживание страниц,
 а не кэш total; новый COUNT по-прежнему выполняется в том же RR snapshot.
@@ -947,41 +947,34 @@ CPU/памяти, ошибок, очереди и времени исполне�
 
 ## Версии и обновления
 
-Проверено 12 ноября 2026 года. Источники точных версий — Gradle Wrapper,
-build.gradle, Dockerfile, packageManager и pnpm-lock.yaml. Плавающие latest
-и предварительные RC/beta/snapshot в рабочий стек не вводим.
-Для JDK и Node.js выбираем актуальную поддерживаемую LTS-ветку; остальные
-зависимости обновляем до совместимого стабильного релиза с проверкой сценариев.
+Источники закреплённых версий — Gradle Wrapper, build.gradle, Dockerfile,
+packageManager и pnpm-lock.yaml. Таблица описывает конфигурацию проекта,
+а не результаты текущего поиска последних релизов.
 
-| Компонент | Сейчас закреплено/установлено | Результат проверки |
+| Компонент | Версия в проекте | Источник |
 | --- | --- | --- |
-| Java / Temurin | 25 / 25.0.5_8 | Java 25 — последняя LTS; Java 27 — более новый non-LTS, переход ради номера не планируется. |
-| Spring Boot | 4.1.2 | Официальная документация указывает stable 4.1.2; 4.2 пока preview. |
-| Gradle | 9.9.1 | Совпадает с официальным current, не snapshot. |
-| PostgreSQL | 18.6 | Совпадает с текущей стабильной версией в таблице поддержки. |
-| Node.js | 26.13.1 | Проектный toolchain проверен по официальному SHA256; engines и Dockerfile обновлены. Docker-сборка и браузерные сценарии прошли. |
-| React / React DOM | 19.3.1 | Установленные версии совпали с npm latest. |
-| React Query / Router | 5.107.1 / 7.18.5 | Установленные версии совпали с npm latest. |
-| TypeScript / Orval | 7.0.2 / 8.47.0 | Установленные версии совпали с npm latest. |
-| Vite | 8.3.8 | package.json, lockfile и установка обновлены; типы и шесть API-client тестов проходят на Node 26.13.1. |
-| pnpm | 12.19.0 | Точная версия опубликована; corepack pnpm --version подтвердил pin. |
+| Java / Temurin | Toolchain 25 / контейнер 25.0.5_8 | build.gradle, Dockerfile |
+| Spring Boot / Gradle | 4.1.2 / 9.9.1 | build.gradle, gradle-wrapper.properties |
+| MapStruct / Lombok | 1.6.3 / 1.18.48 | build.gradle |
+| OpenAPI Generator | 7.27.0 | build.gradle |
+| PostgreSQL | 18.7-alpine | compose.yml |
+| Node.js / pnpm | 26.13.1 / 12.19.0 | frontend/Dockerfile, packageManager |
+| React / React DOM | 19.3.1 | frontend/pnpm-lock.yaml |
+| React Query / Router | 5.107.1 / 7.18.5 | frontend/pnpm-lock.yaml |
+| TypeScript / Orval / Vite | 7.0.2 / 8.47.0 / 8.3.8 | frontend/pnpm-lock.yaml |
 
-Источники: [Spring Boot](https://docs.spring.io/spring-boot/reference/index.html),
-[Gradle current](https://services.gradle.org/versions/current),
-[Java LTS](https://www.oracle.com/java/technologies/java-se-support-roadmap.html),
-[Node.js LTS](https://nodejs.org/en/about/previous-releases),
-[релизы Node.js](https://nodejs.org/dist/index.json),
-[PostgreSQL](https://www.postgresql.org/support/versioning/).
-Версии npm сверены по metadata реестра, в том числе
-[Vite latest](https://registry.npmjs.org/vite/latest) и
-[точной версии pnpm](https://registry.npmjs.org/pnpm/12.19.0).
-Dist-tag не является основанием для понижения существующего pin.
+Обновление выполняется согласованно в manifests, lockfile, образах и инструкции.
+Выбирается совместимая стабильная версия; плавающие latest и предварительные
+релизы в runtime не вводятся. Фактическая установка проверяется по lockfile.
+Новый релиз зависимости не считается квалифицированным до сборки,
+контрактных и относящихся к изменению тестов. Изменение потоков, JDBC,
+Spring или производительного пути требует повторной проверки NF08.
 
-SI-06.2 согласованно обновляет Node.js/Vite, Dockerfile, engines, toolchain,
-lockfile, README и AGENTS. Генерация OpenAPI, типы, сборка и клиентские/
-браузерные сценарии прошли. Обновление JDK, JDBC или Spring дополнительно требует
-серверных тестов и NF08. Последний релиз зависимости не считается проверенным
-в проекте до этих проверок.
+Обычный check может выдавать deprecation warning из OpenAPI Generator:
+Configuration.setVisible вызывается самим Gradle-плагином. В проекте не
+добавлен обходной plugin. При обновлении генератора сравнивается также partial
+[CodePointLength](../contracts/templates/README.md), затем проверяется генерация
+обоих Java-приложений и frontend.
 
 ## PostgreSQL и нагрузка
 
