@@ -118,7 +118,6 @@ export function IssueList() {
               {issuesItems.length === 0 ? (
                 <Card>
                   <EmptyState
-                    headingLevel={2}
                     message={missingPage ? 'Страница не найдена' : 'Проблем в выбранном состоянии нет.'}
                     description={
                       missingPage ? 'Список изменился или в адресе указана недоступная страница.' : undefined

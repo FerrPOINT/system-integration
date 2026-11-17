@@ -70,13 +70,10 @@
   font-size: var(--ui-font-body);
   line-height: var(--ui-line-body);
   overflow-wrap: anywhere;
-}
-.ui-empty-state {
   padding: calc(var(--ui-control-padding-inline) * 2);
   color: var(--color-text-muted);
 }
-.ui-empty-state > p,
-.ui-loading-state > p {
+.ui-empty-state > p {
   margin: 0;
 }
 .ui-empty-description {

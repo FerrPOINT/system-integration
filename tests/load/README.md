@@ -296,6 +296,9 @@ SI_LOAD_PROFILE=nf08-external node tests/load/prepare.mjs
 ~~~
 
 На другой машине используйте ту же версию Node, что на сервере приложений.
+В `SI_EXTERNAL_REMOTE_NODE` укажите абсолютный путь к исполняемому файлу Node
+на сервере. Драйвер вызывает этот файл при предварительной проверке и при
+запуске серверного контроллера. Установка Node может находиться вне checkout.
 Скопируйте из этого коммита три файла с сохранением каталогов:
 tests/load/external.mjs, tests/load/nf08-workload.mjs, tests/support/http.mjs.
 Зависимости npm для них не нужны. Генератор сверяет SHA-256 всех трёх файлов
@@ -304,6 +307,7 @@ tests/load/external.mjs, tests/load/nf08-workload.mjs, tests/support/http.mjs.
 ~~~powershell
 $env:SI_EXTERNAL_SSH_HOST = 'app-server'
 $env:SI_EXTERNAL_REMOTE_ROOT = '/opt/dev/system-integration'
+$env:SI_EXTERNAL_REMOTE_NODE = '/opt/toolchains/node-v26.13.1/bin/node'
 $env:SI_EXTERNAL_LOCAL_PORT = '19680'
 node tests/load/external.mjs
 ~~~

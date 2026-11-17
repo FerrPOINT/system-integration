@@ -5,7 +5,7 @@ import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { getNonce } from 'get-nonce';
 import { cn } from './utils';
 import { Notice } from './notice';
-import { useUiLabels } from './labels';
+import { choiceLabels } from './labels';
 import {
   ChoiceFormBridge,
   useChoiceState,
@@ -38,7 +38,6 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
   },
   ref,
 ) {
-  const ui = useUiLabels();
   const state = useChoiceState(value, defaultValue);
   const presentationForm = `ui-choice-presentation-${useId()}`;
   const [trigger, setTrigger] = useState<HTMLButtonElement | null>(null);
@@ -52,7 +51,8 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
   const tab = useChoiceTab(trigger, () => setOpen(false));
   const selected = options.find((option) => option.value === state.value);
   const label =
-    selected?.label ?? (state.value ? `${state.value} — ${ui.unavailableValue}` : (placeholder ?? ui.chooseOne));
+    selected?.label ??
+    (state.value ? `${state.value} — ${choiceLabels.unavailableValue}` : (placeholder ?? choiceLabels.chooseOne));
   return (
     <>
       {/* Isolate Radix reset/bubble handling; ChoiceFormBridge is the sole form owner. */}
@@ -120,7 +120,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
                   <Primitive.ItemText>{option.label}</Primitive.ItemText>
                 </Primitive.Item>
               ))}
-              {!options.length && <div className="ui-choice-empty">{ui.noOptions}</div>}
+              {!options.length && <div className="ui-choice-empty">{choiceLabels.noOptions}</div>}
             </Primitive.Viewport>
             <Primitive.ScrollDownButton className="ui-choice-scroll">
               <ChevronDown size={16} />
