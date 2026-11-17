@@ -464,7 +464,9 @@ Flyway начинаются с `V1__...` для каждой БД. Схема п
 | `tasks` | `id UUID PRIMARY KEY`, `owner_id UUID NOT NULL REFERENCES users(id)`, `operation_id UUID UNIQUE NOT NULL`, `title VARCHAR(160) NOT NULL`, `title_revision BIGINT NOT NULL DEFAULT 1`, `task_number BIGINT UNIQUE NOT NULL` (выдаётся последовательностью), `request_quantity INTEGER NOT NULL`, `delivery_status NOT NULL DEFAULT 'QUEUED'`, `business_status NOT NULL DEFAULT 'PENDING'`, `created_at TIMESTAMPTZ NOT NULL`. Допустимые значения и границы полей определяет OpenAPI. БД дублирует базовые ограничения длины, формата, количества и статусов. |
 
 ID задания и операции создаёт приложение, ID владельца берётся из сессии.
-Владелец, номер задания и количество не входят в команды изменения. Приложение
+Номер задания выдаётся последовательностью PostgreSQL и передаётся в API
+как десятичная строка, чтобы сохранить точность в браузере. Номер, владелец
+и количество не входят в команды изменения. Приложение
 разрешает создать задание только инициатору. Поля учётки, кроме публичного
 логина, роли и ID, не выдаются через API.
 

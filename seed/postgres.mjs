@@ -24,8 +24,8 @@ const tables = {
 export const literal = (value) => "'" + String(value).replaceAll("'", "''") + "'";
 export const json = (value) => literal(JSON.stringify(value)) + '::jsonb';
 
-export function postgres(target = process.env.SI_SEED_TARGET ?? 'load') {
-  const resources = loadEnvironment({ target });
+export function postgres(target = process.env.SI_SEED_TARGET ?? 'load', frontend = 'container') {
+  const resources = loadEnvironment({ target, frontend });
   const databases = {
     app: resources.find((resource) => resource.service === 'backend').database,
     emulator: resources.find((resource) => resource.service === 'emulator').database,
@@ -75,7 +75,7 @@ export function postgres(target = process.env.SI_SEED_TARGET ?? 'load') {
     target,
     backendUrl: origin('backend'),
     emulatorUrl: origin('emulator'),
-    frontendUrl: origin('frontend'),
+    frontendUrl: frontend === 'vite' ? process.env.SI_FRONTEND_URL || 'http://127.0.0.1:19673' : origin('frontend'),
   };
 }
 

@@ -20,7 +20,8 @@ def bind(sql, values):
  return ''.join(a+sql_literal(b) for a,b in zip(chunks,values))+chunks[-1]
 from jdbc_inventory import collect, text_block_constant
 
-inventory=collect(['backend/src/main/java','emulator/src/main/java'])
+# Flyway transformations are exercised by migration integration tests.
+inventory=collect(['backend/src/main/java/com/azhukov/integration','emulator/src/main/java/com/azhukov/emulator'])
 # Frozen pre-Spring-Data reads are comparison probes, not current JDBC call sites.
 BASELINE_READS={'JdbcTaskRepository.list/6:1','JdbcTaskRepository.countTasks/4:1',
                 'JdbcTaskRepository.history/3:1','JdbcTaskRepository.countHistory/1:1'}
