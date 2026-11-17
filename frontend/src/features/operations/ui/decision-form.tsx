@@ -53,17 +53,19 @@ export function DecisionForm({
         </Notice>
       )}
       <fieldset className="ui-form-fieldset ui-form" disabled={model.busy}>
-        <FormField id="decision-action" label="Действие" required>
-          {(attrs) => (
-            <Select
-              {...attrs}
-              value={action}
-              placeholder="Выберите действие"
-              onValueChange={(value) => model.changeAction(value as DecisionAction)}
-              options={actions.map((value) => ({ value, label: actionLabels[value] }))}
-            />
-          )}
-        </FormField>
+        {actions.length > 1 && (
+          <FormField id="decision-action" label="Действие" required>
+            {(attrs) => (
+              <Select
+                {...attrs}
+                value={action}
+                placeholder="Выберите действие"
+                onValueChange={(value) => model.changeAction(value as DecisionAction)}
+                options={actions.map((value) => ({ value, label: actionLabels[value] }))}
+              />
+            )}
+          </FormField>
+        )}
         {action === 'RETRY' && (
           <Notice appearance="inline">Обмен продолжится с тем же ID операции и исходным запросом.</Notice>
         )}
@@ -72,7 +74,7 @@ export function DecisionForm({
         )}
         {action === 'ACKNOWLEDGE_DIFFERENCE' && (
           <Notice>
-            Локальный результат сохранится. Если доставка приостановлена, она будет окончательно остановлена.
+            Результат в приложении сохранится. Если отправка приостановлена, она будет окончательно остановлена.
           </Notice>
         )}
         {action === 'ACKNOWLEDGE_FEED_ISSUE' && (

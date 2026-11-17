@@ -6,26 +6,29 @@ import { useDecisionCommand } from '../api/exchange-commands';
 import { useExchangeRefresh } from '../api/invalidate-exchange';
 import { decisionActions, decisionBasis, isDecisionStale, type DecisionAction, type DecisionBasis } from './decision';
 
+type DecisionDraft = {
+  action: DecisionAction | '';
+  reason: string;
+  basis: DecisionBasis;
+};
+
 /** A draft captures its original decision basis; refetch never silently rebases it. */
 export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean; unresolved: boolean }) {
-  const [action, setAction] = useState<DecisionAction | ''>('');
-  const [reason, setReason] = useState('');
-  const [basis, setBasis] = useState<DecisionBasis | null>(null);
+  const [draft, setDraft] = useState<DecisionDraft | null>(null);
+  const actions = decisionActions(issue);
+  const singleAction = actions.length === 1 ? actions[0] : '';
+  const action = draft?.action ?? singleAction;
+  const reason = draft?.reason ?? '';
+  const basis = draft?.basis ?? null;
   const { command, resetCommand } = useDecisionCommand(issue.issueId);
   const update = useExchangeRefresh();
-  const dirty = Boolean(action || reason);
+  const dirty = draft !== null;
   const busy = command.isPending || otherCommand.pending;
   const guard = useFormNavigationGuard({ dirty: dirty || otherCommand.unresolved, pending: busy });
-  const actions = decisionActions(issue);
   const stale = isDecisionStale(basis, issue) || Boolean(action && !actions.includes(action));
-  const clearDraft = () => {
-    setAction('');
-    setReason('');
-    setBasis(null);
-  };
   const discardDraft = () => {
     resetCommand();
-    clearDraft();
+    setDraft(null);
   };
   const refresh = () =>
     update.mutate(
@@ -33,13 +36,17 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
       {
         onSuccess: () => {
           resetCommand();
-          clearDraft();
+          setDraft(null);
         },
       },
     );
-  function captureBasis() {
+  function editDraft(nextAction: DecisionAction | '', nextReason: string) {
+    if (!stale && nextAction === singleAction && !nextReason) {
+      discardDraft();
+      return;
+    }
     guard.protect();
-    setBasis((current) => current ?? decisionBasis(issue));
+    setDraft({ action: nextAction, reason: nextReason, basis: basis ?? decisionBasis(issue) });
   }
   const input =
     !stale &&
@@ -61,7 +68,6 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
   return {
     action,
     reason,
-    basis,
     dirty,
     busy,
     stale,
@@ -72,19 +78,15 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
     refresh,
     visible: issue.status === 'OPEN' || dirty || busy || otherCommand.unresolved || command.isSuccess,
     canSubmit: input !== null,
-    changeAction(value: DecisionAction) {
-      captureBasis();
-      setAction(value);
-    },
-    changeReason(value: string) {
-      captureBasis();
-      setReason(value);
-    },
+    changeAction: (value: DecisionAction) => editDraft(value, reason),
+    changeReason: (value: string) => editDraft(action, value),
     resetDraft: () => guard.requestClose(discardDraft),
     rebase() {
-      if (issue.status !== 'OPEN' || (!issue.latestReconciliationId && issue.taskId)) return;
-      setBasis(decisionBasis(issue));
-      if (action && !actions.includes(action)) setAction('');
+      if (!draft || issue.status !== 'OPEN' || (!issue.latestReconciliationId && issue.taskId)) return;
+      const nextAction = action && actions.includes(action) ? action : singleAction;
+      setDraft(
+        reason || nextAction !== singleAction ? { action: nextAction, reason, basis: decisionBasis(issue) } : null,
+      );
     },
     submit() {
       if (!input) return;

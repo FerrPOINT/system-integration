@@ -150,8 +150,8 @@ test('TC-06 / TC-07: conflicting external input is stopped explicitly without ac
   await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Обнаружено расхождение' })).toBeVisible();
   await page.getByRole('link', { name: 'Перейти к разбору и решению' }).click();
-  await expect(page.getByRole('option', { name: 'Принять внешний результат', exact: true })).toHaveCount(0);
-  await selectChoice(page, 'Действие', 'Завершить разбор');
+  await expect(page.getByRole('combobox', { name: 'Действие', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Завершить разбор', exact: true })).toBeDisabled();
   await page
     .getByLabel('Причина решения *', { exact: true })
     .fill('ID занят операцией с другим запросом, прекращаю отправку');

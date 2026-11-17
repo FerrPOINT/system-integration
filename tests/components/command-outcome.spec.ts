@@ -22,6 +22,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
     logouts: 0,
     assigned: false,
     decisionAvailable: true,
+    externalResultAvailable: false,
     resolved: false,
     generalIssue: false,
     revision: 1,
@@ -86,6 +87,7 @@ async function mockApi(page: Page, role = 'INITIATOR') {
             ...(state.assigned ? [] : ['TAKE_OWNERSHIP']),
             'RECONCILE',
             ...(state.decisionAvailable ? ['ACKNOWLEDGE_DIFFERENCE'] : []),
+            ...(state.externalResultAvailable ? ['APPLY_EXTERNAL_RESULT'] : []),
           ],
     resolution: state.resolved
       ? {
@@ -552,7 +554,6 @@ for (const general of [false, true]) {
       state.assigned = true;
       await page.goto('/tests/command-outcome.html?screen=issue');
       const label = general ? 'Закрыть общую проблему' : 'Завершить разбор';
-      await selectChoice(page, 'Действие', label);
       const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
       await reason.fill('Accepted decision');
       await page.getByRole('button', { name: label, exact: true }).click();
@@ -618,9 +619,9 @@ test('decision actions stay distinct and reset only the unsaved fields', async (
   const form = page.getByRole('form', { name: 'Решение оператора', exact: true });
   const reason = form.getByRole('textbox', { name: 'Причина решения', exact: true });
   const reset = form.getByRole('button', { name: 'Сбросить черновик', exact: true });
-  await expect(form.getByRole('button', { name: 'Сохранить решение', exact: true })).toBeDisabled();
+  await expect(form.getByRole('combobox', { name: 'Действие', exact: true })).toHaveCount(0);
+  await expect(form).toContainText('Результат в приложении сохранится.');
   await expect(reset).toHaveCount(0);
-  await selectChoice(page, 'Действие', 'Завершить разбор');
   const submit = form.getByRole('button', { name: 'Завершить разбор', exact: true });
   await expect(submit).toBeDisabled();
   await reason.fill('Unsaved decision');
@@ -642,15 +643,46 @@ test('decision actions stay distinct and reset only the unsaved fields', async (
   await reset.click();
   await confirm.getByRole('button', { name: 'Сбросить', exact: true }).click();
   await expect(reason).toHaveValue('');
-  await expect(form.getByRole('combobox', { name: 'Действие', exact: true })).toContainText('Выберите действие');
+  await expect(submit).toBeDisabled();
   await expect(reset).toHaveCount(0);
   expect(state.commands).toHaveLength(0);
+});
+
+test('decision requires a choice only while several actions are available', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  state.externalResultAvailable = true;
+  await page.goto('/tests/command-outcome.html?screen=issue');
+  const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
+  await reason.fill('Verified external result');
+  await expect(page.getByRole('button', { name: 'Сохранить решение', exact: true })).toBeDisabled();
+  await selectChoice(page, 'Действие', 'Принять внешний результат');
+  const accept = page.getByRole('button', { name: 'Принять внешний результат', exact: true });
+  await expect(accept).toBeEnabled();
+
+  state.externalResultAvailable = false;
+  state.revision = 2;
+  await page.getByRole('button', { name: 'Обновить', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Действие', exact: true })).toHaveCount(0);
+  await expect(accept).toBeDisabled();
+  expect(state.commands).toHaveLength(0);
+
+  await page.getByRole('button', { name: 'Использовать актуальные данные' }).click();
+  await expect(reason).toHaveValue('Verified external result');
+  await page.getByRole('button', { name: 'Завершить разбор', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Решение сохранено.' })).toBeVisible();
+  expect(state.commands.map((command) => command.body)).toEqual([
+    {
+      expectedIssueRevision: 2,
+      reconciliationId: snapshotId,
+      action: 'ACKNOWLEDGE_DIFFERENCE',
+      reason: 'Verified external result',
+    },
+  ]);
 });
 
 test('operator decision draft survives cancelled departure and requires explicit discard', async ({ page }) => {
   await mockApi(page, 'OPERATOR');
   await page.goto('/tests/command-outcome.html?screen=issue');
-  await selectChoice(page, 'Действие', 'Завершить разбор');
   const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
   await reason.fill('Unsubmitted explanation');
   await page.getByRole('link', { name: 'Задания', exact: true }).click();
@@ -666,7 +698,6 @@ test('operator decision draft survives cancelled departure and requires explicit
 test('refetch preserves a decision draft and requires explicit adoption of the new basis', async ({ page }) => {
   const state = await mockApi(page, 'OPERATOR');
   await page.goto('/tests/command-outcome.html?screen=issue');
-  await selectChoice(page, 'Действие', 'Завершить разбор');
   await page.getByRole('textbox', { name: 'Причина решения', exact: true }).fill('Preserved explanation');
   state.revision = 2;
   state.latestSnapshot = 'new-snapshot';
@@ -691,7 +722,6 @@ test('refetch preserves a decision draft and requires explicit adoption of the n
 test('external resolution keeps an unsubmitted draft until the operator discards it', async ({ page }) => {
   const state = await mockApi(page, 'OPERATOR');
   await page.goto('/tests/command-outcome.html?screen=issue');
-  await selectChoice(page, 'Действие', 'Завершить разбор');
   const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
   await reason.fill('Unsubmitted explanation');
   state.resolved = true;
@@ -945,7 +975,6 @@ test('one issue guard preserves a decision draft while reconciliation is recover
   const state = await mockApi(page, 'OPERATOR');
   state.badSnapshotReceipt = {};
   await page.goto('/tests/command-outcome.html?screen=issue');
-  await selectChoice(page, 'Действие', 'Завершить разбор');
   const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
   await reason.fill('Draft must survive reconciliation');
   await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
@@ -1346,7 +1375,6 @@ test('general feed decision validates Unicode and submits no fabricated reconcil
   const state = await mockApi(page, 'OPERATOR');
   state.generalIssue = true;
   await page.goto('/tests/command-outcome.html?screen=issue');
-  await selectChoice(page, 'Действие', 'Закрыть общую проблему');
   const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
   const submit = page.getByRole('button', { name: 'Закрыть общую проблему', exact: true });
   await reason.fill('\u0085');
@@ -1375,7 +1403,6 @@ test('general issue draft survives cancelled logout and retains its command cont
   const state = await mockApi(page, 'OPERATOR');
   state.generalIssue = true;
   await page.goto('/tests/command-outcome.html?screen=issue');
-  await selectChoice(page, 'Действие', 'Закрыть общую проблему');
   const reason = 'Проверена общая проблема ленты 🧪';
   await page.getByRole('textbox', { name: 'Причина решения', exact: true }).fill(reason);
   await openAccountMenu(page);
