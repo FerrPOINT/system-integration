@@ -24,7 +24,9 @@ async function login(username) {
   return session;
 }
 
-if (command === 'fault') {
+if (command === 'seed' || command === 'verify-seed') {
+  await import('../seed/run.mjs');
+} else if (command === 'fault') {
   if (!faultModes.includes(mode)) throw new Error('Unknown fault mode');
   await fault('PUT', reference, mode);
 } else if (command === 'clear') {
@@ -34,7 +36,7 @@ if (command === 'fault') {
   const response = await fetch(external + '/operations/' + reference, { signal: AbortSignal.timeout(10_000) });
   if (!response.ok) throw new Error(`External state: HTTP ${response.status}`);
   console.log(JSON.stringify(await response.json(), null, 2));
-} else if (command === 'seed') {
+} else if (command === 'scenarios') {
   const initiators = await Promise.all(['initiator.one', 'initiator.two'].map(login));
   const operator = await login('operator');
   const cases = [
@@ -77,13 +79,22 @@ if (command === 'fault') {
         }
         ready &&= found;
       } else if (item.fault === 'DROP_RESPONSE_AFTER_EXECUTION') ready &&= item.task.deliveryStatus === 'ACKNOWLEDGED';
-      else ready &&= ['SUCCEEDED', 'REJECTED'].includes(item.task.businessStatus);
+      else ready &&= item.task.businessStatus === (item.quantity > 100 ? 'REJECTED' : 'SUCCEEDED');
     }
     if (ready) break;
     if (Date.now() >= deadline) throw new Error('The demo scenarios did not reach their expected states');
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   const dropped = cases.find((item) => item.fault === 'DROP_RESPONSE_AFTER_EXECUTION');
+  for (const item of cases.filter((item) => item.fault !== 'UNAVAILABLE')) {
+    const response = await fetch(external + '/operations/' + item.task.operationId, {
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error('The demo operation is missing in the emulator');
+    const actual = await response.json();
+    if (actual.executions !== 1 || actual.result?.status !== (item.quantity > 100 ? 'REJECTED' : 'SUCCEEDED'))
+      throw new Error('The demo operation does not have its expected single execution and result');
+  }
   dropped.reconciliation = await operator.command(
     'POST',
     `/api/tasks/${dropped.taskId}/reconciliations`,
@@ -105,6 +116,6 @@ if (command === 'fault') {
   );
 } else {
   throw new Error(
-    'Usage: node tests/demo.mjs seed | fault REQ-900003 UNAVAILABLE | clear REQ-900003 | inspect <operation-id>',
+    'Usage: node tests/demo.mjs seed | verify-seed | scenarios | fault REQ-900003 UNAVAILABLE | clear REQ-900003 | inspect <operation-id>',
   );
 }

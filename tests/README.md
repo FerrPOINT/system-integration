@@ -28,11 +28,17 @@ JavaScript load/recovery scripts остаются вне строгой пров
 
 ```sh
 node --input-type=module -e "import {loadEnvironment} from './tests/load/environment.mjs'; loadEnvironment();"
-SI_BACKEND_URL=http://127.0.0.1:19680 SI_EMULATOR_URL=http://127.0.0.1:19681 node tests/demo.mjs seed
+SI_BACKEND_URL=http://127.0.0.1:19680 SI_EMULATOR_URL=http://127.0.0.1:19681 node --env-file=.env tests/demo.mjs scenarios
 ```
 
 Проверьте origin/external и свежие createdAt в `tests/results/demo.json`:
 идемпотентный replay старых заданий не является проверкой нового кандидата.
+
+Большой исторический набор и его проверка принадлежат [seed/](../seed/README.md).
+Команды `node --env-file=.env tests/demo.mjs seed` и `verify-seed` используют
+только локальный load-проект на 196xx. `corepack pnpm --dir tests test:seed`
+проверяет детерминированность, распределение, связи и допустимые результаты
+каталога без записи в БД.
 ## Production frontend без API/БД
 
 После `frontend: pnpm build` из `tests/` выполните
