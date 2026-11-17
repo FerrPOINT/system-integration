@@ -162,7 +162,7 @@ test('TC-09 / TC-12: empty filter, server error recovery and UTC rendering', asy
   const time = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' }).format(
     new Date(task.createdAt),
   );
-  await expect(page.locator('.details time')).toHaveText(time);
+  await expect(page.locator('.details time')).toHaveText(time + ' UTC');
   const otherZone = await page
     .context()
     .browser()!
@@ -171,7 +171,7 @@ test('TC-09 / TC-12: empty filter, server error recovery and UTC rendering', asy
     const other = await otherZone.newPage();
     await login(other);
     await other.goto('/tasks/' + taskId);
-    await expect(other.locator('.details time')).toHaveText(time);
+    await expect(other.locator('.details time')).toHaveText(time + ' UTC');
   } finally {
     await otherZone.close();
   }

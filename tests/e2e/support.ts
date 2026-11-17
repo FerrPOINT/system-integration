@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Page, type Locator } from '@playwright/test';
 
 export async function login(page: Page, username = 'initiator.one') {
   const password = process.env.SI_DEMO_PASSWORD;
@@ -50,16 +50,34 @@ export async function openAccountMenu(page: Page) {
   if ((await menu.getAttribute('aria-expanded')) === 'false') await menu.click();
 }
 
-export async function collectFeed(region: import('@playwright/test').Locator) {
+export async function collectFeed(region: Locator, selector: string, attribute: string) {
   const footer = region.locator('[data-feed-end]');
+  const range = footer.locator('small[aria-live=polite]');
+  const seen = new Set<string>();
   for (let attempt = 0; attempt < 100; attempt++) {
     await expect(region).toHaveAttribute('aria-busy', 'false');
-    const count = await region.locator('[data-page-item]').count();
-    const summary = await footer.innerText();
-    const total = Number(summary.match(/из (\d+)/)![1]);
-    if (count === total) return;
+    const match = /^(\d+)–(\d+) из (\d+)$/.exec(await range.innerText());
+    expect(match, 'Mobile feed must show its loaded range').not.toBeNull();
+    const [, start, end, total] = match!.map(Number);
+    const ids = await region
+      .locator(selector)
+      .evaluateAll((elements, name) => elements.map((element) => element.getAttribute(name) ?? ''), attribute);
+    expect(ids).toHaveLength(end - start + 1);
+    expect(ids.length).toBeLessThanOrEqual(100);
+    expect(ids).not.toContain('');
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of ids) seen.add(id);
+    if (end === total) {
+      expect(seen.size).toBe(total);
+      return seen;
+    }
     await footer.scrollIntoViewIfNeeded();
-    await expect.poll(() => region.locator('[data-page-item]').count()).toBeGreaterThan(count);
+    await expect
+      .poll(async () => {
+        const position = /^(\d+)–(\d+) из (\d+)$/.exec(await range.innerText());
+        return Number(position?.[2] ?? 0);
+      })
+      .toBeGreaterThan(end);
   }
-  throw new Error('Mobile feed did not terminate');
+  throw new Error('Mobile feed did not reach the last record');
 }

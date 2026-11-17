@@ -14,8 +14,10 @@
    [SQL-проверки](sql/README.md) на пустых si_test/si_emulator_test.
 4. Соберите три образа последовательно с revision кандидата. Поднимите QA,
    сверьте revision, JAR и обслуживаемые frontend-ассеты с проверенной сборкой.
-5. Выполните component, production Nginx/CSP, HTTP smoke и полный e2e двух
-   размеров экрана. Затем отдельно recovery и шесть демосценариев.
+5. Выполните component, production Nginx/CSP, HTTP smoke и
+   [полный e2e двух размеров экрана](#автоматический-браузерный-сценарий).
+   Для полного e2e сначала загрузите showcase в этот же QA. Затем отдельно
+   выполните recovery и шесть демосценариев.
 6. После сброса только собственных fixtures выполните [NF08](load/README.md#запуск).
    Не смешивайте в его окне сбои, recovery, UI и SQL-измерения.
 7. Проверьте целостность, сохранность обычного стенда и итоговый diff.
@@ -98,18 +100,24 @@ API, выдачу собранного JavaScript и проксирование 
 
 ## Автоматический браузерный сценарий
 
-Для запущенного локального приложения загрузите `.env` по инструкции
-из корневого README, чтобы передать `SI_DEMO_PASSWORD`. Из `tests/`:
+Поднимите отдельный Compose-проект system-integration-load с
+compose.load.yml по [инструкции запуска](load/README.md#запуск), до шагов
+reset и подготовки 5 000 записей. Из корня репозитория выполните:
 
-```sh
-corepack pnpm install --frozen-lockfile
-corepack pnpm exec playwright install chromium
-corepack pnpm test:e2e
-```
+~~~sh
+corepack pnpm --dir tests install --frozen-lockfile
+corepack pnpm --dir tests exec playwright install chromium
+SI_SEED_TARGET=load node --env-file=.env tests/demo.mjs seed
+corepack pnpm --dir tests test:e2e
+~~~
 
-Используйте отдельный проект system-integration-load с compose.load.yml
-в выбранном workspace. Его PostgreSQL и том отделены от обычного Compose.
-Прогон против обычных si_app/si_emulator не выполняется.
+Загрузите QA-пароли из .env в окружение перед вызовом runner, как указано в
+[корневом README](../README.md#сборка-и-проверки). Seed создаёт
+tests/results/showcase.json в этом checkout. Три showcase-сценария на двух
+ширинах используют этот файл и данные того же QA; запускать их нужно после сида.
+Для повторного прогона загрузка сида сохраняет уже внесённые изменения.
+Приёмочные сценарии запускайте на свежей изолированной БД, чтобы проверить
+исходное состояние примеров. Для обычных si_app/si_emulator этот прогон не применяется.
 
 Для UI поверх native Vite на 19673 явно задайте
 `SI_UI_FRONTEND_RUNTIME=vite`. Проверка окружения продолжает требовать backend,

@@ -112,7 +112,7 @@ export function History({
                           )}
                           <small title={event.actorUserId}>
                             <time dateTime={event.occurredAt} title={timestamp(event.occurredAt)}>
-                              {timestamp(event.occurredAt, { compact: mobile, showZone: !mobile })}
+                              {timestamp(event.occurredAt, { compact: mobile })}
                             </time>{' '}
                             ·{event.actor === 'SYSTEM' ? ' Система' : ` ${event.actorUsername}`}
                           </small>
