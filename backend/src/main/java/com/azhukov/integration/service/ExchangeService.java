@@ -166,14 +166,8 @@ public class ExchangeService {
 
     @Transactional
     public void badPage(Object page) {
-        issues.open(
-                null,
-                null,
-                Issue.Kind.RESULT_CONFLICT,
-                "Некорректная структура страницы или позиция ленты",
-                page,
-                null,
-                null);
+        // The cursor row serializes reporting across readers, as it does page application.
+        issues.feedPaused(page, exchanges.cursor(true));
     }
 
     private void receive(IncomingEvent event, Map<UUID, ExchangeState> states) {

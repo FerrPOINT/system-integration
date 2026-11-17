@@ -19,6 +19,8 @@ public interface ReviewRepository {
 
     Opened open(UUID task, UUID operation, Issue.Kind kind, String reason, Object content, Evidence evidence);
 
+    void openFeedPause(String reason, Evidence evidence);
+
     UUID temporary(UUID task);
 
     void delay(UUID id, String reason);

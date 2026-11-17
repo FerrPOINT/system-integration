@@ -47,6 +47,11 @@ public class IssueLifecycleService {
         return opened.id();
     }
 
+    public void feedPaused(Object page, long cursor) {
+        String reason = "Некорректная структура страницы или позиция ленты";
+        issues.openFeedPause(reason, evidence(reason, page, cursor, null, null));
+    }
+
     public void temporary(ExchangeState state, boolean delayed) {
         UUID existing = issues.temporary(state.task().id());
         if (existing != null) {
