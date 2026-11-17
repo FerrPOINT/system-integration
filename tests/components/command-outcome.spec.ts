@@ -613,38 +613,28 @@ test('accepted ownership is not repeated to recover a failed issue read', async 
   expect(state.commands).toHaveLength(1);
 });
 
-test('decision actions stay distinct and reset only the unsaved fields', async ({ page }) => {
+test('single decision needs only a reason and has no extra form action', async ({ page }) => {
   const state = await mockApi(page, 'OPERATOR');
   await page.goto('/tests/command-outcome.html?screen=issue');
   const form = page.getByRole('form', { name: 'Решение оператора', exact: true });
   const reason = form.getByRole('textbox', { name: 'Причина решения', exact: true });
-  const reset = form.getByRole('button', { name: 'Сбросить черновик', exact: true });
+  const submit = form.getByRole('button', { name: 'Завершить разбор', exact: true });
   await expect(form.getByRole('combobox', { name: 'Действие', exact: true })).toHaveCount(0);
   await expect(form).toContainText('Результат в приложении сохранится.');
-  await expect(reset).toHaveCount(0);
-  const submit = form.getByRole('button', { name: 'Завершить разбор', exact: true });
   await expect(submit).toBeDisabled();
   await reason.fill('Unsaved decision');
   await expect(submit).toBeEnabled();
-  await expect(submit).toHaveAttribute('data-variant', 'default');
-  await expect(reset).toHaveAttribute('data-variant', 'outline');
+  await expect(form.getByRole('button')).toHaveCount(1);
   const widths = test.info().project.name === 'mobile' ? [390, 320] : [1440, 1000];
   for (const width of widths) {
     await page.setViewportSize({ width, height: 844 });
-    const [a, b] = await Promise.all([submit.boundingBox(), reset.boundingBox()]);
-    expect(a && b && Math.max(b.x - a.x - a.width, b.y - a.y - a.height)).toBeGreaterThanOrEqual(8);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
-  await reset.click();
-  const confirm = page.getByRole('alertdialog', { name: 'Сбросить черновик?', exact: true });
-  await expect(confirm).toContainText('Сбросятся выбранное действие и введённая причина.');
-  await confirm.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
-  await expect(reason).toHaveValue('Unsaved decision');
-  await reset.click();
-  await confirm.getByRole('button', { name: 'Сбросить', exact: true }).click();
-  await expect(reason).toHaveValue('');
+  await reason.fill('');
   await expect(submit).toBeDisabled();
-  await expect(reset).toHaveCount(0);
+  await page.getByRole('link', { name: 'Задания', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Все задания', exact: true })).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   expect(state.commands).toHaveLength(0);
 });
 
@@ -719,7 +709,7 @@ test('refetch preserves a decision draft and requires explicit adoption of the n
   });
 });
 
-test('external resolution keeps an unsubmitted draft until the operator discards it', async ({ page }) => {
+test('external resolution keeps an unsubmitted draft until the operator clears the reason', async ({ page }) => {
   const state = await mockApi(page, 'OPERATOR');
   await page.goto('/tests/command-outcome.html?screen=issue');
   const reason = page.getByRole('textbox', { name: 'Причина решения', exact: true });
@@ -731,11 +721,10 @@ test('external resolution keeps an unsubmitted draft until the operator discards
   await expect(reason).toHaveValue('Unsubmitted explanation');
   await expect(page.getByRole('alert').filter({ hasText: 'Черновик сохранён.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Завершить разбор', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Сбросить черновик', exact: true }).click();
+  await page.getByRole('link', { name: 'Задания', exact: true }).click();
   await page.getByRole('button', { name: 'Продолжить заполнение', exact: true }).click();
   await expect(reason).toBeFocused();
-  await page.getByRole('button', { name: 'Сбросить черновик', exact: true }).click();
-  await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
+  await reason.fill('');
   await expect(reason).toHaveCount(0);
   expect(state.commands).toHaveLength(0);
 });

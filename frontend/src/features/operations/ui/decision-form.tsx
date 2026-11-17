@@ -106,11 +106,6 @@ export function DecisionForm({
         <Button type="submit" variant="default" disabled={!model.canSubmit}>
           {command.isPending ? 'Сохраняем решение…' : action ? actionLabels[action] : 'Сохранить решение'}
         </Button>
-        {model.dirty && (
-          <Button type="button" disabled={model.busy} onClick={model.resetDraft}>
-            Сбросить черновик
-          </Button>
-        )}
       </ActionGroup>
     </form>
   );
