@@ -12,10 +12,7 @@ export function useReconciliation(taskId: string | undefined) {
     update.mutate(
       { taskId: snapshot.taskId, issueId: snapshot.issueId },
       {
-        onSuccess: () => {
-          command.reset();
-          navigate('/tasks/' + snapshot.taskId + '/reconciliations/' + snapshot.reconciliationId);
-        },
+        onSuccess: () => navigate('/tasks/' + snapshot.taskId + '/reconciliations/' + snapshot.reconciliationId),
       },
     );
   return {

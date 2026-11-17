@@ -53,9 +53,18 @@ export function ReconcileControl({
   disabled?: boolean;
 }) {
   const { command: reconcile, unresolved, update } = model;
+  if (reconcile.isSuccess)
+    return (
+      <CommandRefresh
+        message="Сверка сохранена."
+        error={update.error}
+        pending={update.isPending}
+        onRetry={model.retryRefresh}
+      />
+    );
   return (
     <div className="inline-action">
-      <Button ref={trigger} onClick={onStart} disabled={disabled || reconcile.isPending || reconcile.isSuccess}>
+      <Button ref={trigger} onClick={onStart} disabled={disabled || reconcile.isPending}>
         {reconcile.isPending ? 'Сверяем…' : unresolved ? 'Проверить результат сверки' : 'Выполнить сверку'}
       </Button>
       {unresolved ? (
@@ -65,12 +74,6 @@ export function ReconcileControl({
       ) : (
         <ErrorMessage error={reconcile.error} />
       )}
-      <CommandRefresh
-        message="Сверка сохранена."
-        error={update.error}
-        pending={update.isPending}
-        onRetry={model.retryRefresh}
-      />
     </div>
   );
 }
