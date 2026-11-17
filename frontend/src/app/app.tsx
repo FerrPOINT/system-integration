@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { AppShell } from './shell/app-shell';
 import { AppHeader } from './shell/app-header';
 import { ThemePicker, useThemePreference } from './shell/theme';
@@ -13,6 +13,7 @@ import type { SessionRouteContext } from './route-context';
 export function App() {
   const appearance = <ThemePicker {...useThemePreference()} />;
   const session = useQuery(sessionOptions);
+  const navigate = useNavigate();
   if (!session.data)
     return (
       <div className="app-shell">
@@ -26,7 +27,7 @@ export function App() {
               <Button onClick={() => session.refetch()}>Повторить</Button>
             </div>
           ) : (
-            <LoginForm />
+            <LoginForm onAuthenticated={() => navigate('/', { replace: true, flushSync: true })} />
           )}
         </main>
       </div>

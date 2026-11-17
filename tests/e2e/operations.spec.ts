@@ -25,7 +25,7 @@ test('TC-03 / TC-07: lost reply, independent execution, reconciliation and opera
   await page.getByRole('link', { name: 'Создать задание' }).click();
   const title = 'E2E разбор ' + crypto.randomUUID();
   await page.getByLabel('Название *', { exact: true }).fill(title);
-  await page.getByLabel('Номер заявки *', { exact: true }).fill(reference);
+  await page.getByLabel('Номер заявки *', { exact: true }).fill(reference.slice('REQ-'.length));
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await expect(page.getByText('Получено исполнителем', { exact: true })).toBeVisible();
@@ -174,7 +174,7 @@ test('SI-10: exhausted delivery resumes only after a fresh operator decision', a
   await page.getByRole('link', { name: 'Создать задание' }).click();
   const title = 'E2E лимит ' + crypto.randomUUID();
   await page.getByLabel('Название *', { exact: true }).fill(title);
-  await page.getByLabel('Номер заявки *', { exact: true }).fill(reference);
+  await page.getByLabel('Номер заявки *', { exact: true }).fill(reference.slice('REQ-'.length));
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   const taskId = new URL(page.url()).pathname.split('/').at(-1)!;

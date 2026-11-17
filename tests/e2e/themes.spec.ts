@@ -181,7 +181,9 @@ test('UI-06: shared brand, surfaces and form fields across the application', asy
   expect(await editor.evaluate((el) => getComputedStyle(el).borderRadius)).toBe(dialogRadius);
   const reference = page.getByLabel('Номер заявки');
   await expect(reference).toHaveAttribute('aria-describedby', 'field-reference-hint');
-  await expect(page.locator('#field-reference-hint')).toHaveText('REQ- и шесть цифр. После создания изменить нельзя.');
+  await expect(page.locator('#field-reference-hint')).toHaveText(
+    'Введите шесть цифр, включая начальные нули. После создания изменить нельзя.',
+  );
   await expect(reference).toHaveAttribute('required', '');
   expect(
     await page.evaluate(
