@@ -77,7 +77,8 @@ Runner поднимает временный контейнер на 127.0.0.1:1
 Он использует отдельную временную сеть; API перехватывается тестами, доступа
 к Compose/БД нет. Container/network удаляются в global teardown.
 
-Проверяются nonce CSP и условный HTTP-запрос, Dialog/Select/вложенный discard,
+Проверяются переходы из открытой вкладки после смены ассетов, nonce CSP
+и условный HTTP-запрос, Dialog/Select/вложенный discard,
 видимость точных границ периода и desktop scroll cold/warm/POP после Query GC.
 Эта проверка не заменяет сквозные сценарии отдельного test Compose.
 
@@ -147,7 +148,7 @@ spacing.spec.ts дополнительно измеряет интервалы �
 находятся в `components/`, прикладные — в `e2e/`: runner разделены каталогами.
 Component discovery проверяет Select, отложенное измерение,
 идентичность/guard форм, исходы команд и follow-up GET, operator draft basis,
-route/chunk recovery и mobile window. Они используют production components/Query
+восстановление маршрута после ошибки отрисовки и mobile window. Они используют production components/Query
 под StrictMode и перехватывают все API-запросы. Проверяются тёплый/холодный кэш,
 равные revisions, history jump, refetch без потери draft, native reload, focus
 и отсутствие повторной записи после receipt. `mobile/collection-window.spec.ts`

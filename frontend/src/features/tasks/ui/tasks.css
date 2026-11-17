@@ -91,7 +91,7 @@
   min-height: 0;
   overflow: hidden;
 }
-.history-panel {
+.task-history-viewport > .history-panel {
   display: flex;
   flex: 1;
   min-width: 0;
@@ -120,7 +120,7 @@
     display: block;
     overflow: visible;
   }
-  .history-panel {
+  .task-history-viewport > .history-panel {
     display: block;
   }
   .task-cards {

@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { Outlet } from 'react-router-dom';
-import { Suspense } from 'react';
 import { AppShell } from './shell/app-shell';
 import { AppHeader } from './shell/app-header';
 import { ThemePicker, useThemePreference } from './shell/theme';
@@ -43,9 +42,7 @@ export function App() {
           </Button>
         </div>
       )}
-      <Suspense fallback={<Loading />}>
-        <Outlet context={{ user } satisfies SessionRouteContext} />
-      </Suspense>
+      <Outlet context={{ user } satisfies SessionRouteContext} />
     </AppShell>
   );
 }

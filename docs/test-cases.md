@@ -567,7 +567,8 @@ UI-сценарии и добавляют проверки границ сост
 | Session lifecycle | Initial/background 502, dirty/pending форма, настоящий 401 и смена роли | Background failure сохраняет форму/observer; initial retry выполняет чтение; 401/смена identity удаляют приватное состояние. |
 | Guard | Cancel, route/Back, reload, pending, focus | Один guard управляет подтверждением, pending блокирует уход, discard возвращает правильный фокус. |
 | Operator basis | Новая сверка/revision или внешнее закрытие во время ввода | Основа draft не обновляется молча, submit блокируется до явного обновления; причина сохраняется. |
-| Router | Прямой URL, роль, not-found, render/chunk error | Один route tree, безопасный fallback и восстановление с доступной оболочкой. |
+| Router | Прямой URL, роль, not-found, ошибка отрисовки | Один route tree, восстановление с доступной оболочкой. |
+| Открытая вкладка после публикации | Сохранённая сверка → задание и разбор при недоступных старых ассетах | Оба перехода работают без дозагрузки JavaScript или CSS. |
 | Collection budget | 20/100/1000/5000 записей; refetch и polling | Не более 5 страниц/100 записей кэша/DOM и 5 GET; нет копии DTO в state/storage. |
 | Collection access | Полный обход 5000, обратная загрузка, Back после Query GC | Нет пропусков в стабильном наборе, вытесненные записи доступны; ID/offset восстанавливаются. |
 | History navigation | Глубокое warm-окно → сверка → «Открыть задание и историю»; затем native Back | Новая entry открывает summary и page 0; старая entry восстанавливает прежние ID/offset. Кэш остаётся ограниченным. |

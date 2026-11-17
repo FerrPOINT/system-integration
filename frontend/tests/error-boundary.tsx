@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense, type ReactNode } from 'react';
+import { StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createMemoryRouter, Link, Outlet, RouterProvider } from 'react-router-dom';
 import { RootErrorBoundary, RouteErrorBoundary } from '../src/app/root-error-boundary';
@@ -18,9 +18,6 @@ function Crash(): ReactNode {
   throw new Error('PRIVATE_DIAGNOSTIC');
 }
 const nested = new URLSearchParams(location.search).has('nested');
-const FailedChunk = lazy(async () => {
-  throw new Error('PRIVATE_DIAGNOSTIC chunk');
-});
 const router = createMemoryRouter(
   [
     {
@@ -38,20 +35,10 @@ const router = createMemoryRouter(
             <>
               <h1>Working page</h1>
               <Link to="/crash">Break page</Link>
-              <Link to="/chunk">Break chunk</Link>
             </>
           ),
         },
         { path: '/crash', element: <Crash />, ...(nested ? { errorElement: <RouteErrorBoundary /> } : {}) },
-        {
-          path: '/chunk',
-          element: (
-            <Suspense fallback={<p>Loading chunk</p>}>
-              <FailedChunk />
-            </Suspense>
-          ),
-          ...(nested ? { errorElement: <RouteErrorBoundary /> } : {}),
-        },
       ],
     },
   ],

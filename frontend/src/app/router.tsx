@@ -1,4 +1,3 @@
-import { lazy } from 'react';
 import { Link, Navigate, Outlet, useOutletContext, type RouteObject } from 'react-router-dom';
 import { App } from './app';
 import { RootErrorBoundary, RouteErrorBoundary } from './root-error-boundary';
@@ -6,24 +5,12 @@ import type { SessionRouteContext } from './route-context';
 import type { TaskRouteContext } from '../features/tasks/ui/task-route-context';
 import { PageHeader } from '../shared/ui/page-header';
 
-const TaskList = lazy(() =>
-  import('../features/tasks/ui/task-list-page').then((module) => ({ default: module.TaskList })),
-);
-const TaskCard = lazy(() =>
-  import('../features/tasks/ui/task-details-page').then((module) => ({ default: module.TaskCard })),
-);
-const NewTask = lazy(() =>
-  import('../features/tasks/ui/task-create-dialog').then((module) => ({ default: module.NewTask })),
-);
-const IssueList = lazy(() =>
-  import('../features/operations/ui/issue-list-page').then((module) => ({ default: module.IssueList })),
-);
-const IssueCard = lazy(() =>
-  import('../features/operations/ui/issue-details-page').then((module) => ({ default: module.IssueCard })),
-);
-const ReconciliationCard = lazy(() =>
-  import('../features/operations/ui/reconciliation-page').then((module) => ({ default: module.ReconciliationCard })),
-);
+import { TaskList } from '../features/tasks/ui/task-list-page';
+import { TaskCard } from '../features/tasks/ui/task-details-page';
+import { NewTask } from '../features/tasks/ui/task-create-dialog';
+import { IssueList } from '../features/operations/ui/issue-list-page';
+import { IssueCard } from '../features/operations/ui/issue-details-page';
+import { ReconciliationCard } from '../features/operations/ui/reconciliation-page';
 
 function TaskListRoute() {
   const { user } = useOutletContext<SessionRouteContext>();

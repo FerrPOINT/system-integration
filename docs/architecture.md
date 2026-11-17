@@ -319,9 +319,10 @@ Spring MVC принимает запросы, Spring Security
 канонического BusinessStatus enum парсером URL. Между features разрешены только
 task keys/status labels и публичный operations/reconciliation для кнопки сверки.
 
-Единственное дерево Route Objects находится в app/router.tsx. React.lazy загружает
-экраны под Suspense; статическая route boundary сохраняет Shell при ошибке экрана
-или chunk, корневая boundary даёт безопасное восстановление всего приложения.
+Единственное дерево Route Objects находится в app/router.tsx. Все экраны
+входят в начальную сборку, поэтому переходы в открытой вкладке не требуют
+дозагрузки файлов предыдущей публикации. Route boundary сохраняет оболочку
+при ошибке экрана, корневая boundary даёт восстановление всего приложения.
 Query владеет серверными чтениями; loaders и второй кэш не добавлены. Role gates
 используют readonly session из Outlet context, а сервер проверяет доступ заново.
 

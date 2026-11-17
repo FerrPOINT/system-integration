@@ -27,7 +27,7 @@ export function useMainScroll() {
       restoring.current = false;
       observer.disconnect();
     };
-    // A Query/Suspense loading screen must not erase a POP position before content arrives.
+    // A loading screen must not erase a POP position before content arrives.
     const observer = new MutationObserver(restore);
     observer.observe(node, { childList: true, subtree: true });
     restore();
