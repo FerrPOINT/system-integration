@@ -595,16 +595,32 @@ test('accepted reconciliation retries reads and opens the same saved snapshot', 
   await page.goto('/tests/command-outcome.html');
   const start = page.getByRole('button', { name: 'Выполнить сверку', exact: true });
   await expect(start).toBeVisible();
+  const opacity = await start.evaluate((button) => getComputedStyle(button).opacity);
+  const taskRead = '/api/tasks/' + taskId;
+  const readsBefore = state.reads.filter((path) => path === taskRead).length;
+  let releaseWrite!: () => void;
   let releaseRead!: () => void;
+  state.holdWrite = new Promise<void>((resolve) => {
+    releaseWrite = resolve;
+  });
   state.holdRead = new Promise<void>((resolve) => {
     releaseRead = resolve;
   });
   try {
     await start.click();
-    await expect(page.getByRole('status').filter({ hasText: 'Сверка сохранена.' })).toBeVisible();
-    await expect(start).toHaveCount(0);
+    await expect(start).toBeDisabled();
+    await expect(start).toHaveCSS('opacity', opacity);
+    await start.dispatchEvent('click');
+    await expect.poll(() => state.commands.length).toBe(1);
+
+    releaseWrite();
+    await expect.poll(() => state.reads.filter((path) => path === taskRead).length).toBeGreaterThan(readsBefore);
+    await expect(start).toBeDisabled();
+    await expect(start).toHaveCSS('opacity', opacity);
+    await expect(page.getByText('Сверка сохранена.', { exact: false })).toHaveCount(0);
     expect(state.commands).toHaveLength(1);
   } finally {
+    releaseWrite();
     releaseRead();
   }
   await expect(page.getByRole('alert').filter({ hasText: 'Сверка сохранена.' })).toBeVisible();
@@ -949,7 +965,7 @@ for (const screen of ['', 'issue', 'reconciliation']) {
       await expect.poll(() => state.commands.length).toBe(1);
       await page.getByRole('link', { name: 'Задания', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Все задания', exact: true })).toHaveCount(0);
-      await expect(page.getByRole('button', { name: 'Сверяем…', exact: true })).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Выполнить сверку', exact: true })).toBeDisabled();
       release();
       await expect(page.getByRole('alert')).toContainText('Сверка могла сохраниться');
       const nativeProtected = await page.evaluate(() => {
@@ -1282,7 +1298,7 @@ for (const screen of ['', 'issue', 'reconciliation']) {
     state.badSnapshotReceipt = undefined;
     await page.getByRole('button', { name: 'Проверить результат сверки', exact: true }).click();
     await expect.poll(() => state.commands.length).toBe(2);
-    await expect(page.getByRole('button', { name: 'Сверяем…', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Проверить результат сверки', exact: true })).toHaveCount(0);
     expect(state.commands[1]).toEqual(state.commands[0]);
     await openAccountMenu(page);
     await logout.click();
