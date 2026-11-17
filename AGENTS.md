@@ -11,6 +11,7 @@
 | frontend | [AGENTS](frontend/AGENTS.md): экраны, API, кэш и общие компоненты. |
 | contracts | [AGENTS](contracts/AGENTS.md): OpenAPI и build-time генерация. |
 | tests | [AGENTS](tests/AGENTS.md): API/UI, восстановление, SQL и нагрузка. |
+| seed | [README](seed/README.md): большой демонстрационный набор, защита существующих данных и проверка через настоящий API. |
 
 Перед изменением поведения проверьте правило в [аналитике](docs/analysis.md)
 и критерий в [декомпозиции](docs/decomposition.md). Границы кода и владельцы

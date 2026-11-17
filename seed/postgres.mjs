@@ -116,7 +116,7 @@ export function existingDataset(db, model) {
   );
   const issues = db.read(
     'si_test',
-    `SELECT coalesce(jsonb_agg(jsonb_build_object('id',id)),'[]') FROM exchange_issues WHERE id IN (${ids(model.rows.exchange_issues)});`,
+    `SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'status',status)),'[]') FROM exchange_issues WHERE id IN (${ids(model.rows.exchange_issues)});`,
   );
   const faults = db.read(
     'si_emulator_test',

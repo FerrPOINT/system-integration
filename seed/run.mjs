@@ -4,6 +4,7 @@ import { dataset } from './dataset.mjs';
 import { id } from './catalog.mjs';
 import { postgres, existingDataset, insertDataset, protectedData, literal } from './postgres.mjs';
 import { verify } from './verify.mjs';
+import { writeShowcase } from './report.mjs';
 
 const command = process.argv[2];
 const pristine = process.argv[3] === '--pristine';
@@ -42,7 +43,9 @@ console.log(
   `Demo dataset: ${inserted.insertedTasks} new tasks; ${inserted.insertedIssues} new issues. Verifying the actual API...`,
 );
 const summary = await verify(db, model, { fresh: pristine || inserted.insertedTasks === model.rows.tasks.length });
-const current = new Map(existingDataset(db, model).tasks.map((task) => [task.id, task]));
+const current = existingDataset(db, model);
+const titles = new Map(current.tasks.map((task) => [task.id, task.title]));
+const statuses = new Map(current.issues.map((issue) => [issue.id, issue.status]));
 const result = {
   version: model.version,
   anchor,
@@ -53,14 +56,18 @@ const result = {
   preserved: after,
   examples: model.examples.map((item) => ({
     ...item,
-    title: current.get(item.taskId).title,
+    title: titles.get(item.taskId),
     url: `http://127.0.0.1:19673/tasks/${item.taskId}`,
     issueUrl: item.issueId ? `http://127.0.0.1:19673/issues/${item.issueId}` : null,
   })),
   generalIssues: model.rows.exchange_issues
     .filter((issue) => !issue.task_id)
-    .map((issue) => ({ issueId: issue.id, status: issue.status, url: 'http://127.0.0.1:19673/issues/' + issue.id })),
+    .map((issue) => ({
+      issueId: issue.id,
+      status: statuses.get(issue.id),
+      url: 'http://127.0.0.1:19673/issues/' + issue.id,
+    })),
 };
-await writeFile(new URL('showcase.json', results), JSON.stringify(result, null, 2));
+await writeShowcase(result);
 console.log(JSON.stringify(summary));
-console.log('Existing data preserved. Scenario links: tests/results/showcase.json');
+console.log('Existing data preserved. Scenario links: tests/results/showcase.md and showcase.json');
