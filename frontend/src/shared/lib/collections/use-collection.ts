@@ -25,7 +25,7 @@ type LoadFailure = { direction: 'next' | 'previous'; error: Error };
 const changed = 'Список изменился. Позиция восстановлена по доступным записям.';
 const unavailable = 'Браузер не сохраняет позицию списка.';
 
-/** React Query owns both the desktop window and the mobile page sequence. */
+/** React Query owns both the numbered pages and the bounded feed. */
 export function useCollection<T>({
   key,
   positionScope,
@@ -37,6 +37,7 @@ export function useCollection<T>({
   identify,
   refreshInterval = false,
   viewportRef,
+  scrollWithinViewport = false,
 }: {
   key: QueryKey;
   positionScope: string;
@@ -48,6 +49,7 @@ export function useCollection<T>({
   identify: (item: T) => string;
   refreshInterval?: number | false;
   viewportRef?: Ref<HTMLDivElement>;
+  scrollWithinViewport?: boolean;
 }) {
   const owner = useContext(CollectionOwner);
   const location = useLocation();
@@ -77,7 +79,7 @@ export function useCollection<T>({
   if (restoration.key !== storageKey) setRestoration(initial);
   const current = restoration.key === storageKey ? restoration : initial;
   const snapshot = useRef<{ key: string; position: FeedPosition } | null>(null);
-  if (feed && !owner) throw new Error('CollectionOwner is required for a mobile collection');
+  if (feed && !owner) throw new Error('CollectionOwner is required for a feed');
   const query = useInfiniteQuery({
     queryKey,
     enabled: enabled && current.phase !== 'reset-start' && current.phase !== 'reset-restore',
@@ -115,7 +117,7 @@ export function useCollection<T>({
   const restoring = feed && current.phase !== 'ready';
   const capture = useCallback(() => {
     if (!feed || !isCurrentLocation(location) || current.phase !== 'ready') return;
-    const position = capturePosition(viewport.current, pages, identify);
+    const position = capturePosition(viewport.current, pages, identify, scrollWithinViewport ? viewport.current : null);
     if (!position) return;
     snapshot.current = { key: storageKey, position };
     const issue = writePosition(storageKey, position);
@@ -125,7 +127,7 @@ export function useCollection<T>({
           ? value
           : { ...(value.key === storageKey ? value : initial), notice: unavailable },
       );
-  }, [feed, location, current.phase, pages, identify, storageKey, initial]);
+  }, [feed, location, current.phase, pages, identify, storageKey, initial, scrollWithinViewport]);
 
   useEffect(() => {
     if (
@@ -150,10 +152,11 @@ export function useCollection<T>({
 
   useLayoutEffect(() => {
     if (!feed || !enabled || !viewport.current || !isCurrentLocation(location)) return;
+    const root = scrollWithinViewport ? viewport.current : null;
     const old = snapshot.current?.key === storageKey ? snapshot.current.position : undefined;
     // Disable native anchoring on this viewport; adjustment belongs to this controller
     // and works the same way in browsers without CSS scroll anchoring.
-    const alignment = !restoring && old && pages?.length ? alignPosition(viewport.current, old) : undefined;
+    const alignment = !restoring && old && pages?.length ? alignPosition(viewport.current, old, root) : undefined;
     // Router scroll restoration and the committed DOM must settle before measuring.
     const frame = requestAnimationFrame(() => {
       if (!isCurrentLocation(location) || !viewport.current) return;
@@ -185,7 +188,7 @@ export function useCollection<T>({
           setRestoration({ ...current, phase: 'reset-restore' });
           return;
         }
-        const result = alignPosition(viewport.current, wanted);
+        const result = alignPosition(viewport.current, wanted, root);
         if (
           result !== 'restored' &&
           hasNextPage &&
@@ -195,16 +198,16 @@ export function useCollection<T>({
           if (!isFetching) loadPage('next');
           return;
         }
-        if (result !== 'restored') alignPosition(viewport.current, nearestPosition(wanted, pages, identify));
+        if (result !== 'restored') alignPosition(viewport.current, nearestPosition(wanted, pages, identify), root);
         setRestoration({ ...current, phase: 'ready', notice: result === 'restored' ? undefined : changed });
-        const position = capturePosition(viewport.current, pages, identify);
+        const position = capturePosition(viewport.current, pages, identify, root);
         if (position) {
           snapshot.current = { key: storageKey, position };
           writePosition(storageKey, position);
         }
       } else {
         if (old && alignment === 'missing') {
-          alignPosition(viewport.current, nearestPosition(old, pages, identify));
+          alignPosition(viewport.current, nearestPosition(old, pages, identify), root);
           setRestoration((value) =>
             value.key === storageKey && value.notice === changed ? value : { ...current, notice: changed },
           );
@@ -228,6 +231,7 @@ export function useCollection<T>({
     hasNextPage,
     loadPage,
     capture,
+    scrollWithinViewport,
   ]);
 
   useLayoutEffect(() => {
@@ -238,21 +242,24 @@ export function useCollection<T>({
       frame = requestAnimationFrame(capture);
     };
     const beforeLeave = () => capture();
-    window.addEventListener('scroll', scroll, { passive: true });
+    const scrollTarget = scrollWithinViewport ? viewport.current : window;
+    if (!scrollTarget) return;
+    scrollTarget.addEventListener('scroll', scroll, { passive: true });
     window.addEventListener('pointerdown', beforeLeave, true);
     window.addEventListener('keydown', beforeLeave, true);
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', scroll);
+      scrollTarget.removeEventListener('scroll', scroll);
       window.removeEventListener('pointerdown', beforeLeave, true);
       window.removeEventListener('keydown', beforeLeave, true);
     };
-  }, [feed, current.phase, capture]);
+  }, [feed, current.phase, capture, scrollWithinViewport]);
 
   return {
     query,
     ...projection,
     viewportRef: composedRef,
+    scrollRoot: scrollWithinViewport ? viewport : undefined,
     restoring,
     autoLoad: !restoring && !failure && !isError,
     nextError: failure?.direction === 'next' ? failure.error : query.isFetchNextPageError ? query.error : null,

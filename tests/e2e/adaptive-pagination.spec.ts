@@ -240,7 +240,7 @@ test('UI-15: issue table and mobile cards use the same server window without los
   }
 });
 
-test('UI-15: history keeps page boundaries and exposes every saved event', async ({ page }, info) => {
+test('UI-15: history auto-load exposes every saved event', async ({ page }, info) => {
   loadUiEnvironment();
   await login(page);
   const id = await create(page, 'E2E история с адаптивной пагинацией');
@@ -262,36 +262,11 @@ test('UI-15: history keeps page boundaries and exposes every saved event', async
   );
   await page.goto('/tasks/' + id);
   const region = page.locator('.history-panel .paged-list');
-  await expect(region.locator('[data-page-item]').first()).toBeVisible();
-  await page.locator('.history-panel').scrollIntoViewIfNeeded();
-  if (info.project.name === 'mobile') {
-    await expect(region.locator('time').first()).toHaveText(/ UTC$/);
-    expect(await collectFeed(region, '[data-page-item]', 'data-event-id')).toEqual(new Set(expected));
-    await fits(page, region);
-    return;
-  }
-  await settled(page, region);
-  const size = Number(new URL(page.url()).searchParams.get('size'));
-  const pageCount = Math.ceil(expected.length / size);
-  const rows = region.locator('[data-page-item]');
-  const next = region.getByRole('button', { name: 'Далее →', exact: true });
-  for (let index = 0; index < pageCount; index++) {
-    await settled(page, region);
-    const search = new URL(page.url()).searchParams;
-    expect(Number(search.get('page') ?? 0)).toBe(index);
-    expect(Number(search.get('size'))).toBe(size);
-    await expect(region.locator('.pagination-footer')).toBeInViewport();
-    await expect(rows.first()).toBeInViewport();
-    await rows.last().scrollIntoViewIfNeeded();
-    await expect(rows.last()).toBeInViewport();
-    const ids = await rows.evaluateAll((elements) => elements.map((element) => element.getAttribute('data-event-id')));
-    expect(ids).toEqual(expected.slice(index * size, (index + 1) * size));
-    if (index + 1 < pageCount) {
-      await next.click();
-      await expect.poll(() => new URL(page.url()).searchParams.get('page')).toBe(String(index + 1));
-    }
-  }
-  await expect(next).toBeDisabled();
+  await expect(region.locator('[data-event-id]').first()).toBeVisible();
+  await expect(region.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
+  await expect(page).not.toHaveURL(/size=|page=/);
+  if (info.project.name === 'mobile') await expect(region.locator('time').first()).toHaveText(/ UTC$/);
+  expect(await collectFeed(region, '[data-event-id]', 'data-event-id')).toEqual(new Set(expected));
   await expect(region).toContainText('Задание принято и поставлено в очередь');
   await page.screenshot({ path: info.outputPath('adaptive-history.png') });
 });

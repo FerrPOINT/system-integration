@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { login, selectChoice } from './support';
+import { collectFeed, login, selectChoice } from './support';
 import { loadUiEnvironment } from '../load/environment.mjs';
 import { showcaseDirectory } from '../../seed/report.mjs';
 
@@ -24,22 +24,9 @@ test('showcase: both initiators can browse realistic tasks and their own long hi
   await expect(page.getByRole('region', { name: 'Состояние задания', exact: true })).toContainText('Выполнено');
   const history = page.getByRole('region', { name: 'История', exact: true });
   await expect(history.locator('[data-event-id]').first()).toBeVisible();
-  const first = await history.locator('[data-event-id]').first().getAttribute('data-event-id');
-  if (info.project.name === 'desktop') {
-    await expect(page).toHaveURL(/size=/);
-    const short = Number(new URL(page.url()).searchParams.get('size'));
-    await page.setViewportSize({ width: 1440, height: 1200 });
-    await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeGreaterThan(short);
-    await history.getByRole('button', { name: 'Далее →', exact: true }).click();
-    await expect(page).toHaveURL(/page=1/);
-    await expect(history.locator('[data-event-id]').first()).not.toHaveAttribute('data-event-id', first!);
-  } else {
-    const count = await history.locator('[data-event-id]').count();
-    await history.locator('[data-feed-end]').scrollIntoViewIfNeeded();
-    await expect.poll(() => history.locator('[data-event-id]').count()).toBeGreaterThan(count);
-    expect(await history.locator('[data-event-id]').count()).toBeLessThanOrEqual(100);
-    await expect(history.getByRole('navigation', { name: 'Страницы' })).toHaveCount(0);
-  }
+  await expect(history.getByRole('navigation', { name: 'Страницы' })).toHaveCount(0);
+  const seen = await collectFeed(history.locator('.paged-list'), '[data-event-id]', 'data-event-id');
+  expect(seen.size).toBeGreaterThan(120);
   await expect(page.getByRole('alert')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(
     true,
