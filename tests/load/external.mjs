@@ -9,6 +9,7 @@ import { prepareNf08Clients, runNf08Workload } from './nf08-workload.mjs';
 
 const host = process.env.SI_EXTERNAL_SSH_HOST;
 const remoteRoot = process.env.SI_EXTERNAL_REMOTE_ROOT;
+const remoteNode = process.env.SI_EXTERNAL_REMOTE_NODE;
 const port = Number(process.env.SI_EXTERNAL_LOCAL_PORT);
 if (
   !host ||
@@ -20,13 +21,13 @@ if (
   port > 65535
 )
   throw new Error('Set SI_EXTERNAL_SSH_HOST, SI_EXTERNAL_REMOTE_ROOT and a free SI_EXTERNAL_LOCAL_PORT (1024..65535)');
+if (!remoteNode?.startsWith('/'))
+  throw new Error('SI_EXTERNAL_REMOTE_NODE must be an absolute path to the server Node executable');
 if (Number(process.versions.node.split('.')[0]) !== 26) throw new Error('Use the qualified Node 26 toolchain');
 
 const quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
-const setup =
-  'cd ' +
-  quote(remoteRoot) +
-  ' && set -a && . ./.env && set +a && export PATH="$PWD/.local/toolchains/node-v26.13.1-linux-x64/bin:$PATH" && ';
+const setup = `cd ${quote(remoteRoot)} && set -a && . ./.env && set +a && `;
+const nodeCommand = quote(remoteNode);
 const files = ['tests/load/external.mjs', 'tests/load/nf08-workload.mjs', 'tests/support/http.mjs'];
 const children = new Set();
 const sshOptions = [
@@ -170,11 +171,14 @@ try {
   let configuration;
   try {
     configuration = JSON.parse(
-      remoteText('timeout --kill-after=5s 55s node --input-type=module -e ' + quote(preflight), 'Remote preflight'),
+      remoteText(
+        `timeout --kill-after=5s 55s ${nodeCommand} --input-type=module -e ${quote(preflight)}`,
+        'Remote preflight',
+      ),
     );
   } catch {
     throw new Error(
-      'Remote preflight failed; verify committed images, isolated data and SSH access on the application server',
+      'Remote preflight failed; verify SI_EXTERNAL_REMOTE_NODE, committed images, isolated data and SSH access',
     );
   }
   if (configuration.nodeVersion !== process.version)
@@ -194,7 +198,10 @@ try {
   const clients = await prepareNf08Clients(configuration.dataset, 'http://127.0.0.1:' + port, configuration.password);
   delete configuration.password;
   controller = startSsh(
-    [host, setup + 'exec timeout --kill-after=5s 900s env SI_LOAD_PROFILE=nf08-external node tests/load/run.mjs'],
+    [
+      host,
+      setup + `exec timeout --kill-after=5s 900s env SI_LOAD_PROFILE=nf08-external ${nodeCommand} tests/load/run.mjs`,
+    ],
     true,
   );
   lines = createInterface({ input: controller.child.stdout, terminal: false });
