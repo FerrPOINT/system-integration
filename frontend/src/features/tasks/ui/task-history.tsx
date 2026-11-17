@@ -4,6 +4,7 @@ import { Notice } from '../../../shared/ui/notice';
 import { Timeline, TimelineItem, TimelineMarker, TimelineContent } from '../../../shared/ui/timeline';
 import { Card, CardContent, CardTitle } from '../../../shared/ui/card';
 import { Button } from '../../../shared/ui/button';
+import { ActionGroup } from '../../../shared/ui/action-group';
 import { Link, useLocation } from 'react-router-dom';
 import type { HistoryEvent } from '../../../../build/generated/openapi/client';
 import { taskKeys } from '../api/task-keys';
@@ -64,7 +65,7 @@ export function History({
             <div
               className="paged-viewport"
               ref={registryRef}
-              data-page-measurement={history.isError ? 'paused' : undefined}
+              data-page-measurement={history.isError || history.isPlaceholderData ? 'paused' : undefined}
             >
               {mobile && valid && historyPage && (
                 <FeedStart
@@ -92,7 +93,7 @@ export function History({
                   {!history.isFetchNextPageError && !history.isFetchPreviousPageError && (
                     <ErrorMessage error={history.error} />
                   )}
-                  <Timeline data-page-items>
+                  <Timeline data-page-items data-variable-page-total={historyPage.totalItems}>
                     {historyItems.map((event) => (
                       <TimelineItem
                         key={event.eventId}
@@ -116,12 +117,16 @@ export function History({
                             </time>{' '}
                             ·{event.actor === 'SYSTEM' ? ' Система' : ` ${event.actorUsername}`}
                           </small>
-                          {canReview && event.reconciliationId && (
-                            <Link to={'/tasks/' + id + '/reconciliations/' + event.reconciliationId}>
-                              Открыть сохранённую сверку
-                            </Link>
+                          {canReview && (event.reconciliationId || event.issueId) && (
+                            <ActionGroup align="start">
+                              {event.reconciliationId && (
+                                <Link to={'/tasks/' + id + '/reconciliations/' + event.reconciliationId}>
+                                  Открыть сохранённую сверку
+                                </Link>
+                              )}
+                              {event.issueId && <Link to={'/issues/' + event.issueId}>Открыть разбор</Link>}
+                            </ActionGroup>
                           )}
-                          {canReview && event.issueId && <Link to={'/issues/' + event.issueId}>Открыть разбор</Link>}
                         </TimelineContent>
                       </TimelineItem>
                     ))}

@@ -10,7 +10,7 @@ export function usePagination(mode: 'pages' | 'feed' = 'pages') {
   const page = Number(search.get('page') ?? 0);
   const size = Number(search.get('size') ?? 20);
   const valid = isPageIndex(page) && Number.isSafeInteger(size) && size >= 1 && size <= 100;
-  const { viewportRef, measuredSize } = usePageSize(page, mode === 'pages');
+  const { viewportRef, measuredSize } = usePageSize(page, size, mode === 'pages');
   useEffect(() => {
     if (!valid) return;
     // The router can update the address before its transitioned React location.
