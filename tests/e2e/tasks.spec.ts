@@ -14,6 +14,7 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
   await expect(page.getByRole('button', { name: 'Создать', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+  await expect(page.getByText('REQ-800001', { exact: true })).toBeVisible();
   await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
   await expect(page.getByText('Получено исполнителем', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Изменить название' }).click();
@@ -38,10 +39,13 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
     })
     .toBe(true);
   if (testInfo.project.name === 'desktop') {
-    await expect.poll(() => new URL(page.url()).searchParams.get('size')).not.toBeNull();
-    const historySize = Number(new URL(page.url()).searchParams.get('size'));
+    const pageSize = () => Number(new URL(page.url()).searchParams.get('size'));
+    // Measure the populated history before comparing the tall and short layouts.
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await expect.poll(pageSize).toBeGreaterThan(1);
+    const historySize = pageSize();
     await page.setViewportSize({ width: 1440, height: 550 });
-    await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeLessThan(historySize);
+    await expect.poll(pageSize).toBeLessThan(historySize);
     await expect
       .poll(async () => {
         const card = await history.boundingBox();
