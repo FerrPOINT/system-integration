@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { collectFeed, selectChoice } from '../e2e/support';
+import { selectChoice } from '../e2e/support';
 
 const taskId = '10000000-0000-4000-8000-000000000001';
 const snapshotId = '10000000-0000-4000-8000-000000000002';
@@ -27,7 +27,7 @@ async function mockApi(
     totalTasks?: number;
     signedIn?: boolean;
     technicalHistory?: boolean;
-    historyActionAt?: number;
+    historyActions?: boolean;
     tallHistoryFrom?: number;
   } = {},
 ) {
@@ -93,7 +93,7 @@ async function mockApi(
                       'History event ' + (pageNumber * size + n) + '. ' + 'Подробное описание обмена. '.repeat(16),
                   }
                 : {}),
-              ...(control.historyActionAt === pageNumber * size + n
+              ...(control.historyActions && pageNumber * size + n === 0
                 ? {
                     actor: 'USER',
                     actorUserId: userId,
@@ -200,44 +200,102 @@ test('failed task refetch retains the measured window and does not retry through
   expect(new URL(page.url()).searchParams.get('businessStatus')).toBe('SUCCEEDED');
 });
 
-test('task history loads more without numbered pages', async ({ page }, info) => {
+test('task history exposes descriptions and adapts the left pane to viewport height', async ({ page }, info) => {
   if (info.project.name === 'desktop') await page.setViewportSize({ width: 1280, height: 720 });
-  const reads = await mockApi(page, 'INITIATOR', 60, { technicalHistory: true });
-  await page.goto('/tasks/' + taskId + '?size=8&page=1');
+  await mockApi(page, 'INITIATOR', 1000, { technicalHistory: true });
+  await page.goto('/tasks/' + taskId);
   const history = page.getByRole('region', { name: 'История', exact: true });
-  const events = history.locator('[data-event-id]');
+  const state = page.getByRole('region', { name: 'Состояние задания', exact: true });
   await expect(history.getByText('Попытка 1: PUT', { exact: true })).toBeVisible();
   await expect(history.locator('details')).toHaveCount(0);
-  await expect(page).not.toHaveURL(/size=|page=/);
-  await expect(history.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
-  await expect(events).toHaveCount(20);
-  await page.getByRole('button', { name: 'Изменить название', exact: true }).click();
-  const draft = page.getByRole('textbox', { name: 'Новое название', exact: true });
-  await draft.fill('History draft');
-  await history.locator('[data-feed-end]').scrollIntoViewIfNeeded();
-  await expect(events).toHaveCount(40);
-  await expect(draft).toHaveValue('History draft');
-  await expect(page.getByRole('alertdialog')).toHaveCount(0);
-  expect(
-    reads
-      .filter((read) => read.includes('/history?'))
-      .map((read) => {
-        const params = new URL(read, 'http://localhost').searchParams;
-        return { page: params.get('page'), size: params.get('size') };
-      }),
-  ).toEqual([
-    { page: '0', size: '20' },
-    { page: '1', size: '20' },
-  ]);
+  if (info.project.name === 'mobile') {
+    await expect(page).not.toHaveURL(/size=/);
+    await expect(history.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
+    const stateBox = (await state.boundingBox())!,
+      historyBox = (await history.boundingBox())!;
+    expect(historyBox.y).toBeGreaterThanOrEqual(stateBox.y + stateBox.height);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+    ).toBe(true);
+    return;
+  }
+  async function settledSize() {
+    await expect
+      .poll(async () => {
+        const size = Number(new URL(page.url()).searchParams.get('size'));
+        return (
+          (await history.locator('[data-event-id]').count()) === size &&
+          (await history.locator('[aria-busy]').getAttribute('aria-busy')) === 'false'
+        );
+      })
+      .toBe(true);
+    return Number(new URL(page.url()).searchParams.get('size'));
+  }
+  async function fits() {
+    await expect
+      .poll(() =>
+        history.evaluate((panel) => {
+          const content = panel.querySelector('.ui-card-content')!,
+            viewport = panel.querySelector('.paged-viewport')!;
+          const footer = panel.querySelector('.pagination-footer')!.getBoundingClientRect();
+          const area = viewport.getBoundingClientRect(),
+            box = panel.getBoundingClientRect();
+          const workspace = panel.closest('.task-workspace')!.getBoundingClientRect();
+          const summary = document.querySelector('.task-summary')!.getBoundingClientRect();
+          const rows = [...panel.querySelectorAll('[data-event-id]')];
+          return {
+            historyFirst: box.right <= summary.left && Math.abs(box.top - summary.top) < 1,
+            fillsColumn: Math.abs(box.bottom - workspace.bottom) < 1,
+            footerAtBottom:
+              Math.abs(
+                content.getBoundingClientRect().bottom -
+                  parseFloat(getComputedStyle(content).paddingBottom) -
+                  footer.bottom,
+              ) < 1,
+            visibleFooter: footer.bottom <= innerHeight && area.bottom <= footer.top,
+            fittingRows:
+              rows.every((row) => row.getBoundingClientRect().bottom <= area.bottom + 1) ||
+              (rows.length === 1 && viewport.scrollHeight > viewport.clientHeight),
+            noOverflow:
+              document.documentElement.scrollWidth <= document.documentElement.clientWidth &&
+              document.querySelector('main')!.scrollTop === 0,
+          };
+        }),
+      )
+      .toEqual({
+        historyFirst: true,
+        fillsColumn: true,
+        footerAtBottom: true,
+        visibleFooter: true,
+        fittingRows: true,
+        noOverflow: true,
+      });
+  }
+  await expect(page).toHaveURL(/size=/);
+  await fits();
+  const short = await settledSize();
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeGreaterThan(short);
+  const tall = await settledSize();
+  expect(tall).toBeGreaterThan(short);
+  await fits();
+  await page.setViewportSize({ width: 820, height: 480 });
+  await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeLessThan(tall);
+  expect(await settledSize()).toBeLessThan(tall);
+  await fits();
+  await history.getByRole('button', { name: 'Далее →', exact: true }).click();
+  await expect(page).toHaveURL(/page=1/);
+  await settledSize();
+  await fits();
 });
 
-test('history separates the two event links at wide and narrow widths', async ({ page }, info) => {
+test('mixed-height history fits all nine entries and separates the two event links', async ({ page }, info) => {
   const desktop = info.project.name === 'desktop';
   await page.setViewportSize(desktop ? { width: 1513, height: 1243 } : { width: 320, height: 720 });
-  await mockApi(page, 'OPERATOR', 9, { technicalHistory: true, historyActionAt: 0 });
+  await mockApi(page, 'OPERATOR', 9, { technicalHistory: true, historyActions: true });
   await page.goto('/tasks/' + taskId + '?size=8&page=0');
   const history = page.getByRole('region', { name: 'История', exact: true });
-  const event = history.locator('[data-event-id]').filter({
+  const event = history.locator('[data-page-item]').filter({
     has: page.getByRole('link', { name: 'Открыть сохранённую сверку', exact: true }),
   });
   const reconciliation = event.getByRole('link', { name: 'Открыть сохранённую сверку', exact: true });
@@ -249,55 +307,61 @@ test('history separates the two event links at wide and narrow widths', async ({
   const second = (await issue.boundingBox())!;
   const gap = second.y >= first.y + first.height ? second.y - first.y - first.height : second.x - first.x - first.width;
   expect.soft(gap).toBeGreaterThanOrEqual(6);
-  await expect(history.locator('[data-event-id]')).toHaveCount(9);
-  await expect(history.getByText('1–9 из 9', { exact: true })).toBeVisible();
-  await expect(history.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
+  await expect(history.locator('[data-page-item]')).toHaveCount(9);
   if (desktop) {
+    await expect(history.getByText('Всего: 9', { exact: true })).toBeVisible();
     expect(
       await history
         .locator('.paged-viewport')
         .evaluate((viewport) => viewport.scrollHeight <= viewport.clientHeight + 1),
     ).toBe(true);
   } else {
+    await expect(history.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       await page.evaluate(() => document.documentElement.clientWidth),
     );
   }
 });
 
-test('desktop history restores the scroll position after visiting a reconciliation @desktop', async ({ page }) => {
+test('history page boundaries stay fixed when a later page has taller events @desktop', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  const total = 125;
-  await mockApi(page, 'OPERATOR', total, { historyActionAt: 115, tallHistoryFrom: 20 });
-  await page.goto('/tasks/' + taskId);
+  const total = 35;
+  await mockApi(page, 'OPERATOR', total, { tallHistoryFrom: 6 });
+  await page.goto('/tasks/' + taskId + '?size=5&page=0');
   const history = page.getByRole('region', { name: 'История', exact: true });
-  const list = history.locator('.paged-list');
-  const viewport = history.getByRole('region', { name: 'События истории', exact: true });
-  await expect(history.locator('[data-event-id]').first()).toBeVisible();
-  expect(await collectFeed(list, '[data-event-id]', 'data-event-id')).toEqual(
-    new Set(
-      Array.from({ length: total }, (_, index) => '10000000-0000-4000-8000-' + String(1000 + index).padStart(12, '0')),
-    ),
-  );
+  const viewport = history.locator('.paged-viewport');
+  const events = history.locator('[data-page-item]');
+  const search = () => new URL(page.url()).searchParams;
+  const next = history.getByRole('button', { name: 'Далее →', exact: true });
+  await expect(next).toBeEnabled();
+  await expect.poll(() => Number(search().get('size'))).toBe(6);
+  await expect(events).toHaveCount(6);
+  await expect(next).toBeEnabled();
 
-  const link = history.getByRole('link', { name: 'Открыть сохранённую сверку', exact: true });
-  await link.scrollIntoViewIfNeeded();
-  const anchor = async () =>
-    viewport.evaluate((element) => {
-      const top = element.getBoundingClientRect().top;
-      const row = [...element.querySelectorAll('[data-record-id]')].find(
-        (item) => item.getBoundingClientRect().bottom > top,
-      )!;
-      return { id: row.getAttribute('data-record-id'), offset: Math.round(row.getBoundingClientRect().top - top) };
-    });
+  await next.click();
+  await expect(events.first()).toContainText('History event 6.');
+  await expect.poll(() => viewport.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
+  expect(search().get('size')).toBe('6');
+  expect(search().get('page')).toBe('1');
+  await expect(events).toHaveCount(6);
+  await expect(history.getByText('7–12 из 35', { exact: true })).toBeVisible();
+  await expect(history.getByRole('button', { name: 'Страница 6', exact: true })).toBeVisible();
+  await events.last().scrollIntoViewIfNeeded();
   await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-  const before = await anchor();
-  await link.click();
-  await expect(page.getByRole('heading', { name: 'Сохранённая сверка', exact: true })).toBeVisible();
-  await page.goBack();
-  await expect(list).toHaveAttribute('aria-busy', 'false');
-  await expect.poll(anchor).toEqual(before);
-  await expect(link).toBeInViewport();
+
+  await history.getByRole('button', { name: 'Страница 6', exact: true }).click();
+  await expect(events.first()).toContainText('History event 30.');
+  await expect(history.getByText('31–35 из 35', { exact: true })).toBeVisible();
+  await expect(events).toHaveCount(5);
+  await expect(next).toBeDisabled();
+  expect(search().get('size')).toBe('6');
+
+  await history.getByRole('button', { name: 'Страница 1', exact: true }).click();
+  await expect(history.getByText('1–6 из 35', { exact: true })).toBeVisible();
+  expect(search().get('size')).toBe('6');
 });
 
 test('failed history polling retains its window and the next ordinary poll can recover @desktop', async ({ page }) => {
@@ -308,11 +372,20 @@ test('failed history polling retains its window and the next ordinary poll can r
   await page.goto('/tasks/' + taskId);
   const events = page.locator('[data-event-id]');
   await expect.poll(() => events.count()).toBeGreaterThan(0);
-  await expect(events).toHaveCount(20);
-  await expect(page.getByRole('region', { name: 'История', exact: true }).locator('.paged-list')).toHaveAttribute(
-    'aria-busy',
-    'false',
-  );
+  await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeLessThan(20);
+  // A new size in the URL precedes its response; freeze the baseline only after that window is rendered.
+  await expect
+    .poll(async () => {
+      const size = Number(new URL(page.url()).searchParams.get('size'));
+      return (
+        (await events.count()) === size &&
+        (await page
+          .getByRole('region', { name: 'История', exact: true })
+          .locator('[aria-busy]')
+          .getAttribute('aria-busy')) === 'false'
+      );
+    })
+    .toBe(true);
   const originalUrl = page.url();
   const originalEvents = await events.allTextContents();
   const count = reads.filter((read) => read.includes('/history?')).length;
@@ -493,10 +566,14 @@ test('desktop navigation resets warm detail scroll and restores POP after query 
   await expect.poll(() => page.locator('main').evaluate((main) => main.scrollTop)).toBe(0);
   await page.setViewportSize({ width: 800, height: 480 });
   await page.getByRole('link', { name: 'К заданию', exact: true }).click();
-  const history = page.getByRole('region', { name: 'История', exact: true });
-  await expect(history.locator('[data-event-id]').first()).toBeVisible();
-  expect(await page.locator('main').evaluate((main) => main.scrollTop)).toBe(0);
-  await history.locator('[data-feed-end]').scrollIntoViewIfNeeded();
-  await expect(history.locator('[data-event-id]')).toHaveCount(40);
-  await expect.poll(() => page.locator('main').evaluate((main) => main.scrollTop)).toBe(0);
+  const next = page
+    .getByRole('region', { name: 'История', exact: true })
+    .getByRole('button', { name: 'Далее →', exact: true });
+  await expect(next).toBeEnabled();
+  const historyTop = await page.locator('main').evaluate((main) => main.scrollTop);
+  expect(historyTop).toBe(0);
+  await expect(next).toBeInViewport();
+  await next.click();
+  await expect(page).toHaveURL(/page=1/);
+  await expect.poll(() => page.locator('main').evaluate((main) => main.scrollTop)).toBe(historyTop);
 });

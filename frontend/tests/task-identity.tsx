@@ -38,6 +38,7 @@ function Harness() {
         <button onClick={() => navigate('/tasks/' + tasks[0].taskId)}>Open A</button>
         <button onClick={() => navigate('/tasks/' + tasks[1].taskId)}>Open B</button>
         <button onClick={() => navigate(-1)}>History back</button>
+        <button onClick={() => navigate('?page=1&size=10')}>Change history page</button>
         <button
           onClick={() =>
             client.setQueryData(taskKeys.task(tasks[0].taskId), { ...tasks[0], title: 'Server A', titleRevision: 9 })
