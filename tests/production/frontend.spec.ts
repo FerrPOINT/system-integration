@@ -605,6 +605,8 @@ test('issue registry uses two lines on desktop and keeps diagnostics in mobile c
     await expect(problem.getByRole('link')).toHaveAttribute('title', summary);
     await expect(problem).toContainText(input.reference + ' · ' + title);
     await expect(problem.locator('small')).toHaveCount(1);
+    await expect(cells.last().locator('time').first()).toHaveAttribute('title', /00:00:00 UTC/);
+    await expect(cells.last().locator('time')).toHaveCount(2);
     await expect(rows.last().getByRole('cell').first()).toContainText('Лента · ' + feedSummary);
     expect((await rows.first().boundingBox())!.height).toBeLessThanOrEqual(64);
     expect(

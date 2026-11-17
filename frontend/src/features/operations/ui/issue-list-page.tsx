@@ -204,7 +204,9 @@ export function IssueList() {
                             </span>
                           </td>
                           <td>
-                            <time dateTime={issue.openedAt}>{timestamp(issue.openedAt, { showZone: false })}</time>
+                            <time dateTime={issue.openedAt} title={timestamp(issue.openedAt)}>
+                              {timestamp(issue.openedAt, { showZone: false, compact: true })}
+                            </time>
                             {issue.nextAttemptAt && (
                               <small
                                 className="ui-truncate"
@@ -212,7 +214,7 @@ export function IssueList() {
                               >
                                 Повтор:{' '}
                                 <time dateTime={issue.nextAttemptAt}>
-                                  {timestamp(issue.nextAttemptAt, { showZone: false })}
+                                  {timestamp(issue.nextAttemptAt, { showZone: false, compact: true })}
                                 </time>
                               </small>
                             )}
