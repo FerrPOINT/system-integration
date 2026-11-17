@@ -23,6 +23,8 @@ FROM eclipse-temurin:25.0.5_8-jre@sha256:a640968ae55027b322cedd5f8228b01a84baff0
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
+# ENTRYPOINT starts Java directly, so the base image supervisor is unused.
+RUN rm -f /usr/bin/pebble
 ARG VCS_REF=development
 LABEL org.opencontainers.image.revision=$VCS_REF
 WORKDIR /app

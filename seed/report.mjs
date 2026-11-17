@@ -1,8 +1,13 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { SCENARIOS } from './catalog.mjs';
 
+export function showcaseDirectory(target) {
+  if (target !== 'load' && target !== 'demo') throw new Error('Unsupported showcase target');
+  return new URL(`../tests/results/showcase/${target}/`, import.meta.url);
+}
+
 export async function writeShowcase(result) {
-  const results = new URL('../tests/results/', import.meta.url);
+  const results = showcaseDirectory(result.target);
   await mkdir(results, { recursive: true });
   await writeFile(new URL('showcase.json', results), JSON.stringify(result, null, 2));
   const escape = (value) =>

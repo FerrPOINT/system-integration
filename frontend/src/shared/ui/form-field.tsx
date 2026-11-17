@@ -1,28 +1,20 @@
 import type { ReactNode } from 'react';
 import { Label } from './label';
-import { Notice } from './notice';
 
 export function FormField({
   id,
   label,
   required,
   hint,
-  error,
   children,
 }: {
   id: string;
   label: string;
   required?: boolean;
   hint?: ReactNode;
-  error?: string;
-  children: (attrs: {
-    id: string;
-    required?: boolean;
-    'aria-invalid'?: boolean;
-    'aria-describedby'?: string;
-  }) => ReactNode;
+  children: (attrs: { id: string; required?: boolean; 'aria-describedby'?: string }) => ReactNode;
 }) {
-  const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined;
+  const describedBy = hint ? `${id}-hint` : undefined;
   return (
     <div className="ui-form-field">
       <Label htmlFor={id}>
@@ -32,18 +24,12 @@ export function FormField({
       {children({
         id,
         required,
-        'aria-invalid': error ? true : undefined,
         'aria-describedby': describedBy,
       })}
       {hint && (
         <p id={`${id}-hint`} className="ui-field-hint">
           {hint}
         </p>
-      )}
-      {error && (
-        <Notice role="alert" tone="danger" appearance="inline" id={`${id}-error`}>
-          {error}
-        </Notice>
       )}
     </div>
   );

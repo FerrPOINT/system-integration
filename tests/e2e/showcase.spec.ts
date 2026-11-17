@@ -2,13 +2,16 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { login, selectChoice } from './support';
 import { loadUiEnvironment } from '../load/environment.mjs';
+import { showcaseDirectory } from '../../seed/report.mjs';
 
 type Example = { scenario: string; taskId: string; issueId: string | null; title: string; owner: string };
-type Showcase = { examples: Example[]; generalIssues: { issueId: string; status: string }[] };
+type Showcase = { target: 'load'; examples: Example[]; generalIssues: { issueId: string; status: string }[] };
 
 function showcase(): Showcase {
   loadUiEnvironment();
-  return JSON.parse(readFileSync(new URL('../results/showcase.json', import.meta.url), 'utf8'));
+  const report: Showcase = JSON.parse(readFileSync(new URL('showcase.json', showcaseDirectory('load')), 'utf8'));
+  if (report.target !== 'load') throw new Error('The UI tests require a showcase report from the load installation');
+  return report;
 }
 
 test('showcase: both initiators can browse realistic tasks and their own long history', async ({ page }, info) => {

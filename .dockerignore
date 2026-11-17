@@ -2,9 +2,10 @@
 **/.env.*
 !**/.env.example
 .git
-.local
+**/.local
 **/node_modules
 **/build
+!tests/build/*.test.mjs
 **/.gradle
 frontend/dist
 tests/results

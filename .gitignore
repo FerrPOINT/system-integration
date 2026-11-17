@@ -1,5 +1,5 @@
-/.local/
-/.gradle/
+.local/
+.gradle/
 /build/
 /backend/build/
 /emulator/build/
@@ -9,5 +9,6 @@
 /tests/results/
 /tests/node_modules/
 .env
-.env.local
+.env.*
+!.env.example
 __pycache__/

@@ -115,7 +115,7 @@ corepack pnpm --dir tests test:e2e
 ~~~
 
 Генерация OpenAPI создаёт типы в этом checkout для TypeScript-проверки
-runner. Загрузка сида создаёт tests/results/showcase.json и данные для трёх
+runner. Загрузка сида создаёт tests/results/showcase/load/showcase.json и данные для трёх
 showcase-сценариев на двух ширинах. Для приёмки используйте свежую QA-базу:
 повторная загрузка сохраняет уже внесённые изменения, а сценарии проверяют
 исходное состояние примеров.
@@ -262,7 +262,9 @@ node --test tests/build/context.test.mjs
 Проверка использует scratch/COPY без сети, синтетические env-файлы и временный
 каталог внутри .local. Не читает приватные env и удаляет созданные fixtures.
 
-Проверка графов и владения codegen не компилирует бизнес-исходники:
+Проверка графов и владения codegen использует JDK из `JAVA_HOME`
+или ищет Java в `PATH`, если переменная не задана. Бизнес-исходники
+при этом не компилируются.
 
 ~~~sh
 node --test tests/build/gradle.test.mjs
