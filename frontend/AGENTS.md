@@ -30,12 +30,14 @@ React и TypeScript. Код сценария храните рядом с его
 pathname/search/hash выполняется общим isCurrentLocation в pagination/collection;
 не добавляйте задержки и локальные исключения в кнопки перехода.
 
-До 760 px списки и история используют ленту с порциями по 20 записей,
-прокруткой документа и IntersectionObserver. React Query владеет всей
+До 760 px реестры используют ленту с прокруткой документа. История работает
+лентой на всех ширинах. На desktop прокручивается панель истории, до 760 px
+прокручивается документ. Ленты загружают по 20 записей через IntersectionObserver.
+React Query владеет всей
 последовательностью страниц через useCollection: maxPages=5, до 100 записей
 в кэше/DOM и до пяти GET на refetch/poll. Не копируйте выдачу в state.
 Предыдущие страницы доступны сверху; ошибка любого направления останавливает
-autoload до явного retry. Фильтры остаются в URL, page/size принадлежат desktop.
+autoload до явного retry. Фильтры остаются в URL, page/size принадлежат нумерованным реестрам на desktop.
 Scroll position — небольшие sessionStorage metadata, изолированные userId/role
 и коллекцией, без DTO. CollectionOwner передаёт только identity scope.
 При изменении окна проверяйте оба направления, Back после Query GC, ошибки,

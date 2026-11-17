@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import { ErrorMessage } from './error-message';
 import { Button } from './button';
 
@@ -8,12 +8,14 @@ function useVisibleLoad({
   error,
   autoLoad,
   onLoad,
+  scrollRoot,
 }: {
   more: boolean;
   busy: boolean;
   error: Error | null;
   autoLoad: boolean;
   onLoad: () => unknown;
+  scrollRoot?: RefObject<HTMLElement | null>;
 }) {
   const sentinel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -23,14 +25,14 @@ function useVisibleLoad({
       (entries) => {
         if (active && entries.some((entry) => entry.isIntersecting)) onLoad();
       },
-      { rootMargin: '160px 0px' },
+      { root: scrollRoot?.current, rootMargin: '160px 0px' },
     );
     observer.observe(sentinel.current);
     return () => {
       active = false;
       observer.disconnect();
     };
-  }, [more, busy, error, autoLoad, onLoad]);
+  }, [more, busy, error, autoLoad, onLoad, scrollRoot]);
   return sentinel;
 }
 
@@ -41,6 +43,7 @@ export function FeedStart({
   error,
   autoLoad,
   onLoad,
+  scrollRoot,
 }: {
   hasPrevious: boolean;
   pending: boolean;
@@ -48,8 +51,9 @@ export function FeedStart({
   error: Error | null;
   autoLoad: boolean;
   onLoad: () => unknown;
+  scrollRoot?: RefObject<HTMLElement | null>;
 }) {
-  const sentinel = useVisibleLoad({ more: hasPrevious, busy, error, autoLoad, onLoad });
+  const sentinel = useVisibleLoad({ more: hasPrevious, busy, error, autoLoad, onLoad, scrollRoot });
   return (
     <div ref={sentinel} className="feed-start" data-feed-start>
       {error ? (
@@ -82,6 +86,7 @@ export function FeedFooter({
   autoLoad,
   notice,
   onLoad,
+  scrollRoot,
 }: {
   loaded: number;
   total: number;
@@ -94,8 +99,9 @@ export function FeedFooter({
   autoLoad: boolean;
   notice?: string;
   onLoad: () => unknown;
+  scrollRoot?: RefObject<HTMLElement | null>;
 }) {
-  const sentinel = useVisibleLoad({ more: hasNext, busy, error, autoLoad, onLoad });
+  const sentinel = useVisibleLoad({ more: hasNext, busy, error, autoLoad, onLoad, scrollRoot });
   return (
     <div ref={sentinel} className="feed-footer" data-feed-end>
       {error ? (

@@ -92,15 +92,6 @@ test('local cancel and route departure require discard and restore focus on canc
   await expect(title).toHaveValue('Task A');
 });
 
-test('same-record history parameters do not discard or block the draft', async ({ page }) => {
-  await page.goto('/tests/task-identity.html');
-  await page.getByRole('button', { name: 'Изменить название' }).click();
-  await page.getByRole('textbox', { name: 'Новое название' }).fill('History draft');
-  await page.getByRole('button', { name: 'Change history page' }).click();
-  await expect(page.getByRole('alertdialog')).toHaveCount(0);
-  await expect(page.getByRole('textbox', { name: 'Новое название' })).toHaveValue('History draft');
-});
-
 test('pending rename blocks editing, cancel and route departure until acknowledgement', async ({ page }) => {
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {

@@ -37,11 +37,10 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
       );
     })
     .toBe(true);
+  await expect(page).not.toHaveURL(/size=|page=/);
+  await expect(history.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
   if (testInfo.project.name === 'desktop') {
-    await expect.poll(() => new URL(page.url()).searchParams.get('size')).not.toBeNull();
-    const historySize = Number(new URL(page.url()).searchParams.get('size'));
     await page.setViewportSize({ width: 1440, height: 550 });
-    await expect.poll(() => Number(new URL(page.url()).searchParams.get('size'))).toBeLessThan(historySize);
     await expect
       .poll(async () => {
         const card = await history.boundingBox();
@@ -50,7 +49,6 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
       })
       .toBe(true);
   } else {
-    await expect(history.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
     expect(await historyViewport.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
   }
   await page.setViewportSize({ width: testInfo.project.name === 'desktop' ? 1440 : 390, height: 1000 });
