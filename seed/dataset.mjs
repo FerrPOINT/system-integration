@@ -1,4 +1,12 @@
-import { catalog, generalIssues, id, SEED_VERSION } from './catalog.mjs';
+import {
+  catalog,
+  generalIssues,
+  id,
+  RECENT_TASK_COUNT,
+  SEED_VERSION,
+  STANDARD_TASK_COUNT,
+  TASK_COUNT,
+} from './catalog.mjs';
 
 /** Persisted demonstration snapshots, not a second implementation of exchange rules. */
 export function dataset(users, anchor) {
@@ -21,12 +29,14 @@ export function dataset(users, anchor) {
   );
   const examples = [];
   for (const item of catalog()) {
-    const { index, scenario, reference, quantity, taskId, operationId } = item;
+    const { index, scenario, scenarioExample, recent, reference, quantity, taskId, operationId } = item;
     const operator = users.operator;
     const owner = users[item.owner];
-    // Curated examples are recent; the wider register covers three months.
-    const age = index < 1000 ? 1 + ((index * 31) % 90) : (index - 1000) % 14;
-    const start = epoch - age * 86400000 + (1 + (index % 10)) * 3600000 + (index % 59) * 60000;
+    // Keep ordinary completed tasks ahead of diagnostic examples in the newest-first registry.
+    const age = scenarioExample ? (index - STANDARD_TASK_COUNT) % 14 : 1 + ((index * 31) % 90);
+    const start = recent
+      ? epoch + 12 * 3600000 + (index - (TASK_COUNT - RECENT_TASK_COUNT)) * 10 * 60000
+      : epoch - age * 86400000 + (1 + (index % 10)) * 3600000 + (index % 59) * 60000;
     const time = (seconds) => new Date(start + seconds * 1000).toISOString();
     let tick = 0;
     let event = 0;
@@ -151,13 +161,9 @@ export function dataset(users, anchor) {
         completed_at: actual.completedAt,
       });
       // Archived completed imports do not republish a historical feed into the live cursor.
-      for (const [value, copy] of index < 1000
-        ? []
-        : [
-            [result('RUNNING', 1, actual.request), 0],
-            [actual, 0],
-            ...(scenario === 'duplicate' ? [[actual, 1]] : []),
-          ]) {
+      for (const [value, copy] of scenarioExample
+        ? [[result('RUNNING', 1, actual.request), 0], [actual, 0], ...(scenario === 'duplicate' ? [[actual, 1]] : [])]
+        : []) {
         rows.result_events.push({
           operation_id: operationId,
           version: value.version,
@@ -168,7 +174,7 @@ export function dataset(users, anchor) {
         });
       }
       // Held notifications are explicit. Releasing this reference uses the normal fault API.
-      if (index >= 1000)
+      if (scenarioExample)
         rows.faults.push({
           reference: actual.request.reference,
           mode: 'DROP_RESPONSE_AFTER_EXECUTION',
@@ -313,7 +319,7 @@ export function dataset(users, anchor) {
           : task.exchange_version,
       );
     }
-    if (['matched', 'long'].includes(scenario)) {
+    if (recent || ['matched', 'long'].includes(scenario)) {
       const count = scenario === 'long' ? 120 : 1;
       for (let n = 0; n < count; n++) reconcile('MATCH', 'PRESENT');
     }
@@ -401,7 +407,7 @@ export function dataset(users, anchor) {
       });
     if (issue) rows.exchange_issues.push(issue);
     rows.tasks.push(task);
-    if (index >= 1000)
+    if (scenarioExample)
       examples.push({
         ...item,
         title: task.title,

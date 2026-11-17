@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { SCENARIOS } from './catalog.mjs';
+import { RECENT_TASK_COUNT, SCENARIOS, TASK_COUNT } from './catalog.mjs';
 
 export function showcaseDirectory(target) {
   if (target !== 'load' && target !== 'demo') throw new Error('Unsupported showcase target');
@@ -20,7 +20,7 @@ export async function writeShowcase(result) {
   });
   await writeFile(
     new URL('showcase.md', results),
-    `# Демонстрационные примеры\n\n1200 заданий, по 600 у каждого инициатора. Вход: initiator.one, initiator.two или operator; пароль — из приватного .env. Для разбора и сверок нужен operator.\n\nНазвания и статусы отражают последнюю проверку; ваши изменения при повторной загрузке сохраняются. Кратковременные состояния очереди наблюдаются в живых сценариях.\n\n| Сценарий | Задание | Разбор |\n| --- | --- | --- |\n${links.join('\n')}\n\n${result.generalIssues
+    `# Демонстрационные примеры\n\n${TASK_COUNT} заданий, по ${TASK_COUNT / 2} у каждого инициатора. В начале реестра ${RECENT_TASK_COUNT} завершённых заданий с совпадающей сверкой. Вход: initiator.one, initiator.two или operator; пароль — из приватного .env. Для разбора и сверок нужен operator.\n\nНазвания и статусы отражают последнюю проверку; ваши изменения при повторной загрузке сохраняются. Кратковременные состояния очереди наблюдаются в живых сценариях.\n\n| Сценарий | Задание | Разбор |\n| --- | --- | --- |\n${links.join('\n')}\n\n${result.generalIssues
       .slice(0, 2)
       .map((issue) => `[Общая проблема ленты: ${issue.status}](${issue.url})`)
       .join(' · ')}\n`,
