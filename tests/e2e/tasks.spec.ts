@@ -39,13 +39,10 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
     })
     .toBe(true);
   if (testInfo.project.name === 'desktop') {
-    const pageSize = () => Number(new URL(page.url()).searchParams.get('size'));
-    // Measure the populated history before comparing the tall and short layouts.
-    await page.setViewportSize({ width: 1440, height: 1100 });
-    await expect.poll(pageSize).toBeGreaterThan(1);
-    const historySize = pageSize();
     await page.setViewportSize({ width: 1440, height: 550 });
-    await expect.poll(pageSize).toBeLessThan(historySize);
+    const nextHistoryPage = history.getByRole('button', { name: 'Далее →', exact: true });
+    await expect(nextHistoryPage).toBeInViewport();
+    await expect(nextHistoryPage).toBeEnabled();
     await expect
       .poll(async () => {
         const card = await history.boundingBox();
@@ -53,6 +50,9 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
         return card && viewport && card.y + card.height <= viewport.y + viewport.height + 1;
       })
       .toBe(true);
+    await nextHistoryPage.click();
+    await expect(page).toHaveURL(/[?&]page=1(?:&|$)/);
+    await expect(history.getByText(/Название изменено:/)).toHaveCount(0);
   } else {
     await expect(history.getByRole('navigation', { name: 'Страницы', exact: true })).toHaveCount(0);
     expect(await historyViewport.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
