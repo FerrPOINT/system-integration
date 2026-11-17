@@ -18,7 +18,7 @@ system-integration-load (compose.load.yml), его БД и loopback-порты 1
 
 Изолированные свойства UI-компонентов проверяет components.config.ts через собственный
 loopback Vite 19774 без API/БД: Select, отложенные измерения пагинации,
-идентичность/guard форм, исходы команд, render/chunk recovery и bounded feeds.
+идентичность/guard форм, исходы команд, восстановление после ошибки отрисовки и bounded feeds.
 Fixtures используют StrictMode и реальные production components/Query; API
 перехватывается. Mobile window profiles лежат в components/mobile и запускаются
 только мобильным project. Fixtures не входят в production bundle, но входят в frontend typecheck.

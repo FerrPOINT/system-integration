@@ -25,13 +25,3 @@ for (const query of ['', '?value', '?nested', '?nested&value']) {
     await expect(page.getByRole('heading', { name: 'Working page' })).toBeVisible();
   });
 }
-
-test('lazy chunk failure preserves the shell and offers recovery', async ({ page }) => {
-  await page.goto('/tests/error-boundary.html?nested');
-  await page.getByRole('link', { name: 'Break chunk' }).click();
-  await expect(page.getByRole('alert')).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Fixture shell' })).toBeVisible();
-  await expect(page.locator('body')).not.toContainText('PRIVATE_DIAGNOSTIC');
-  await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Working page' })).toBeVisible();
-});

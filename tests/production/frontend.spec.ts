@@ -29,6 +29,7 @@ async function mockApi(
     technicalHistory?: boolean;
     historyActions?: boolean;
     tallHistoryFrom?: number;
+    reconciliationIssueId?: string;
   } = {},
 ) {
   const reads: string[] = [];
@@ -156,6 +157,7 @@ async function mockApi(
             reconciliationId: snapshotId,
             taskId,
             operationId: taskId,
+            issueId: control.reconciliationIssueId,
             checkedAt: task.createdAt,
             checkedBy: userId,
             outcome: 'UNAVAILABLE',
@@ -551,6 +553,31 @@ test('exact filter bounds remain visible and unchanged until edited', async ({ p
   await expect(page).toHaveURL(/createdFrom=2026-11-16T07%3A29%3A00Z/);
   await expect(page.getByText('Точная граница: ' + from, { exact: false })).toHaveCount(0);
   expect(new URL(page.url()).searchParams.get('createdTo')).toBe(to);
+});
+
+test('open reconciliation can navigate after the deployed asset set changes', async ({ page }) => {
+  await mockApi(page, 'OPERATOR', 8, { reconciliationIssueId: taskId });
+  await page.goto('/tasks/' + taskId + '/reconciliations/' + snapshotId);
+  const openTask = page.getByRole('link', { name: 'Открыть задание и историю', exact: true });
+  const openIssue = page.getByRole('link', { name: 'Перейти к разбору и решению', exact: true });
+  await expect(openTask).toBeVisible();
+  await expect(openIssue).toBeVisible();
+
+  const missingAssets: string[] = [];
+  await page.route('**/assets/**', (route) => {
+    missingAssets.push(new URL(route.request().url()).pathname);
+    return route.fulfill({ status: 404 });
+  });
+  await openTask.click();
+  await expect(page.getByRole('heading', { name: task.title, exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'История', exact: true })).toContainText('History event 0');
+
+  await page.goBack();
+  await expect(openTask).toHaveAttribute('data-variant', 'outline');
+  await expect(openIssue).toHaveAttribute('data-variant', 'outline');
+  await openIssue.click();
+  await expect(page.getByRole('heading', { name: 'Расхождение при сверке', exact: true })).toBeVisible();
+  expect(missingAssets).toEqual([]);
 });
 
 test('browser Back retraces linked issue, reconciliation and task cards', async ({ page }) => {

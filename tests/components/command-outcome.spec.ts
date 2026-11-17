@@ -790,25 +790,6 @@ test('a screen render failure preserves the shell and recovers through the actua
   await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
 });
 
-test('a rejected page chunk has a controlled boundary and reload retries the module', async ({ page }) => {
-  await mockApi(page);
-  let attempts = 0;
-  await page.route(
-    (url) => url.pathname.endsWith('/features/tasks/ui/task-list-page.tsx'),
-    (route) => {
-      attempts++;
-      return attempts === 1 ? route.abort('failed') : route.continue();
-    },
-  );
-  await page.goto('/tests/command-outcome.html?screen=list');
-  await expect(page.getByRole('heading', { name: 'Не удалось открыть страницу', exact: true })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Основная навигация', exact: true })).toBeVisible();
-  await expect(page.locator('body')).not.toContainText('Failed to fetch dynamically imported module');
-  await page.getByRole('button', { name: 'Обновить страницу', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
-  expect(attempts).toBe(2);
-});
-
 test('initiator route gate redirects before reading operator data', async ({ page }) => {
   const state = await mockApi(page);
   const operatorReads: string[] = [];

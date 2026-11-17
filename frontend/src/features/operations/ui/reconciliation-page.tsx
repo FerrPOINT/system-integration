@@ -81,9 +81,11 @@ function SavedReconciliation({ taskId, reconciliationId }: { taskId: string; rec
               )}
             </div>
             <ActionGroup align="start">
-              <Link to={'/tasks/' + taskId}>Открыть задание и историю</Link>
+              <Button asChild>
+                <Link to={'/tasks/' + taskId}>Открыть задание и историю</Link>
+              </Button>
               {item.issueId && (
-                <Button asChild variant="default">
+                <Button asChild>
                   <Link to={'/issues/' + item.issueId}>Перейти к разбору и решению</Link>
                 </Button>
               )}
