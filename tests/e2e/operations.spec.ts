@@ -54,7 +54,7 @@ test('TC-03 / TC-07: lost reply, independent execution, reconciliation and opera
   const evidence = page.getByRole('region', { name: 'Диагностика первого события', exact: true });
   await expect(evidence).toContainText('Сохранённые данные на момент ошибки');
   await expect(page.getByRole('link', { name: 'Открыть последнюю сверку', exact: true })).toHaveCount(1);
-  await expect(actions.getByRole('button', { name: 'Применить решение', exact: true })).toBeDisabled();
+  await expect(actions.getByRole('button', { name: 'Сохранить решение', exact: true })).toBeDisabled();
   const panels = await page.locator('.issue-workspace').evaluate((el) =>
     Array.from(el.children).map((child) => {
       const { top, bottom, left, right } = child.getBoundingClientRect();

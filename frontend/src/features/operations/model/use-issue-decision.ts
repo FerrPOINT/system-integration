@@ -24,7 +24,7 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
     setBasis(null);
   };
   const discardDraft = () => {
-    if (!command.isSuccess) resetCommand();
+    resetCommand();
     clearDraft();
   };
   const refresh = () =>
@@ -80,7 +80,7 @@ export function useIssueDecision(issue: Issue, otherCommand: { pending: boolean;
       captureBasis();
       setReason(value);
     },
-    close: () => guard.requestClose(discardDraft),
+    resetDraft: () => guard.requestClose(discardDraft),
     rebase() {
       if (issue.status !== 'OPEN' || (!issue.latestReconciliationId && issue.taskId)) return;
       setBasis(decisionBasis(issue));
