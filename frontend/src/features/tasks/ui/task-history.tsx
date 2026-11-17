@@ -65,6 +65,9 @@ export function History({
             <div
               className="paged-viewport"
               ref={registryRef}
+              role="region"
+              aria-label="События истории"
+              tabIndex={mobile ? undefined : 0}
               data-page-measurement={history.isError || history.isPlaceholderData ? 'paused' : undefined}
             >
               {mobile && valid && historyPage && (

@@ -329,7 +329,7 @@ test('history page boundaries stay fixed when a later page has taller events @de
   await mockApi(page, 'OPERATOR', total, { tallHistoryFrom: 6 });
   await page.goto('/tasks/' + taskId + '?size=5&page=0');
   const history = page.getByRole('region', { name: 'История', exact: true });
-  const viewport = history.locator('.paged-viewport');
+  const viewport = history.getByRole('region', { name: 'События истории', exact: true });
   const events = history.locator('[data-page-item]');
   const search = () => new URL(page.url()).searchParams;
   const next = history.getByRole('button', { name: 'Далее →', exact: true });
@@ -349,8 +349,20 @@ test('history page boundaries stay fixed when a later page has taller events @de
   await expect(events).toHaveCount(6);
   await expect(history.getByText('7–12 из 35', { exact: true })).toBeVisible();
   await expect(history.getByRole('button', { name: 'Страница 6', exact: true })).toBeVisible();
-  await events.last().scrollIntoViewIfNeeded();
+  await expect(viewport).toHaveCSS('scrollbar-width', 'none');
+  expect(
+    await viewport.evaluate((element) => Math.round(element.getBoundingClientRect().width) - element.clientWidth),
+  ).toBe(0);
+  const box = (await viewport.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 300);
   await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await viewport.focus();
+  await viewport.press('End');
+  await expect
+    .poll(() => viewport.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop))
+    .toBeLessThanOrEqual(1);
+  await expect(events.last()).toBeInViewport();
 
   await history.getByRole('button', { name: 'Страница 6', exact: true }).click();
   await expect(events.first()).toContainText('History event 30.');
