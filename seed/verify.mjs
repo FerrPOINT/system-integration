@@ -6,7 +6,7 @@ import { literal } from './postgres.mjs';
 /** Verify served domain objects, not only SQL row counts or fixture JSON. */
 export async function verify(db, model, { fresh = false } = {}) {
   if (!process.env.SI_DEMO_PASSWORD) throw new Error('SI_DEMO_PASSWORD is required for API verification');
-  const api = new ApiSession('http://127.0.0.1:19680');
+  const api = new ApiSession(db.backendUrl);
   await api.login('operator', process.env.SI_DEMO_PASSWORD);
   const summary = { tasks: 0, operations: 0, issues: 0, reconciliations: 0, histories: 0, roles: false };
   const actualTasks = new Map();
@@ -26,7 +26,7 @@ export async function verify(db, model, { fresh = false } = {}) {
   assert.equal(summary.tasks, TASK_COUNT);
   console.log(`Verified ${summary.tasks} task cards.`);
   await parallel(model.rows.operations, 6, async (expected) => {
-    const response = await fetch('http://127.0.0.1:19681/operations/' + expected.id, {
+    const response = await fetch(db.emulatorUrl + '/operations/' + expected.id, {
       signal: AbortSignal.timeout(10_000),
     });
     assert.equal(response.status, 200);
@@ -106,12 +106,12 @@ export async function verify(db, model, { fresh = false } = {}) {
   assert.ok(range.totalItems > 0);
   assert.ok(range.items.every((task) => Date.parse(task.createdAt) === Date.parse(first.createdAt)));
   const ownerCounts = db.read(
-    'si_test',
+    'app',
     `SELECT jsonb_object_agg(username,n) FROM (SELECT u.username,count(*) n FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.id IN (${model.rows.tasks.map((task) => literal(task.id)).join(',')}) GROUP BY u.username) counts;`,
   );
   assert.deepEqual(ownerCounts, { 'initiator.one': 600, 'initiator.two': 600 });
   for (const name of ['initiator.one', 'initiator.two']) {
-    const user = new ApiSession('http://127.0.0.1:19680');
+    const user = new ApiSession(db.backendUrl);
     const identity = await user.login(name, process.env.SI_DEMO_PASSWORD);
     const page = await user.get('/api/tasks?size=20');
     assert.ok(page.items.every((task) => task.ownerId === identity.userId));

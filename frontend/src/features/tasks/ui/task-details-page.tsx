@@ -83,7 +83,7 @@ function TaskDetails({ id, user }: { id: string; user: GetSession200 }) {
                 <dd>{item.request.quantity}</dd>
                 <dt>Создано</dt>
                 <dd>
-                  <time dateTime={item.createdAt}>{timestamp(item.createdAt, { showZone: false })}</time>
+                  <time dateTime={item.createdAt}>{timestamp(item.createdAt)}</time>
                 </dd>
                 <dt>ID операции</dt>
                 <dd className="technical">{item.operationId}</dd>

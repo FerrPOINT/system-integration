@@ -24,15 +24,32 @@ const tables = {
 export const literal = (value) => "'" + String(value).replaceAll("'", "''") + "'";
 export const json = (value) => literal(JSON.stringify(value)) + '::jsonb';
 
-export function postgres() {
-  const resources = loadEnvironment();
+export function postgres(target = process.env.SI_SEED_TARGET ?? 'load') {
+  const resources = loadEnvironment({ target });
+  const databases = {
+    app: resources.find((resource) => resource.service === 'backend').database,
+    emulator: resources.find((resource) => resource.service === 'emulator').database,
+  };
+  const origin = (service) => 'http://127.0.0.1:' + resources.find((resource) => resource.service === service).hostPort;
   const container = resources.find((resource) => resource.service === 'postgres').containerId;
   function query(database, sql) {
-    if (!['si_test', 'si_emulator_test'].includes(database))
-      throw new Error('Only isolated demo databases are supported');
+    if (!['app', 'emulator'].includes(database)) throw new Error('Unsupported seed database');
     return execFileSync(
       'docker',
-      ['exec', '-i', container, 'psql', '-w', '-XqAt', '-v', 'ON_ERROR_STOP=1', '-U', 'si_admin', '-d', database],
+      [
+        'exec',
+        '-i',
+        container,
+        'psql',
+        '-w',
+        '-XqAt',
+        '-v',
+        'ON_ERROR_STOP=1',
+        '-U',
+        'si_admin',
+        '-d',
+        databases[database],
+      ],
       {
         input: `SET statement_timeout='30s'; SET lock_timeout='5s';\n${sql}`,
         encoding: 'utf8',
@@ -42,11 +59,19 @@ export function postgres() {
   }
   const read = (database, sql) => JSON.parse(query(database, `BEGIN READ ONLY; ${sql} COMMIT;`));
   const version = read(
-    'si_test',
+    'app',
     "SELECT coalesce(jsonb_agg(version),'[]') FROM flyway_schema_history WHERE success AND version='12';",
   );
   if (!version.includes('12')) throw new Error('Apply the current application migrations before seeding');
-  return { query, read, resources };
+  return {
+    query,
+    read,
+    resources,
+    target,
+    backendUrl: origin('backend'),
+    emulatorUrl: origin('emulator'),
+    frontendUrl: origin('frontend'),
+  };
 }
 
 export function insertion(table, rows) {
@@ -89,11 +114,11 @@ export function insertDataset(db, model, existing) {
   );
   // Each database commits atomically. A retry completes the second stage without rewriting the first.
   db.query(
-    'si_emulator_test',
+    'emulator',
     `BEGIN; SELECT pg_advisory_xact_lock(60202601);\n${['operations', 'result_events', 'faults'].map((table) => insertion(table, fresh[table])).join('')}COMMIT;`,
   );
   db.query(
-    'si_test',
+    'app',
     `BEGIN; SELECT pg_advisory_xact_lock(60202601);\n${['tasks', 'delivery_attempts', 'delivery_queue', 'task_history', 'reconciliations', 'exchange_issues'].map((table) => insertion(table, fresh[table])).join('')}COMMIT;`,
   );
   return { insertedTasks: newTasks.length, insertedIssues: fresh.exchange_issues.length };
@@ -102,24 +127,24 @@ export function insertDataset(db, model, existing) {
 export function existingDataset(db, model) {
   const ids = (rows) => rows.map((row) => literal(row.id)).join(',');
   const conflicts = db.read(
-    'si_test',
+    'app',
     `SELECT to_jsonb(count(*)) FROM tasks WHERE request_reference IN (${model.rows.tasks.map((task) => literal(task.request_reference)).join(',')}) AND id NOT IN (${ids(model.rows.tasks)});`,
   );
   if (conflicts) throw new Error('Reserved demo references are already used by another dataset');
   const tasks = db.read(
-    'si_test',
+    'app',
     `SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'owner',owner_id,'reference',request_reference,'quantity',request_quantity,'title',title)),'[]') FROM tasks WHERE id IN (${ids(model.rows.tasks)});`,
   );
   const operations = db.read(
-    'si_emulator_test',
+    'emulator',
     `SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'reference',reference,'quantity',quantity)),'[]') FROM operations WHERE id IN (${ids(model.rows.operations)});`,
   );
   const issues = db.read(
-    'si_test',
+    'app',
     `SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'status',status)),'[]') FROM exchange_issues WHERE id IN (${ids(model.rows.exchange_issues)});`,
   );
   const faults = db.read(
-    'si_emulator_test',
+    'emulator',
     `SELECT coalesce(jsonb_agg(jsonb_build_object('reference',reference,'operationId',bound_operation_id)),'[]') FROM faults WHERE reference IN (${model.rows.faults.map((row) => literal(row.reference)).join(',')});`,
   );
   for (const row of tasks) {
@@ -151,16 +176,16 @@ export function protectedData(db, model) {
   const faults = model.rows.faults.map((row) => literal(row.reference)).join(',');
   const result = {};
   for (const [table, condition, database] of [
-    ['tasks', `id NOT IN (${tasks})`, 'si_test'],
-    ['task_history', `task_id NOT IN (${tasks})`, 'si_test'],
-    ['delivery_attempts', `operation_id NOT IN (${operations})`, 'si_test'],
-    ['delivery_queue', `operation_id NOT IN (${operations})`, 'si_test'],
-    ['reconciliations', `task_id NOT IN (${tasks})`, 'si_test'],
-    ['exchange_issues', `id NOT IN (${issues}) AND (task_id IS NULL OR task_id NOT IN (${tasks}))`, 'si_test'],
-    ['command_receipts', 'true', 'si_test'],
-    ['operations', `id NOT IN (${operations})`, 'si_emulator_test'],
-    ['result_events', `operation_id NOT IN (${operations})`, 'si_emulator_test'],
-    ['faults', `reference NOT IN (${faults})`, 'si_emulator_test'],
+    ['tasks', `id NOT IN (${tasks})`, 'app'],
+    ['task_history', `task_id NOT IN (${tasks})`, 'app'],
+    ['delivery_attempts', `operation_id NOT IN (${operations})`, 'app'],
+    ['delivery_queue', `operation_id NOT IN (${operations})`, 'app'],
+    ['reconciliations', `task_id NOT IN (${tasks})`, 'app'],
+    ['exchange_issues', `id NOT IN (${issues}) AND (task_id IS NULL OR task_id NOT IN (${tasks}))`, 'app'],
+    ['command_receipts', 'true', 'app'],
+    ['operations', `id NOT IN (${operations})`, 'emulator'],
+    ['result_events', `operation_id NOT IN (${operations})`, 'emulator'],
+    ['faults', `reference NOT IN (${faults})`, 'emulator'],
   ])
     result[table] = db.read(
       database,

@@ -51,7 +51,7 @@ export function TaskRecords({
                         {task.request.reference} · {task.request.quantity} ед.
                       </span>
                       <time dateTime={task.createdAt} title={timestamp(task.createdAt)}>
-                        {timestamp(task.createdAt, { showZone: false, compact: true })}
+                        {timestamp(task.createdAt, { compact: true })}
                       </time>
                     </div>
                   </CardContent>

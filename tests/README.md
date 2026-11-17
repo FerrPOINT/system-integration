@@ -14,8 +14,10 @@
    [SQL-проверки](sql/README.md) на пустых si_test/si_emulator_test.
 4. Соберите три образа последовательно с revision кандидата. Поднимите QA,
    сверьте revision, JAR и обслуживаемые frontend-ассеты с проверенной сборкой.
-5. Выполните component, production Nginx/CSP, HTTP smoke и полный e2e двух
-   размеров экрана. Затем отдельно recovery и шесть демосценариев.
+5. Выполните component, production Nginx/CSP, HTTP smoke и
+   [полный e2e двух размеров экрана](#автоматический-браузерный-сценарий).
+   Для полного e2e сначала загрузите showcase в этот же QA. Затем отдельно
+   выполните recovery и шесть демосценариев.
 6. После сброса только собственных fixtures выполните [NF08](load/README.md#запуск).
    Не смешивайте в его окне сбои, recovery, UI и SQL-измерения.
 7. Проверьте целостность, сохранность обычного стенда и итоговый diff.
@@ -59,7 +61,9 @@ SI_BACKEND_URL=http://127.0.0.1:19680 SI_EMULATOR_URL=http://127.0.0.1:19681 nod
 
 Большой исторический набор и его проверка принадлежат [seed/](../seed/README.md).
 Команды `node --env-file=.env tests/demo.mjs seed` и `verify-seed` используют
-только локальный load-проект на 196xx. `corepack pnpm --dir tests test:seed`
+по умолчанию локальный load-проект на 196xx. Явный `SI_SEED_TARGET=demo`
+переключает только большой набор и его проверку на обычную демонстрацию;
+живые сценарии и автотесты остаются изолированными. `corepack pnpm --dir tests test:seed`
 проверяет детерминированность, распределение, связи и допустимые результаты
 каталога без записи в БД.
 ## Production frontend без API/БД
@@ -96,18 +100,25 @@ API, выдачу собранного JavaScript и проксирование 
 
 ## Автоматический браузерный сценарий
 
-Для запущенного локального приложения загрузите `.env` по инструкции
-из корневого README, чтобы передать `SI_DEMO_PASSWORD`. Из `tests/`:
+Поднимите отдельный Compose-проект system-integration-load с
+compose.load.yml по [инструкции запуска](load/README.md#запуск) до шагов
+reset и подготовки 5 000 записей. Загрузите QA-пароли из .env в окружение
+по [корневому README](../README.md#сборка-и-проверки). Из корня проекта:
 
-```sh
-corepack pnpm install --frozen-lockfile
-corepack pnpm exec playwright install chromium
-corepack pnpm test:e2e
-```
+~~~sh
+corepack pnpm --dir frontend install --frozen-lockfile
+corepack pnpm --dir frontend generate:api
+corepack pnpm --dir tests install --frozen-lockfile
+corepack pnpm --dir tests exec playwright install chromium
+SI_SEED_TARGET=load node --env-file=.env tests/demo.mjs seed
+corepack pnpm --dir tests test:e2e
+~~~
 
-Используйте отдельный проект system-integration-load с compose.load.yml
-в выбранном workspace. Его PostgreSQL и том отделены от обычного Compose.
-Прогон против обычных si_app/si_emulator не выполняется.
+Генерация OpenAPI создаёт типы в этом checkout для TypeScript-проверки
+runner. Загрузка сида создаёт tests/results/showcase.json и данные для трёх
+showcase-сценариев на двух ширинах. Для приёмки используйте свежую QA-базу:
+повторная загрузка сохраняет уже внесённые изменения, а сценарии проверяют
+исходное состояние примеров.
 
 Для UI поверх native Vite на 19673 явно задайте
 `SI_UI_FRONTEND_RUNTIME=vite`. Проверка окружения продолжает требовать backend,

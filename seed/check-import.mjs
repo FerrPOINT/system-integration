@@ -4,15 +4,15 @@ import { postgres, insertion } from './postgres.mjs';
 
 // Exercise the final serializer against actual column types and CHECK/UNIQUE constraints.
 // Temporary tables belong to this connection and disappear on rollback/connection loss.
-const db = postgres();
+const db = postgres('load');
 const users = db.read(
-  'si_test',
+  'app',
   "SELECT jsonb_object_agg(username,id) FROM users WHERE username IN ('initiator.one','initiator.two','operator');",
 );
 const model = dataset(users, '2026-11-16T00:00:00.000Z');
 for (const [database, tables] of [
-  ['si_test', ['tasks', 'task_history', 'delivery_attempts', 'delivery_queue', 'reconciliations', 'exchange_issues']],
-  ['si_emulator_test', ['operations', 'result_events', 'faults']],
+  ['app', ['tasks', 'task_history', 'delivery_attempts', 'delivery_queue', 'reconciliations', 'exchange_issues']],
+  ['emulator', ['operations', 'result_events', 'faults']],
 ]) {
   const sql =
     'BEGIN;\n' +

@@ -159,7 +159,7 @@ export function IssueList() {
                                 {issue.assignedTo ? 'Назначен' : 'Не назначен'}
                               </small>
                               <time dateTime={issue.openedAt} title={timestamp(issue.openedAt)}>
-                                {timestamp(issue.openedAt, { showZone: false, compact: true })}
+                                {timestamp(issue.openedAt, { compact: true })}
                               </time>
                             </div>
                             {issue.nextAttemptAt && <small>Следующая попытка: {timestamp(issue.nextAttemptAt)}</small>}

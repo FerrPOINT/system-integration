@@ -15,11 +15,11 @@ if (!['seed', 'verify-seed'].includes(command))
 if (!process.env.SI_DEMO_PASSWORD) throw new Error('SI_DEMO_PASSWORD is required');
 const db = postgres();
 const users = db.read(
-  'si_test',
+  'app',
   "SELECT jsonb_object_agg(username,id) FROM users WHERE username IN ('initiator.one','initiator.two','operator');",
 );
 const first = db.read(
-  'si_test',
+  'app',
   `SELECT coalesce(jsonb_agg(created_at),'[]') FROM tasks WHERE id=${literal(id('task/0'))};`,
 );
 // Recover the original anchor from task 0 so manifests remain stable on another machine or day.
@@ -47,6 +47,7 @@ const current = existingDataset(db, model);
 const titles = new Map(current.tasks.map((task) => [task.id, task.title]));
 const statuses = new Map(current.issues.map((issue) => [issue.id, issue.status]));
 const result = {
+  target: db.target,
   version: model.version,
   anchor,
   verifiedAt: new Date().toISOString(),
@@ -57,15 +58,15 @@ const result = {
   examples: model.examples.map((item) => ({
     ...item,
     title: titles.get(item.taskId),
-    url: `http://127.0.0.1:19673/tasks/${item.taskId}`,
-    issueUrl: item.issueId ? `http://127.0.0.1:19673/issues/${item.issueId}` : null,
+    url: `${db.frontendUrl}/tasks/${item.taskId}`,
+    issueUrl: item.issueId ? `${db.frontendUrl}/issues/${item.issueId}` : null,
   })),
   generalIssues: model.rows.exchange_issues
     .filter((issue) => !issue.task_id)
     .map((issue) => ({
       issueId: issue.id,
       status: statuses.get(issue.id),
-      url: 'http://127.0.0.1:19673/issues/' + issue.id,
+      url: db.frontendUrl + '/issues/' + issue.id,
     })),
 };
 await writeShowcase(result);

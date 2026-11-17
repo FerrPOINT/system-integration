@@ -60,13 +60,9 @@ async function fits(page: Page, region: Locator) {
 
 async function collect(page: Page, region: Locator, links: string) {
   if (page.viewportSize()!.width <= 760) {
-    await collectFeed(region);
+    const ids = await collectFeed(region, links, 'href');
     await fits(page, region);
-    const hrefs = await region
-      .locator(links)
-      .evaluateAll((elements) => elements.map((element) => element.getAttribute('href')!));
-    expect(new Set(hrefs).size).toBe(hrefs.length);
-    return new Set(hrefs);
+    return ids;
   }
   const ids = new Set<string>();
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -182,7 +178,7 @@ test('UI-15: issue table and mobile cards use the same server window without los
   page,
 }, info) => {
   const postgres = loadUiEnvironment().find((item) => item.service === 'postgres')!;
-  const ids = Array.from({ length: 8 }, () => crypto.randomUUID());
+  const ids = Array.from({ length: info.project.name === 'mobile' ? 105 : 8 }, () => crypto.randomUUID());
   const sql = (input: string) =>
     execFileSync(
       'docker',
@@ -207,11 +203,23 @@ test('UI-15: issue table and mobile cards use the same server window without los
   );
   try {
     await login(page, 'operator');
+    const expected = new Set<string>();
+    for (let index = 0; ; index++) {
+      const response = await page.request.get('/api/exchange/issues?status=OPEN&size=100&page=' + index);
+      expect(response.ok()).toBe(true);
+      const data = await response.json();
+      for (const item of data.items) expected.add('/issues/' + item.issueId);
+      if (!data.hasNext) {
+        expect(expected.size).toBe(data.totalItems);
+        break;
+      }
+    }
+    for (const id of ids) expect(expected.has('/issues/' + id)).toBe(true);
     await page.goto('/issues?status=OPEN');
     const region = page.locator('section.paged-list');
     await expect(region.locator('[data-page-item]').first()).toBeVisible();
-    const seen = await collect(page, region, '[data-issue-link]');
-    for (const id of ids) expect(seen.has('/issues/' + id)).toBe(true);
+    if (info.project.name === 'mobile') await expect(region.locator('.issue-cards time').first()).toHaveText(/ UTC$/);
+    expect(await collect(page, region, '[data-issue-link]')).toEqual(expected);
     if (info.project.name === 'desktop') {
       for (const width of [761, 900, 1280]) {
         await page.setViewportSize({ width, height: 1000 });
@@ -258,13 +266,9 @@ test('UI-15: history fits its panel and exposes every saved event', async ({ pag
   await page.locator('.history-panel').scrollIntoViewIfNeeded();
   const seen = new Set<string>();
   if (info.project.name === 'mobile') {
-    await collectFeed(region);
+    await expect(region.locator('time').first()).toHaveText(/ UTC$/);
+    expect(await collectFeed(region, '[data-page-item]', 'data-event-id')).toEqual(new Set(expected));
     await fits(page, region);
-    const ids = await region
-      .locator('[data-page-item]')
-      .evaluateAll((elements) => elements.map((element) => element.getAttribute('data-event-id')!));
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(new Set(ids)).toEqual(new Set(expected));
     return;
   }
   const windows: { page: number; size: number; ids: string[] }[] = [];
