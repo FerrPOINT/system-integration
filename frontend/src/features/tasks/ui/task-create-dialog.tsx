@@ -1,4 +1,9 @@
-import { titleInputProps, referenceInputProps, quantityInputProps } from '../../../shared/lib/form-rules';
+import {
+  titleInputProps,
+  referenceNumberInputProps,
+  formatRequestReference,
+  quantityInputProps,
+} from '../../../shared/lib/form-rules';
 import './tasks.css';
 import { ErrorMessage } from '../../../shared/ui/error-message';
 import { FormField } from '../../../shared/ui/form-field';
@@ -32,7 +37,10 @@ export function NewTask() {
     if (create.isPending || create.isSuccess) return;
     const input = unresolvedInput ?? {
       title: String(form.get('title')),
-      request: { reference: String(form.get('reference')), quantity: Number(form.get('quantity')) },
+      request: {
+        reference: formatRequestReference(String(form.get('referenceNumber'))),
+        quantity: Number(form.get('quantity')),
+      },
     };
     create.mutate(input, {
       onSuccess: (result) => {
@@ -56,7 +64,7 @@ export function NewTask() {
           className="ui-dialog-form"
           onChange={(event) => {
             const form = new FormData(event.currentTarget);
-            setDirty(Boolean(form.get('title') || form.get('reference') || form.get('quantity') !== '25'));
+            setDirty(Boolean(form.get('title') || form.get('referenceNumber') || form.get('quantity') !== '25'));
           }}
           onSubmit={(event) => {
             event.preventDefault();
@@ -77,9 +85,11 @@ export function NewTask() {
                   id="field-reference"
                   label="Номер заявки"
                   required
-                  hint="REQ- и шесть цифр. После создания изменить нельзя."
+                  hint="Введите шесть цифр, включая начальные нули. После создания изменить нельзя."
                 >
-                  {(attrs) => <Input {...attrs} name="reference" {...referenceInputProps} placeholder="REQ-000001" />}
+                  {(attrs) => (
+                    <Input {...attrs} name="referenceNumber" {...referenceNumberInputProps} placeholder="000001" />
+                  )}
                 </FormField>
                 <FormField
                   id="field-quantity"

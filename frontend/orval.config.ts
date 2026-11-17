@@ -6,7 +6,7 @@ let formRules:
   | {
       Title: TextRule;
       ActionReason: TextRule;
-      Reference: { pattern: string };
+      Reference: { prefix: string; numberPattern: string };
       Quantity: { minimum: number; maximum: number };
       Username: TextRule;
     }
@@ -35,8 +35,12 @@ export default defineConfig({
           if (!input || !('properties' in input)) throw new Error('Missing OperationInput constraints');
           const reference = input.properties?.reference;
           const quantity = input.properties?.quantity;
-          if (!reference || !('pattern' in reference) || typeof reference.pattern !== 'string')
-            throw new Error('Missing request reference pattern');
+          const referenceParts =
+            reference && 'pattern' in reference && typeof reference.pattern === 'string'
+              ? /^\^([A-Z]+-)(\[0-9\]\{[1-9][0-9]*\})\$$/.exec(reference.pattern)
+              : null;
+          if (!referenceParts) throw new Error('Expected a fixed request reference prefix and a digit pattern');
+          const [, prefix, numberPattern] = referenceParts;
           if (
             !quantity ||
             !('minimum' in quantity) ||
@@ -61,7 +65,7 @@ export default defineConfig({
           formRules = {
             Title: textRules.Title,
             ActionReason: textRules.ActionReason,
-            Reference: { pattern: reference.pattern },
+            Reference: { prefix, numberPattern },
             Quantity: { minimum: quantity.minimum, maximum: quantity.maximum },
             Username: { maxLength: username.maxLength, pattern: username.pattern },
           };

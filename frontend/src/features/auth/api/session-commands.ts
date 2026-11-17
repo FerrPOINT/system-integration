@@ -12,7 +12,7 @@ function changeSession<T>(command: () => Promise<T>) {
   return navigator.locks.request('system-integration-session-cookie', command);
 }
 
-export function useLogin() {
+export function useLogin(onAuthenticated: () => void | Promise<void>) {
   const client = useQueryClient();
   const send = useSessionCommand();
   return useMutation({
@@ -22,8 +22,11 @@ export function useLogin() {
           data(logIn({ username: String(form.get('username')), password: String(form.get('password')) }, headers)),
         ),
       ),
-    // Session-query failures have their own recovery in the auth gate.
-    onSuccess: () => client.invalidateQueries({ queryKey: sessionKey }),
+    onSuccess: async () => {
+      // Move off the old route before the new session mounts protected screens.
+      await onAuthenticated();
+      await client.invalidateQueries({ queryKey: sessionKey });
+    },
   });
 }
 

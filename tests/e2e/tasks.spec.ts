@@ -6,7 +6,7 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
   await page.getByRole('link', { name: 'Создать задание' }).click();
   const name = `E2E ${testInfo.project.name} ${crypto.randomUUID()}`;
   await page.getByLabel('Название *', { exact: true }).fill(name);
-  await page.getByLabel('Номер заявки').fill('REQ-800001');
+  await page.getByLabel('Номер заявки').fill('800001');
   await page.getByLabel('Количество *', { exact: true }).fill('25');
   await page.getByLabel('Количество *', { exact: true }).press('Tab');
   await expect(page.getByRole('button', { name: 'Отмена', exact: true })).toBeFocused();
@@ -108,7 +108,7 @@ test('TC-01 / TC-09: business rejection, visible loading and recovery to the fil
   await page.getByRole('link', { name: 'Создать задание' }).click();
   const name = 'E2E отказ ' + crypto.randomUUID();
   await page.getByLabel('Название *', { exact: true }).fill(name);
-  await page.getByLabel('Номер заявки').fill('REQ-800004');
+  await page.getByLabel('Номер заявки').fill('800004');
   await page.getByLabel('Количество *', { exact: true }).fill('150');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
@@ -215,9 +215,9 @@ test('TC-08: session refresh removes the previous owner cache before an in-place
   await page.getByLabel('Логин *', { exact: true }).fill('initiator.two');
   await page.getByLabel('Пароль *', { exact: true }).fill(process.env.SI_DEMO_PASSWORD!);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Отмена', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/tasks(?:\?|$)/);
+  await expect(page.getByRole('dialog', { name: 'Новое задание', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0);
 });
 
@@ -232,7 +232,7 @@ test('TC-09: history follows automatic task updates without reopening the card',
     await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
     const title = 'E2E живая история ' + crypto.randomUUID();
     await page.getByLabel('Название *', { exact: true }).fill(title);
-    await page.getByLabel('Номер заявки *', { exact: true }).fill(reference);
+    await page.getByLabel('Номер заявки *', { exact: true }).fill(reference.slice('REQ-'.length));
     await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
     await expect(page.getByText('Задание принято и поставлено в очередь', { exact: true })).toBeVisible();

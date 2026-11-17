@@ -341,8 +341,29 @@ test('login remains usable after a rejected credential attempt changes the sessi
   await expect(page.getByRole('alert')).toHaveText('Неверный логин или пароль');
   state.rejectLogin = false;
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Проверка команд', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
   expect(state.logins).toBe(2);
+});
+
+test('a new role signs in to its registry without reading the previous task', async ({ page }) => {
+  const state = await mockApi(page, 'OPERATOR');
+  await page.goto('/tests/command-outcome.html');
+  await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+  await openAccountMenu(page);
+  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Вход в систему', exact: true })).toBeVisible();
+
+  state.accountId = '00000000-0000-4000-8000-000000000099';
+  state.username = 'second-account';
+  state.role = 'INITIATOR';
+  state.failCsrf = false;
+  state.reads.length = 0;
+  await page.getByRole('textbox', { name: 'Логин', exact: true }).fill('second-account');
+  await page.getByLabel('Пароль *', { exact: true }).fill('fixture');
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
+  await expect.poll(() => state.reads).toContain('/api/tasks');
+  expect(state.reads.filter((path) => path.startsWith('/api/tasks/'))).toEqual([]);
 });
 
 test('overlapping identical creates keep one key while the second CSRF waits', async ({ page }) => {
@@ -439,7 +460,7 @@ test('a delayed logout cannot erase the login cookie of another tab', async ({ p
   ]);
   release();
   await Promise.all([logout, login]);
-  await expect(other.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+  await expect(other.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
   await expect
     .poll(async () => (await context.cookies()).find((cookie) => cookie.name === 'JSESSIONID')?.value)
     .toBe('fixture-renewed');
@@ -904,11 +925,19 @@ test('accepted create offers only read recovery after a failed follow-up', async
   await page.goto('/tests/command-outcome.html?screen=list');
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
   await page.getByRole('textbox', { name: 'Название', exact: true }).fill('Created task');
-  await page.getByRole('textbox', { name: 'Номер заявки', exact: true }).fill('REQ-000002');
-  await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  const reference = page.getByRole('textbox', { name: 'Номер заявки', exact: true });
+  const submit = page.getByRole('button', { name: 'Создать', exact: true });
+  await reference.fill('00002');
+  await submit.click();
+  expect(await reference.evaluate((input: HTMLInputElement) => input.validity.patternMismatch)).toBe(true);
+  expect(state.commands).toHaveLength(0);
+
+  await reference.fill('000002');
+  await submit.click();
   await expect(page.getByRole('alert').filter({ hasText: 'Задание создано.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Создать', exact: true })).toHaveCount(0);
   expect(state.commands).toHaveLength(1);
+  expect(state.commands[0].body).toMatchObject({ request: { reference: 'REQ-000002' } });
   state.failRead = false;
   await page.getByRole('button', { name: 'Повторить обновление' }).click();
   await expect(page.getByRole('heading', { name: 'Created task', exact: true })).toBeVisible();
@@ -919,7 +948,7 @@ async function openCreate(page: Page, title: string) {
   await page.goto('/tests/command-outcome.html?screen=list');
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
   await page.getByRole('textbox', { name: 'Название', exact: true }).fill(title);
-  await page.getByRole('textbox', { name: 'Номер заявки', exact: true }).fill('REQ-456789');
+  await page.getByRole('textbox', { name: 'Номер заявки', exact: true }).fill('456789');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
 }
 
@@ -1168,7 +1197,7 @@ test('leaving an uncertain create requires an explicit warning before a new comm
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
   await page.getByRole('textbox', { name: 'Название', exact: true }).fill('Deliberate new command');
-  await page.getByRole('textbox', { name: 'Номер заявки', exact: true }).fill('REQ-567890');
+  await page.getByRole('textbox', { name: 'Номер заявки', exact: true }).fill('567890');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Задание создано.');
   expect(state.commands).toHaveLength(2);
@@ -1425,7 +1454,7 @@ test('login shares the full-width brand and theme header and preserves entered c
   await expect(page.getByRole('textbox', { name: 'Логин', exact: true })).toHaveValue('fixture');
   await expect(page.getByLabel('Пароль *', { exact: true })).toHaveValue('fixture-password');
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect(header.getByRole('navigation', { name: 'Основная навигация', exact: true })).toBeVisible();
   expect(state.logins).toBe(1);
@@ -1444,7 +1473,7 @@ test('login acknowledgement followed by session failure recovers with GET only',
   await expect(page.getByRole('alert')).not.toContainText('Неверный логин');
   state.failSession = false;
   await page.getByRole('button', { name: 'Повторить', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Original task', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Мои задания', exact: true })).toBeVisible();
   expect(state.logins).toBe(1);
 });
 

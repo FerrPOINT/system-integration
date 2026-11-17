@@ -77,4 +77,6 @@ innerWidth включает классический scrollbar. Не задав�
 Orval из OpenAPI в build. shared/lib/form-rules адаптирует их к HTML,
 включая отличие UTF-16 maxlength от Unicode code points.
 Не дублируйте pattern/границы на экранах и не нормализуйте сохраняемый ввод.
+Поле номера заявки принимает цифровую часть; префикс и её pattern выводятся
+из канонического формата OpenAPI. До отправки форма собирает полный номер.
 ACKNOWLEDGE_FEED_ISSUE использует ту же форму и issue revision без сверки.

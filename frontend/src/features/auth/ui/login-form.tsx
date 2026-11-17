@@ -8,8 +8,8 @@ import { FormField } from '../../../shared/ui/form-field';
 import { Input } from '../../../shared/ui/input';
 import { Button } from '../../../shared/ui/button';
 
-export function LoginForm() {
-  const login = useLogin();
+export function LoginForm({ onAuthenticated }: { onAuthenticated: () => void | Promise<void> }) {
+  const login = useLogin(onAuthenticated);
   return (
     <Card asChild>
       <section className="login-panel">

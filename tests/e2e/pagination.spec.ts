@@ -183,7 +183,7 @@ test('UI-10: lost create response keeps the command key and invalidates the cach
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
   const title = 'E2E command replay ' + crypto.randomUUID();
   await page.getByLabel('Название *', { exact: true }).fill(title);
-  await page.getByLabel('Номер заявки').fill('REQ-880002');
+  await page.getByLabel('Номер заявки').fill('880002');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Результат отправки неизвестен');
   await expect(page.getByLabel('Название *', { exact: true })).toBeDisabled();
@@ -204,7 +204,7 @@ test('UI-11: changing account outside the SPA clears the previous private card',
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
   const title = 'E2E cache identity ' + crypto.randomUUID();
   await page.getByLabel('Название *', { exact: true }).fill(title);
-  await page.getByLabel('Номер заявки').fill('REQ-880003');
+  await page.getByLabel('Номер заявки').fill('880003');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
@@ -261,7 +261,7 @@ test('UI-12: storage unavailability keeps the form, session and command key for 
   await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
   const title = 'E2E storage retry ' + crypto.randomUUID();
   await page.getByLabel('Название *', { exact: true }).fill(title);
-  await page.getByLabel('Номер заявки').fill('REQ-880003');
+  await page.getByLabel('Номер заявки').fill('880003');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Результат отправки неизвестен');
   await expect(page.getByLabel('Название *', { exact: true })).toBeDisabled();
