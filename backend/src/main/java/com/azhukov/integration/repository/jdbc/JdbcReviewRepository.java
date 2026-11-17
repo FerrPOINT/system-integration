@@ -53,6 +53,21 @@ public class JdbcReviewRepository implements ReviewRepository {
                 false);
     }
 
+    @Override
+    public void openFeedPause(String reason, Evidence evidence) {
+        UUID id = UUID.randomUUID();
+        jdbc.update(
+                """
+                INSERT INTO exchange_issues(id,scope,fingerprint,kind,summary,evidence)
+                SELECT ?, 'feed-page', ?, 'RESULT_CONFLICT', ?, ?::jsonb
+                WHERE NOT EXISTS (SELECT 1 FROM exchange_issues WHERE scope = 'feed-page' AND status = 'OPEN')
+                """,
+                id,
+                id.toString(),
+                reason,
+                json.writeValueAsString(evidence));
+    }
+
     public UUID temporary(UUID task) {
         return jdbc
                 .query(

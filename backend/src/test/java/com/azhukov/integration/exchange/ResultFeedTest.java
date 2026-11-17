@@ -28,6 +28,66 @@ class ResultFeedTest extends PostgresTest {
     @MockitoSpyBean JdbcTemplate observedSql;
 
     @Test
+    void recurrentInvalidPageRemainsVisibleInTheOpenOperatorRegistry() throws Exception {
+        var original = "[{\"cursor\":2},{\"cursor\":1}]";
+        var page = new AtomicReference<>(original);
+        var server = source(new AtomicInteger(), page, new AtomicInteger(200));
+        try (var http = transport(server)) {
+            var client = new HttpExternalExchangeClient(http, json, settings(server));
+            try (var worker = new ExchangeCoordinator(exchange, client, 8)) {
+                worker.receive();
+                assertTrue(worker.diagnostics().paused());
+            }
+            var id = jdbc.queryForObject("SELECT id FROM exchange_issues WHERE status='OPEN'", java.util.UUID.class);
+            var op = login("operator");
+            var resolution =
+                    mvc.perform(
+                                    org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                                                    "/api/exchange/issues/" + id + "/resolve")
+                                            .session(op.session())
+                                            .header("X-CSRF-TOKEN", op.csrf())
+                                            .header("Idempotency-Key", java.util.UUID.randomUUID())
+                                            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                                            .content(
+                                                    "{\"expectedIssueRevision\":1,\"action\":\"ACKNOWLEDGE_FEED_ISSUE\",\"reason\":\"Источник исправлен\"}"))
+                            .andReturn();
+            status(200, resolution);
+            page.set("[]");
+            try (var restarted = new ExchangeCoordinator(exchange, client, 8)) {
+                restarted.receive();
+                assertFalse(restarted.diagnostics().paused());
+                assertNotNull(restarted.diagnostics().lastSuccessfulRead());
+                page.set(original);
+                restarted.receive();
+                assertTrue(restarted.diagnostics().paused());
+                var open =
+                        mvc.perform(
+                                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                                                        "/api/exchange/issues?status=OPEN")
+                                                .session(op.session()))
+                                .andReturn();
+                status(200, open);
+                assertEquals(
+                        "RESOLVED",
+                        jdbc.queryForObject("SELECT status FROM exchange_issues WHERE id=?", String.class, id));
+                var registry = body(open);
+                assertEquals(
+                        1,
+                        registry.get("totalItems").asInt(),
+                        "A new stop after a successful read must be visible in the operator's open registry");
+                assertNotEquals(id.toString(), registry.get("items").get(0).get("issueId").asString());
+                assertEquals(
+                        "Источник исправлен",
+                        jdbc.queryForObject(
+                                "SELECT resolution->>'reason' FROM exchange_issues WHERE id=?", String.class, id));
+                assertEquals(0, exchange.cursor());
+            }
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void aPublishedResultAfterAnEmptyReadIsConsumedOnTheNextSchedulerTrigger() throws Exception {
         var task = created(login("initiator.one"), java.util.UUID.randomUUID());
         var operation = jdbc.queryForObject("SELECT operation_id FROM tasks WHERE id=?", java.util.UUID.class, task);
@@ -156,7 +216,7 @@ class ResultFeedTest extends PostgresTest {
     }
 
     @Test
-    void detailedBadPageReusesTheHistoricalFingerprintWithoutChangingStoredJson() throws Exception {
+    void restartReusesTheOpenFeedPauseAndPreservesItsFirstEvidence() throws Exception {
         var page =
                 new AtomicReference<>(
                         """
@@ -164,6 +224,7 @@ class ResultFeedTest extends PostgresTest {
                         """);
         exchange.badPage(json.readTree(page.get()));
         assertEquals(1, count("exchange_issues"));
+        var first = jdbc.queryForObject("SELECT evidence::text FROM exchange_issues", String.class);
         var server = source(new AtomicInteger(), page, new AtomicInteger(200));
         try (var http = transport(server);
                 var worker =
@@ -171,6 +232,7 @@ class ResultFeedTest extends PostgresTest {
                                 exchange, new HttpExternalExchangeClient(http, json, settings(server)), 8)) {
             worker.receive();
             assertEquals(1, count("exchange_issues"));
+            assertEquals(first, jdbc.queryForObject("SELECT evidence::text FROM exchange_issues", String.class));
             assertTrue(worker.diagnostics().paused());
         } finally {
             server.stop(0);
