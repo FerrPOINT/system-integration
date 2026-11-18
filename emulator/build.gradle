@@ -29,6 +29,7 @@ tasks.named('bootJar') { archiveFileName = 'system-integration-emulator.jar' }
 tasks.register('integrationTest', Test) {
     description = 'Emulator API and durability tests against si_emulator_test'
     group = 'verification'
+    doNotTrackState('The isolated PostgreSQL database can change independently of Gradle inputs')
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
     useJUnitPlatform { includeTags 'postgres' }
