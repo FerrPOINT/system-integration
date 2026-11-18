@@ -14,7 +14,7 @@ function fixture(change = () => {}) {
         calls.push({ owner: userId, method, path, input });
         const replacement = change(method, path, input);
         if (replacement !== undefined) return replacement;
-        if (method === 'POST') return { taskId: 'created-' + input.request.reference };
+        if (method === 'POST') return { taskId: 'created-' + input.title };
         const task = path.split('/').at(-1);
         assert.ok(revisions.has(task), 'A rename must not use the other owner target');
         assert.equal(input.expectedTitleRevision, revisions.get(task));
@@ -119,5 +119,5 @@ test('gentle warmup does not reduce measured rate or insert a phase barrier', ()
     [10, 10, 10, 10],
   );
   assert.throws(() => mixedSchedule({ SI_MIXED_WARMUP_RATE: '91' }), /Invalid mixed/);
-  assert.throws(() => mixedSchedule({ SI_MIXED_PHASE_SECONDS: '999999' }), /finite references/);
+  assert.equal(mixedSchedule({ SI_MIXED_PHASE_SECONDS: '1800' })[1].durationMs, 1_800_000);
 });

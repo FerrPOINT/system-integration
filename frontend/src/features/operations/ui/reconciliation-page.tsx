@@ -59,6 +59,7 @@ function SavedReconciliation({ taskId, reconciliationId }: { taskId: string; rec
               {timestamp(item.checkedAt)} · Оператор {item.checkedBy}
             </Notice>
             <p className="muted">Это сохранённые данные на момент проверки. Новая сверка создаст отдельную запись.</p>
+            {item.diagnostic && <p className="muted">{item.diagnostic}</p>}
             <div className="comparison-grid">
               <Snapshot title="В приложении" value={item.local} />
               {item.external ? (

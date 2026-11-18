@@ -56,7 +56,7 @@ function IssueDetails({ id }: { id: string }) {
             </div>
             {item.taskId ? (
               <p>
-                {item.requestReference} · {item.taskTitle}
+                № {item.taskNumber} · {item.taskTitle}
               </p>
             ) : (
               <p>Общая проблема ленты</p>

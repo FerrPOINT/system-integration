@@ -15,7 +15,8 @@ public record Reconciliation(
         LocalSnapshot local,
         Availability externalAvailability,
         OperationSnapshot external,
-        UUID issueId) {
+        UUID issueId,
+        String diagnostic) {
     public enum Outcome {
         MATCH,
         DIFFERENCE,

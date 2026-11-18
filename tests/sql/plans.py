@@ -20,7 +20,8 @@ def bind(sql, values):
  return ''.join(a+sql_literal(b) for a,b in zip(chunks,values))+chunks[-1]
 from jdbc_inventory import collect, text_block_constant
 
-inventory=collect(['backend/src/main/java','emulator/src/main/java'])
+# Flyway transformations are exercised by migration integration tests.
+inventory=collect(['backend/src/main/java/com/azhukov/integration','emulator/src/main/java/com/azhukov/emulator'])
 # Frozen pre-Spring-Data reads are comparison probes, not current JDBC call sites.
 BASELINE_READS={'JdbcTaskRepository.list/6:1','JdbcTaskRepository.countTasks/4:1',
                 'JdbcTaskRepository.history/3:1','JdbcTaskRepository.countHistory/1:1'}
@@ -37,13 +38,13 @@ def static(key,params=(),variant='default'):
  assert len(strings)==1,(key,strings)
  add(key,strings[0],params,variant)
 
-result=json.dumps({'operationId':O,'request':{'reference':'REQ-100001','quantity':25},'version':2,'status':'SUCCEEDED','completedAt':'2026-01-02T00:00:00Z'})
+result=json.dumps({'operationId':O,'request':{'quantity':25},'version':2,'status':'SUCCEEDED','completedAt':'2026-01-02T00:00:00Z'})
 params={
 'JdbcExchangeRepository.backlog/0:1':[],
 'JdbcExchangeRepository.databaseActivity/0:1':[],
 'JdbcCommandReceiptRepository.lock/3:1':['actor:command:key'],'JdbcCommandReceiptRepository.find/3:1':[U,'CREATE_TASK',K],'JdbcCommandReceiptRepository.insert/5:1':[U,'NEW_COMMAND',K,'probe','{}'],
 'DemoUsers.run/1:1':[uid(900004),'sql.probe','not-a-login-secret','INITIATOR'],'JdbcUserDetailsService.loadUserByUsername/1:1':['sql.owner.one'],
-'JdbcTaskRepository.insert/2:1':[NT,U,NO,'probe','REQ-110001',25],'JdbcExchangeRepository.enqueue/1:1':[uid(105001)],'JdbcTaskRepository.rename/3:1':[ 'changed',2,T],
+'JdbcTaskRepository.insert/2:1':[NT,U,NO,'probe',25],'JdbcExchangeRepository.enqueue/1:1':[uid(105001)],'JdbcTaskRepository.rename/3:1':[ 'changed',2,T],
 'JdbcTaskRepository.history/5:1':[uid(600001),T,O,'USER',U,'RENAMED','probe','{}'],'JdbcTaskRepository.countHistory/1:1':[T],'JdbcTaskRepository.history/3:1':[T,20,0],
 'JdbcExchangeRepository.lockDueExchange/0:1':[],'JdbcExchangeRepository.lockQueue/1:1':[O],'JdbcExchangeRepository.startAttempt/4:1':[C,2,O],'JdbcExchangeRepository.startAttempt/4:2':[C,O,2,'PUT'],
 'JdbcExchangeRepository.finishAttempt/2:1':['ACK',uid(500002)],'JdbcExchangeRepository.ownsClaim/2:1':[uid(100002),uid(500002)],
@@ -61,20 +62,20 @@ params={
 'JdbcReviewRepository.resolve/2:1':['{"decision":"STOP","reason":"probe"}',I],
 'JdbcOperationRepository.find/1:1':[O],'JdbcOperationRepository.lockNext/1:1':[1],'JdbcOperationRepository.events/2:1':[0,100],
 'JdbcOperationRepository.event/3:1':[O,1,1,result,False],
-'JdbcOperationRepository.lockOperation/1:1':[O],'JdbcOperationRepository.lockFault/1:1':['REQ-100001'],
-'JdbcOperationRepository.insert/2:1':[NO,'REQ-110001',25],'JdbcOperationRepository.bindFault/2:1':[uid(100003),'REQ-100002'],
+'JdbcOperationRepository.lockOperation/1:1':[O],'JdbcOperationRepository.lockFault/1:1':[O],
+'JdbcOperationRepository.insert/2:1':[NO,25],
 'JdbcOperationRepository.complete/1:1':[result,'2026-01-02T00:00:00Z',O],'JdbcOperationRepository.publish/1:1':[],
 'JdbcOperationRepository.publish/1:2':[25],'JdbcOperationRepository.publish/1:3':[20001,uid(105001),1,0],'JdbcOperationRepository.publish/1:4':[20001],
-'JdbcOperationRepository.lockFaultConfiguration/1:1':['fault:REQ-100001'],'JdbcOperationRepository.configure/2:1':['REQ-100002','DELAY_RESULT'],
-'JdbcOperationRepository.releaseEvents/1:1':[uid(105001)],'JdbcOperationRepository.releaseEvents/1:2':[uid(105001)],'JdbcOperationRepository.clearFault/1:1':['REQ-100001']}
+'JdbcOperationRepository.configure/2:1':[uid(100002),'DELAY_RESULT'],
+'JdbcOperationRepository.releaseEvents/1:1':[uid(105001)],'JdbcOperationRepository.releaseEvents/1:2':[uid(105001)],'JdbcOperationRepository.clearFault/1:1':[O]}
 for key,values in params.items():static(key,values)
 static('JdbcExchangeRepository.applyResult/2:1',[result,'SUCCEEDED',1,O],'single-result')
 for batch in [1,10,50]:static('JdbcOperationRepository.publish/1:2',[batch],f'batch={batch}')
 for batch in [5,10,25]:static('JdbcOperationRepository.lockNext/1:1',[batch],f'batch={batch}')
 for n in [1,5,25]:
- add('JdbcOperationRepository.faults/1:1','SELECT bound_operation_id,mode FROM faults WHERE bound_operation_id IN ('+','.join('?'*n)+') ORDER BY reference FOR UPDATE',
+ add('JdbcOperationRepository.faults/1:1','SELECT operation_id,mode FROM faults WHERE operation_id IN ('+','.join('?'*n)+') ORDER BY operation_id FOR UPDATE',
      [uid(i+100001) for i in range(n)],f'ids={n}')
-add('JdbcOperationRepository.faults/1:1','SELECT bound_operation_id,mode FROM faults WHERE bound_operation_id IN (?) ORDER BY reference FOR UPDATE',[uid(999999)],'unconfigured')
+add('JdbcOperationRepository.faults/1:1','SELECT operation_id,mode FROM faults WHERE operation_id IN (?) ORDER BY operation_id FOR UPDATE',[uid(999999)],'unconfigured')
 static('JdbcExchangeRepository.ownsClaim/2:1',[uid(100006),uid(500006)],'active-lease-owned')
 static('JdbcReviewRepository.temporary/1:1',[T],'no-temporary-issue')
 static('JdbcReviewRepository.confirm/1:1',[T],'no-temporary-issue')
@@ -170,11 +171,11 @@ app_fixture="""
 INSERT INTO users VALUES ('00000000-0000-0000-0000-000000900001','sql.owner.one','not-a-login-secret','INITIATOR'),
 ('00000000-0000-0000-0000-000000900002','sql.owner.two','not-a-login-secret','INITIATOR'),
 ('00000000-0000-0000-0000-000000900003','sql.operator','not-a-login-secret','OPERATOR');
-INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,delivery_status,business_status,created_at)
+INSERT INTO tasks(id,owner_id,operation_id,title,request_quantity,delivery_status,business_status,created_at)
 SELECT ('00000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,
 ('00000000-0000-0000-0000-'||CASE WHEN i%10=0 THEN '000000900002' ELSE '000000900001' END)::uuid,
 ('00000000-0000-0000-0000-'||lpad((100000+i)::text,12,'0'))::uuid,
-'SQL baseline '||i,'REQ-'||(100000+i),25,
+'SQL baseline '||i,25,
 CASE WHEN i%4=0 THEN 'ACKNOWLEDGED' WHEN i%4=1 THEN 'QUEUED' WHEN i%4=2 THEN 'UNKNOWN' ELSE 'NEEDS_REVIEW' END,
 CASE WHEN i%4=0 THEN 'SUCCEEDED' WHEN i%4=1 THEN 'PENDING' WHEN i%4=2 THEN 'RUNNING' ELSE 'REJECTED' END,
 '2026-01-01'::timestamptz+i*interval '1 second' FROM generate_series(1,10000) i;
@@ -214,10 +215,10 @@ app_fixture=app_fixture.replace("""INSERT INTO delivery_queue(operation_id,due_a
 SELECT operation_id,clock_timestamp()-id::text::uuid::text::text::int*interval '1 second',NULL,NULL FROM tasks WHERE false;
 """,'')
 emu_fixture="""
-INSERT INTO operations(id,reference,quantity,accepted_at)
-SELECT ('00000000-0000-0000-0000-'||lpad((100000+i)::text,12,'0'))::uuid,'REQ-'||(100000+i),25,
+INSERT INTO operations(id,quantity,accepted_at)
+SELECT ('00000000-0000-0000-0000-'||lpad((100000+i)::text,12,'0'))::uuid,25,
 '2026-01-01'::timestamptz+i*interval '1 second' FROM generate_series(1,10000)i;
-INSERT INTO faults(reference,mode,bound_operation_id) VALUES ('REQ-100001','DELAY_RESULT','00000000-0000-0000-0000-000000100001');
+INSERT INTO faults(operation_id,mode) VALUES ('00000000-0000-0000-0000-000000100001','DELAY_RESULT');
 INSERT INTO result_events(operation_id,version,copy_number,cursor,payload,publish_after)
 SELECT id,v,0,CASE WHEN i<=5000 THEN 2*i+v-2 END,'{}',
 CASE WHEN i%10=0 THEN NULL ELSE clock_timestamp() END
@@ -228,10 +229,10 @@ ANALYZE operations; ANALYZE faults; ANALYZE result_events;
 hot_backlog_fixture="""
 UPDATE tasks SET business_status=CASE WHEN right(id::text,12)::int<=5000 THEN 'SUCCEEDED' ELSE 'PENDING' END,
 owner_id=CASE WHEN right(id::text,12)::int%2=0 THEN '00000000-0000-0000-0000-000000900001'::uuid ELSE '00000000-0000-0000-0000-000000900002'::uuid END;
-INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,delivery_status,business_status,created_at)
+INSERT INTO tasks(id,owner_id,operation_id,title,request_quantity,delivery_status,business_status,created_at)
 SELECT ('00000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,
 CASE WHEN i%2=0 THEN '00000000-0000-0000-0000-000000900001'::uuid ELSE '00000000-0000-0000-0000-000000900002'::uuid END,
-('00000000-0000-0000-0000-'||lpad((100000+i)::text,12,'0'))::uuid,'Recent backlog '||i,'REQ-'||(100000+i),25,'QUEUED','PENDING',
+('00000000-0000-0000-0000-'||lpad((100000+i)::text,12,'0'))::uuid,'Recent backlog '||i,25,'QUEUED','PENDING',
 '2026-01-02'::timestamptz+i*interval '1 second' FROM generate_series(30001,40000)i;
 ANALYZE tasks;
 """

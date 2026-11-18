@@ -60,12 +60,12 @@ test('queue snapshot counts both unfinished states and excludes both terminal ne
       input: `
 BEGIN;
 CREATE TEMP TABLE tasks (LIKE public.tasks INCLUDING ALL) ON COMMIT DROP;
-INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,business_status,created_at)
+INSERT INTO tasks(id,owner_id,operation_id,title,request_quantity,business_status,created_at)
 VALUES
-(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'pending-fixture','REQ-000001',25,'PENDING','2003-01-01T00:00:00Z'),
-(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'running-fixture','REQ-000002',25,'RUNNING','2002-01-01T00:00:00Z'),
-(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'succeeded-fixture','REQ-000003',25,'SUCCEEDED','2000-01-01T00:00:00Z'),
-(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'rejected-fixture','REQ-000004',25,'REJECTED','2001-01-01T00:00:00Z');
+(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'pending-fixture',25,'PENDING','2003-01-01T00:00:00Z'),
+(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'running-fixture',25,'RUNNING','2002-01-01T00:00:00Z'),
+(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'succeeded-fixture',25,'SUCCEEDED','2000-01-01T00:00:00Z'),
+(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'rejected-fixture',25,'REJECTED','2001-01-01T00:00:00Z');
 ${queueSql};
 UPDATE tasks SET business_status='SUCCEEDED' WHERE title='running-fixture';
 ${queueSql};

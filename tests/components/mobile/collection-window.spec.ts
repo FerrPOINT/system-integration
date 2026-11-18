@@ -19,9 +19,10 @@ async function server(page: Page, total: number, history = false) {
     fail: undefined as number | undefined,
   };
   function task(sequence: number) {
-    const request = { reference: 'REQ-' + String(sequence % 1_000_000).padStart(6, '0'), quantity: 25 };
+    const request = { quantity: 25 };
     return {
       taskId: id(sequence),
+      taskNumber: String(sequence),
       operationId: id(sequence),
       ownerId: owner,
       title: 'Запись №' + sequence,
@@ -298,7 +299,7 @@ test('return restores the visible record after inactive query data is evicted', 
   await expect(page.getByRole('heading', { name: 'Состояние задания', exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as Fixture).fixtureEvictInactiveLists());
   expect((await info(page)).cached).toBe(0);
-  await page.getByRole('link', { name: 'К заданиям', exact: true }).click();
+  await page.getByRole('link', { name: 'Задания', exact: true }).click();
   await ready(page);
   const row = page.locator('[data-record-id="' + anchor.id + '"]');
   await expect(row).toBeVisible();

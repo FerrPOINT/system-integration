@@ -19,12 +19,9 @@ if (
   !rates.length ||
   rates.some((rate) => !Number.isInteger(rate) || rate < 1) ||
   !Number.isInteger(phaseSeconds) ||
-  phaseSeconds < 1 ||
-  rates.reduce((sum, rate) => sum + rate * phaseSeconds, 0) > 399000
+  phaseSeconds < 1
 )
-  throw new Error(
-    'Set positive integer SI_STEADY_RATES and SI_STEADY_PHASE_SECONDS within the finite request-reference range',
-  );
+  throw new Error('Set positive integer SI_STEADY_RATES and SI_STEADY_PHASE_SECONDS');
 const origin = localOrigin(process.env.SI_BACKEND_URL || 'http://127.0.0.1:19680');
 const externalOrigin = localOrigin(process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19681');
 const resources = qualifiedLoadEnvironment(sourceCommit);
@@ -54,7 +51,7 @@ const maxInFlight = 64,
   created = [],
   phases = [];
 const phaseMetrics = rates.map(() => ({ latencies: [], errors: {}, successes: 0 }));
-let serial = 600000;
+let serial = 0;
 const observation = await observeLoad(resources);
 const startedAt = new Date().toISOString();
 const cpuBefore = process.cpuUsage();
@@ -76,7 +73,7 @@ try {
       const metrics = phaseMetrics[phaseIndex];
       const sequence = serial++,
         client = clients[sequence % clients.length];
-      const input = { title: 'Steady ' + sequence, request: { reference: 'REQ-' + sequence, quantity: 25 } };
+      const input = { title: 'Steady ' + sequence, quantity: 25 };
       const beforeRequest = performance.now();
       try {
         const task = await client.session.command('POST', '/api/tasks', input);
@@ -86,7 +83,6 @@ try {
           client: client.index,
           ownerId: client.userId,
           title: input.title,
-          reference: input.request.reference,
         });
         metrics.successes++;
       } catch (error) {

@@ -65,11 +65,7 @@ class ThreadingTest extends com.azhukov.integration.support.PostgresTest {
                 Object input =
                         rename
                                 ? java.util.Map.of("title", title, "expectedTitleRevision", 1)
-                                : java.util.Map.of(
-                                        "title",
-                                        title,
-                                        "request",
-                                        java.util.Map.of("reference", "REQ-000001", "quantity", 25));
+                                : java.util.Map.of("title", title, "quantity", 25);
                 var response =
                         http.send(
                                 HttpRequest.newBuilder(URI.create(base + "/api/tasks" + (rename ? "/" + id : "")))

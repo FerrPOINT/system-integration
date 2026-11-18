@@ -7,7 +7,7 @@ test('UI-19: mobile feed appends once, retains cards on failure, retries and res
   const { token } = await (await page.request.get('/api/csrf')).json();
   const created = await page.request.post('/api/tasks', {
     headers: { 'X-CSRF-TOKEN': token, 'Idempotency-Key': crypto.randomUUID() },
-    data: { title: 'E2E mobile feed', request: { reference: 'REQ-890001', quantity: 25 } },
+    data: { title: 'E2E mobile feed', quantity: 25 },
   });
   expect(created.status()).toBe(201);
   const receipt = await created.json();

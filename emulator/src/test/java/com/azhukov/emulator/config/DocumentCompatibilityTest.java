@@ -22,7 +22,7 @@ class DocumentCompatibilityTest {
             var document =
                     json.readTree(
                             """
-                            {"operationId":"00000000-0000-4000-8000-000000000001","request":{"reference":"REQ-000001","quantity":25},%s}
+                            {"operationId":"00000000-0000-4000-8000-000000000001","request":{"quantity":25},%s}
                             """
                                     .formatted(fields));
             var legacy = json.treeToValue(document, Result.class);

@@ -30,13 +30,13 @@ class ReadConnectionProfileTest extends PostgresTest {
     void profilesCompleteCountedReadsAndSeparatesTheObserverOverhead() throws Exception {
         jdbc.update(
                 """
-                INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,
+                INSERT INTO tasks(id,owner_id,operation_id,title,request_quantity,
                     delivery_status,business_status,created_at,accepted_result)
                 SELECT id,CASE WHEN n%2=0 THEN ?::uuid ELSE ?::uuid END,operation_id,
-                    'Read profile '||n,'REQ-'||lpad(n::text,6,'0'),25,'ACKNOWLEDGED','SUCCEEDED',
+                    'Read profile '||n,25,'ACKNOWLEDGED','SUCCEEDED',
                     '2026-11-10T12:00:00Z'::timestamptz+n*interval '1 millisecond',
                     jsonb_build_object('operationId',operation_id,'request',
-                        jsonb_build_object('reference','REQ-'||lpad(n::text,6,'0'),'quantity',25),
+                        jsonb_build_object('quantity',25),
                         'version',2,'status','SUCCEEDED','completedAt','2026-11-10T12:01:00Z')
                 FROM (SELECT n,gen_random_uuid() AS id,gen_random_uuid() AS operation_id
                     FROM generate_series(1,5000) n) fixture

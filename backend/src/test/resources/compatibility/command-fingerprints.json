@@ -2,13 +2,10 @@
   "create": {
     "input": {
       "title": "Проверка заявки",
-      "request": {
-        "reference": "REQ-000001",
-        "quantity": 25
-      }
+      "quantity": 25
     },
-    "canonical": "{\"request\":{\"quantity\":25,\"reference\":\"REQ-000001\"},\"title\":\"Проверка заявки\"}",
-    "sha256": "6427b531c6c8869e01e47cb31c1dc06483728773b05a5a0840a5d9954210efe8"
+    "canonical": "{\"quantity\":25,\"title\":\"Проверка заявки\"}",
+    "sha256": "001ba4896eb64accf803e3a325a3e89991795ea87beb1254b5c11665a2df05fd"
   },
   "rename": {
     "input": {

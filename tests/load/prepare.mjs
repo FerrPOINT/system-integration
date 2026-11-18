@@ -26,7 +26,7 @@ await parallel(records, 8, async (i) => {
   const owner = accounts[i % 2];
   const result = await owner.session.command('POST', '/api/tasks', {
     title: `${profile} initial ${i}`,
-    request: { reference: `REQ-${100000 + i}`, quantity: 25 },
+    quantity: 25,
   });
   owner.tasks.push(result.taskId);
 });

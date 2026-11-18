@@ -7,6 +7,7 @@ import java.util.UUID;
 /** Immutable task state; title changes cannot rewrite its owner, request or external outcome. */
 public record Task(
         UUID id,
+        long taskNumber,
         UUID operationId,
         UUID ownerId,
         TaskTitle title,
@@ -17,6 +18,7 @@ public record Task(
         TaskOutcome outcome) {
     public Task {
         Objects.requireNonNull(id);
+        if (taskNumber < 1) throw new IllegalArgumentException("Некорректный номер задания");
         Objects.requireNonNull(operationId);
         Objects.requireNonNull(ownerId);
         Objects.requireNonNull(title);
@@ -29,6 +31,7 @@ public record Task(
     public Task rename(String value, long expectedRevision) {
         return new Task(
                 id,
+                taskNumber,
                 operationId,
                 ownerId,
                 title.rename(value, expectedRevision),
@@ -40,6 +43,7 @@ public record Task(
     }
 
     public Task withDeliveryStatus(DeliveryStatus value) {
-        return new Task(id, operationId, ownerId, title, request, value, businessStatus, createdAt, outcome);
+        return new Task(
+                id, taskNumber, operationId, ownerId, title, request, value, businessStatus, createdAt, outcome);
     }
 }

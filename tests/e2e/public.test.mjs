@@ -58,7 +58,7 @@ test('TC-16: public HTTPS, secure session, roles and private service boundaries'
     await client.command('POST', '/api/logout');
     await assert.rejects(client.get('/api/tasks'), (error) => error.status === 401);
   }
-  for (const path of ['/actuator/health', '/test/faults/REQ-900001', '/operations']) {
+  for (const path of ['/actuator/health', '/test/faults/00000000-0000-4000-8000-000000000001', '/operations']) {
     const reply = await fetch(origin + path, { signal: AbortSignal.timeout(10_000) });
     assert.ok(
       !reply.headers.get('content-type')?.includes('application/json'),

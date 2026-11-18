@@ -114,6 +114,32 @@ class TaskWorkflowTest extends PostgresTest {
     }
 
     @Test
+    void parallelIndependentCreatesWithTheSamePayloadReceiveDifferentNumbers() throws Exception {
+        var owner = login("initiator.one");
+        var key = UUID.randomUUID();
+        UUID firstTask;
+        UUID secondTask;
+        try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            var firstCreate = pool.submit(() -> created(owner, key));
+            var secondCreate = pool.submit(() -> created(owner, UUID.randomUUID()));
+            firstTask = firstCreate.get();
+            secondTask = secondCreate.get();
+        }
+        assertNotEquals(firstTask, secondTask);
+        var numbers = jdbc.queryForList("SELECT task_number FROM tasks ORDER BY task_number", Long.class);
+        assertEquals(2, numbers.size());
+        assertTrue(numbers.get(0) > 0);
+        assertTrue(numbers.get(1) > numbers.get(0));
+        assertEquals(firstTask, created(owner, key));
+        assertEquals(numbers, jdbc.queryForList("SELECT task_number FROM tasks ORDER BY task_number", Long.class));
+        var card = mvc.perform(get("/api/tasks/" + firstTask).session(owner.session())).andReturn();
+        status(200, card);
+        assertEquals(
+                jdbc.queryForObject("SELECT task_number::text FROM tasks WHERE id=?", String.class, firstTask),
+                body(card).get("taskNumber").asString());
+    }
+
+    @Test
     void concurrentRenameDoesNotLoseAnUpdateAndReceiptReturnsOriginalAnswer() throws Exception {
         var owner = login("initiator.one");
         UUID id = created(owner, UUID.randomUUID());
@@ -195,8 +221,8 @@ class TaskWorkflowTest extends PostgresTest {
         for (int i = 0; i < 22; i++) {
             jdbc.update(
                     """
-                    INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,created_at)
-                    VALUES (?,?,?,'Проверка','REQ-000001',1,?)
+                    INSERT INTO tasks(id,owner_id,operation_id,title,request_quantity,created_at)
+                    VALUES (?,?,?,'Проверка',1,?)
                     """,
                     UUID.randomUUID(),
                     first,
@@ -273,8 +299,8 @@ class TaskWorkflowTest extends PostgresTest {
         for (int n = 0; n < 3; n++)
             jdbc.update(
                     """
-                    INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,created_at)
-                    VALUES (?,?,?,'Граница UTC','REQ-000001',25,?)
+                    INSERT INTO tasks(id,owner_id,operation_id,title,request_quantity,created_at)
+                    VALUES (?,?,?,'Граница UTC',25,?)
                     """,
                     ids.get(n),
                     first,
@@ -282,8 +308,8 @@ class TaskWorkflowTest extends PostgresTest {
                     n == 2 ? at.plusSeconds(1) : at);
         jdbc.update(
                 """
-                INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,created_at)
-                VALUES (?,?,?,'Другой владелец','REQ-000001',25,?)
+                INSERT INTO tasks(id,owner_id,operation_id,title,request_quantity,created_at)
+                VALUES (?,?,?,'Другой владелец',25,?)
                 """,
                 UUID.randomUUID(),
                 second,
@@ -330,7 +356,9 @@ class TaskWorkflowTest extends PostgresTest {
                         CREATE.replace("25", "0"),
                         CREATE.replace("25", "25.5"),
                         CREATE.replace("25", "\"25\""),
-                        CREATE.replace("REQ-000001", "other"),
+                        """
+                        {"title":"Старый контракт","request":{"reference":"REQ-000001","quantity":25}}
+                        """,
                         CREATE.replace("Проверка заявки", "  "),
                         CREATE.replace("\"title\":", "\"ownerId\":\"" + second + "\",\"title\":"))) {
             status(400, create(owner, UUID.randomUUID(), invalid));
@@ -358,13 +386,7 @@ class TaskWorkflowTest extends PostgresTest {
     void nulCannotReachStorageOnCreateOrRenameAndValidUnicodeIsPreserved() throws Exception {
         var owner = login("initiator.one");
         String invalid = "До" + Character.toString(0) + "после";
-        var input =
-                json.writeValueAsString(
-                        java.util.Map.of(
-                                "title",
-                                invalid,
-                                "request",
-                                java.util.Map.of("reference", "REQ-000001", "quantity", 25)));
+        var input = json.writeValueAsString(java.util.Map.of("title", invalid, "quantity", 25));
         var rejected = create(owner, UUID.randomUUID(), input);
         status(400, rejected);
         assertEquals("VALIDATION_FAILED", body(rejected).get("code").asString());

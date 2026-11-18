@@ -35,7 +35,7 @@ public abstract class PostgresTest {
     protected static final String PASSWORD = "test-only-password-123";
     protected static final String CREATE =
             """
-            {"title":"Проверка заявки", "request":{"reference":"REQ-000001","quantity":25}}
+            {"title":"Проверка заявки", "quantity":25}
             """;
 
     @DynamicPropertySource

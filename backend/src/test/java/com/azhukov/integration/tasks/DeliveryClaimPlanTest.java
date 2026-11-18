@@ -25,8 +25,8 @@ class DeliveryClaimPlanTest extends PostgresTest {
     void aGrowingQueueDoesNotRequireReadingAlreadyDeliveredTasks() {
         jdbc.update(
                 """
-                INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,delivery_status)
-                SELECT gen_random_uuid(),?,gen_random_uuid(),'Accepted population','REQ-000001',25,'ACKNOWLEDGED'
+                INSERT INTO tasks(id,owner_id,operation_id,title,request_quantity,delivery_status)
+                SELECT gen_random_uuid(),?,gen_random_uuid(),'Accepted population',25,'ACKNOWLEDGED'
                 FROM generate_series(1,10000)
                 """,
                 first);
@@ -65,8 +65,8 @@ class DeliveryClaimPlanTest extends PostgresTest {
                     jdbc.execute("ALTER TABLE delivery_queue SET (autovacuum_enabled=false)");
                     jdbc.update(
                             """
-                            INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity,delivery_status)
-                            SELECT gen_random_uuid(),?,gen_random_uuid(),'Delivered population','REQ-000001',25,'ACKNOWLEDGED'
+                            INSERT INTO tasks(id,owner_id,operation_id,title,request_quantity,delivery_status)
+                            SELECT gen_random_uuid(),?,gen_random_uuid(),'Delivered population',25,'ACKNOWLEDGED'
                             FROM generate_series(1,?)
                             """,
                             first,
@@ -142,8 +142,8 @@ class DeliveryClaimPlanTest extends PostgresTest {
         jdbc.update(
                 """
                 WITH fresh AS (
-                    INSERT INTO tasks(id,owner_id,operation_id,title,request_reference,request_quantity)
-                    SELECT gen_random_uuid(),?,gen_random_uuid(),'Due task','REQ-000002',25
+                    INSERT INTO tasks(id,owner_id,operation_id,title,request_quantity)
+                    SELECT gen_random_uuid(),?,gen_random_uuid(),'Due task',25
                     FROM generate_series(1,?) RETURNING operation_id
                 )
                 INSERT INTO delivery_queue(operation_id,due_at)

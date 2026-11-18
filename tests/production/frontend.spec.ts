@@ -4,9 +4,10 @@ import { selectChoice } from '../e2e/support';
 const taskId = '10000000-0000-4000-8000-000000000001';
 const snapshotId = '10000000-0000-4000-8000-000000000002';
 const userId = '10000000-0000-4000-8000-000000000003';
-const input = { reference: 'REQ-123456', quantity: 25 };
+const input = { quantity: 25 };
 const task = {
   taskId,
+  taskNumber: '123456',
   operationId: taskId,
   ownerId: userId,
   title: 'Production UI task',
@@ -121,7 +122,7 @@ async function mockApi(
             taskId,
             operationId: taskId,
             taskTitle: task.title,
-            requestReference: input.reference,
+            taskNumber: task.taskNumber,
             issueRevision: 1,
             kind: 'RECONCILIATION_DIFFERENCE',
             status: 'RESOLVED',
@@ -567,7 +568,7 @@ test('issue registry uses two lines on desktop and keeps diagnostics in mobile c
       route.fulfill({
         json: {
           items: [
-            { ...issue, taskId, requestReference: input.reference, taskTitle: title, nextAttemptAt: task.createdAt },
+            { ...issue, taskId, taskNumber: task.taskNumber, taskTitle: title, nextAttemptAt: task.createdAt },
             { ...issue, issueId: snapshotId, summary: feedSummary },
           ],
           page: 0,
@@ -585,7 +586,7 @@ test('issue registry uses two lines on desktop and keeps diagnostics in mobile c
       await expect(page.getByRole('table')).toHaveCount(0);
       const cards = page.locator('.issue-cards > li');
       await expect(cards).toHaveCount(2);
-      await expect(cards.first()).toContainText(input.reference + ' · ' + title);
+      await expect(cards.first()).toContainText('№ ' + task.taskNumber + ' · ' + title);
       await expect(cards.first()).toContainText(summary);
       await expect(cards.last()).toContainText('Общая проблема ленты');
       await expect(cards.last()).toContainText(feedSummary);
@@ -603,7 +604,7 @@ test('issue registry uses two lines on desktop and keeps diagnostics in mobile c
     const cells = rows.first().getByRole('cell');
     const problem = cells.first();
     await expect(problem.getByRole('link')).toHaveAttribute('title', summary);
-    await expect(problem).toContainText(input.reference + ' · ' + title);
+    await expect(problem).toContainText('№ ' + task.taskNumber + ' · ' + title);
     await expect(problem.locator('small')).toHaveCount(1);
     await expect(cells.last().locator('time').first()).toHaveAttribute('title', /00:00:00 UTC/);
     await expect(cells.last().locator('time')).toHaveCount(2);

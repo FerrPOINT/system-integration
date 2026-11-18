@@ -43,8 +43,8 @@ class ExecutionProfileTest {
                     clean();
                     jdbc.update(
                             """
-                            INSERT INTO operations(id,reference,quantity,accepted_at)
-                            SELECT md5('execution-profile:'||i)::uuid,'REQ-'||(710000+i),25,
+                            INSERT INTO operations(id,quantity,accepted_at)
+                            SELECT md5('execution-profile:'||i)::uuid,25,
                                 '2026-11-15'::timestamptz+i*interval '1 millisecond'
                             FROM generate_series(1,1000) i
                             """);

@@ -64,7 +64,7 @@ class HistoricalReviewTest extends PostgresTest {
         String historical =
                 """
                 {"reconciliationId":"%s","taskId":"%s","operationId":"%s","checkedAt":"2026-11-12T00:00:00.123456789Z",
-                 "checkedBy":"%s","outcome":"MATCH","local":{"request":{"reference":"REQ-000001","quantity":25},
+                 "checkedBy":"%s","outcome":"MATCH","local":{"request":{"quantity":25},
                  "deliveryStatus":"QUEUED","businessStatus":"PENDING"},"externalAvailability":"NOT_FOUND"}
                 """
                         .formatted(id, task, claim.operationId(), operator);

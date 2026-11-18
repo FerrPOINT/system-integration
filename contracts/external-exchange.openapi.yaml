@@ -25,7 +25,7 @@ paths:
         202 означает первое принятие, 200 — повтор того же содержимого.
         Оба ответа подтверждают получение, а итог доступен отдельным событием.
         После перезапуска на прежней БД повтор возвращает 200 без нового исполнения.
-        Один ID с отличающимся reference или quantity возвращает 409.
+        Один ID с отличающимся количеством возвращает 409.
       requestBody:
         required: true
         content:
@@ -33,7 +33,6 @@ paths:
             schema:
               $ref: '#/components/schemas/OperationInput'
             example:
-              reference: REQ-123456
               quantity: 25
       responses:
         '202':
@@ -107,7 +106,6 @@ paths:
                   result:
                     operationId: 40ad5299-2e09-4d7f-9a14-f02ca60f55ef
                     request:
-                      reference: REQ-123456
                       quantity: 25
                     version: 2
                     status: SUCCEEDED
@@ -116,18 +114,18 @@ paths:
           $ref: '#/components/responses/Invalid'
         '503':
           $ref: '#/components/responses/Unavailable'
-  /test/faults/{reference}:
+  /test/faults/{operationId}:
     parameters:
-      - name: reference
+      - name: operationId
         in: path
         required: true
         schema:
           type: string
-          pattern: '^REQ-[0-9]{6}$'
+          format: uuid
     put:
       operationId: configureFault
       tags: [TestFaults]
-      summary: Включить сбой для будущей отправки по номеру заявки
+      summary: Включить сбой до первой доставки операции
       description: |
         Маршрут доступен только в тестовом профиле и в закрытой сети эмулятора.
         DROP_RESPONSE_AFTER_EXECUTION задерживает первый ответ PUT после записи
@@ -145,7 +143,7 @@ paths:
         '400':
           $ref: '#/components/responses/Invalid'
         '409':
-          description: FAULT_ALREADY_BOUND. Режим уже связан с операцией.
+          description: FAULT_ALREADY_BOUND. Операция уже принята.
           content:
             application/problem+json:
               schema:
@@ -197,18 +195,17 @@ components:
       minimum: 0
       maximum: 9007199254740991
       description: Ноль означает чтение с начала. Позиции событий положительны.
+    Quantity:
+      type: integer
+      minimum: 1
+      maximum: 1000
     OperationInput:
       type: object
       additionalProperties: false
-      required: [reference, quantity]
+      required: [quantity]
       properties:
-        reference:
-          type: string
-          pattern: '^REQ-[0-9]{6}$'
         quantity:
-          type: integer
-          minimum: 1
-          maximum: 1000
+          $ref: '#/components/schemas/Quantity'
     Acknowledgement:
       type: object
       additionalProperties: false

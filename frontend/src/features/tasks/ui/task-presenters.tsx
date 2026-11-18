@@ -37,7 +37,7 @@ export function TaskRecords({ items, size, mobile }: { items: Task[]; size: numb
                     </div>
                     <div className="mobile-card-meta" id={'task-meta-' + task.taskId}>
                       <span className="ui-truncate">
-                        {task.request.reference} · {task.request.quantity} ед.
+                        № {task.taskNumber} · {task.request.quantity} ед.
                       </span>
                       <time dateTime={task.createdAt} title={timestamp(task.createdAt)}>
                         {timestamp(task.createdAt, { compact: true })}
@@ -55,7 +55,7 @@ export function TaskRecords({ items, size, mobile }: { items: Task[]; size: numb
             <caption className="sr-only">Реестр заданий</caption>
             <thead data-page-heading>
               <tr>
-                <th scope="col">Название / заявка</th>
+                <th scope="col">Название / номер</th>
                 <th scope="col">Доставка</th>
                 <th scope="col">Результат</th>
                 <th scope="col">Создано (UTC)</th>
@@ -69,7 +69,7 @@ export function TaskRecords({ items, size, mobile }: { items: Task[]; size: numb
                       {task.title}
                     </Link>
                     <small>
-                      {task.request.reference} · {task.request.quantity} ед.
+                      № {task.taskNumber} · {task.request.quantity} ед.
                     </small>
                   </td>
                   <td>{deliveryLabels[task.deliveryStatus]}</td>

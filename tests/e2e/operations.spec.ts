@@ -2,37 +2,41 @@ import { test, expect } from '@playwright/test';
 import { login, openAccountMenu, selectChoice } from './support';
 import { execFileSync } from 'node:child_process';
 import { loadUiEnvironment } from '../load/environment.mjs';
+import { createHeldDelivery, releaseHeldDelivery } from '../support/held-delivery.mjs';
 
 const external = process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19681';
 
 test.afterEach(async ({ request }) => {
-  for (const reference of ['REQ-810001', 'REQ-810002', 'REQ-820001', 'REQ-820002', 'REQ-850001', 'REQ-850002'])
-    expect((await request.delete(`${external}/test/faults/${reference}`)).status()).toBe(204);
+  for (const operationId of configuredFaults.splice(0))
+    expect((await request.delete(external + '/test/faults/' + operationId)).status()).toBe(204);
 });
+
+const configuredFaults: string[] = [];
 
 test('TC-03 / TC-07: lost reply, independent execution, reconciliation and operator decision', async ({
   page,
   request,
 }, info) => {
-  const reference = info.project.name === 'mobile' ? 'REQ-810002' : 'REQ-810001';
-  expect((await request.delete(`${external}/test/faults/${reference}`)).status()).toBe(204);
+  await login(page);
+  const title = 'E2E разбор ' + crypto.randomUUID();
+  const local = await createHeldDelivery(async () => {
+    await page.getByRole('link', { name: 'Создать задание' }).click();
+    await page.getByLabel('Название *', { exact: true }).fill(title);
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
+    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    return (await page.request.get('/api' + new URL(page.url()).pathname)).json();
+  });
+  const { taskId, operationId } = local;
+  const taskPath = '/tasks/' + taskId;
+  configuredFaults.push(operationId);
   expect(
     (
-      await request.put(`${external}/test/faults/${reference}`, { data: { mode: 'DROP_RESPONSE_AFTER_EXECUTION' } })
+      await request.put(external + '/test/faults/' + operationId, { data: { mode: 'DROP_RESPONSE_AFTER_EXECUTION' } })
     ).status(),
   ).toBe(204);
-  await login(page);
-  await page.getByRole('link', { name: 'Создать задание' }).click();
-  const title = 'E2E разбор ' + crypto.randomUUID();
-  await page.getByLabel('Название *', { exact: true }).fill(title);
-  await page.getByLabel('Номер заявки *', { exact: true }).fill(reference.slice('REQ-'.length));
-  await page.getByRole('button', { name: 'Создать', exact: true }).click();
-  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  releaseHeldDelivery(operationId);
   await expect(page.getByText('Получено исполнителем', { exact: true })).toBeVisible();
   await expect(page.getByText('Ожидает исполнения', { exact: true })).toBeVisible();
-  const taskPath = new URL(page.url()).pathname;
-  const taskId = taskPath.split('/').at(-1);
-  const local = await (await page.request.get('/api/tasks/' + taskId)).json();
   const actual = await (await request.get(`${external}/operations/${local.operationId}`)).json();
   expect(actual.executions).toBe(1);
   expect(actual.result.status).toBe('SUCCEEDED');
@@ -47,7 +51,7 @@ test('TC-03 / TC-07: lost reply, independent execution, reconciliation and opera
   const issuePath = new URL(page.url()).pathname;
   await page.getByRole('link', { name: 'Разбор обмена', exact: true }).click();
   const row = page.locator('[data-record-id]').filter({ hasText: title });
-  await expect(row).toContainText(reference);
+  await expect(row).toContainText('№ ' + local.taskNumber);
   await row.getByRole('link').click();
   await expect(page).toHaveURL(new RegExp(issuePath + '$'));
   const actions = page.getByRole('region', { name: 'Действия оператора', exact: true });
@@ -117,28 +121,21 @@ test('TC-03 / TC-07: lost reply, independent execution, reconciliation and opera
 test('TC-06 / TC-07: conflicting external input is stopped explicitly without accepting its result', async ({
   page,
   request,
-}, info) => {
-  const reference = info.project.name === 'mobile' ? 'REQ-820002' : 'REQ-820001';
-  await request.delete(`${external}/test/faults/${reference}`);
-  expect((await request.put(`${external}/test/faults/${reference}`, { data: { mode: 'UNAVAILABLE' } })).status()).toBe(
-    204,
-  );
+}) => {
   await login(page);
-  const csrf = await (await page.request.get('/api/csrf')).json();
-  const created = await page.request.post('/api/tasks', {
-    headers: { 'X-CSRF-TOKEN': csrf.token, 'Idempotency-Key': crypto.randomUUID() },
-    data: { title: 'E2E ошибка протокола ' + crypto.randomUUID(), request: { reference, quantity: 25 } },
+  const local = await createHeldDelivery(async () => {
+    const csrf = await (await page.request.get('/api/csrf')).json();
+    const created = await page.request.post('/api/tasks', {
+      headers: { 'X-CSRF-TOKEN': csrf.token, 'Idempotency-Key': crypto.randomUUID() },
+      data: { title: 'E2E ошибка протокола ' + crypto.randomUUID(), quantity: 25 },
+    });
+    expect(created.status()).toBe(201);
+    const { taskId } = await created.json();
+    return (await page.request.get('/api/tasks/' + taskId)).json();
   });
-  expect(created.status()).toBe(201);
-  const { taskId } = await created.json();
-  const initial = await (await page.request.get('/api/tasks/' + taskId)).json();
-  expect(
-    (
-      await request.put(`${external}/operations/${initial.operationId}`, {
-        data: { reference: 'REQ-829999', quantity: 25 },
-      })
-    ).status(),
-  ).toBe(202);
+  const { taskId, operationId } = local;
+  expect((await request.put(external + '/operations/' + operationId, { data: { quantity: 26 } })).status()).toBe(202);
+  releaseHeldDelivery(operationId);
   await expect
     .poll(async () => (await (await page.request.get('/api/tasks/' + taskId)).json()).deliveryStatus)
     .toBe('NEEDS_REVIEW');
@@ -162,23 +159,25 @@ test('TC-06 / TC-07: conflicting external input is stopped explicitly without ac
   await expect(page.getByText('Ожидает исполнения', { exact: true })).toBeVisible();
 });
 
-test('SI-10: exhausted delivery resumes only after a fresh operator decision', async ({ page, request }, info) => {
+test('SI-10: exhausted delivery resumes only after a fresh operator decision', async ({ page, request }) => {
   test.setTimeout(60_000);
   const resources = loadUiEnvironment();
   const postgres = resources.find((item: { service: string }) => item.service === 'postgres')!;
-  const reference = info.project.name === 'mobile' ? 'REQ-850002' : 'REQ-850001';
-  expect((await request.put(external + '/test/faults/' + reference, { data: { mode: 'UNAVAILABLE' } })).status()).toBe(
-    204,
-  );
   await login(page);
-  await page.getByRole('link', { name: 'Создать задание' }).click();
   const title = 'E2E лимит ' + crypto.randomUUID();
-  await page.getByLabel('Название *', { exact: true }).fill(title);
-  await page.getByLabel('Номер заявки *', { exact: true }).fill(reference.slice('REQ-'.length));
-  await page.getByRole('button', { name: 'Создать', exact: true }).click();
-  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
-  const taskId = new URL(page.url()).pathname.split('/').at(-1)!;
-  expect(taskId).toMatch(/^[0-9a-f-]{36}$/);
+  const local = await createHeldDelivery(async () => {
+    await page.getByRole('link', { name: 'Создать задание' }).click();
+    await page.getByLabel('Название *', { exact: true }).fill(title);
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
+    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    return (await page.request.get('/api' + new URL(page.url()).pathname)).json();
+  });
+  const { taskId, operationId } = local;
+  configuredFaults.push(operationId);
+  expect(
+    (await request.put(external + '/test/faults/' + operationId, { data: { mode: 'UNAVAILABLE' } })).status(),
+  ).toBe(204);
+  releaseHeldDelivery(operationId);
   const sql = (query: string) =>
     execFileSync(
       'docker',
@@ -233,7 +232,7 @@ test('SI-10: exhausted delivery resumes only after a fresh operator decision', a
     page.getByText('Автоматическая доставка приостановлена: исчерпан лимит 5 попыток', { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Действие', exact: true })).toHaveCount(0);
-  expect((await request.delete(external + '/test/faults/' + reference)).status()).toBe(204);
+  expect((await request.delete(external + '/test/faults/' + operationId)).status()).toBe(204);
   await page.getByRole('button', { name: 'Выполнить сверку', exact: true }).click();
   await page.getByRole('link', { name: 'Перейти к разбору и решению' }).click();
   await selectChoice(page, 'Действие', 'Повторить обмен');

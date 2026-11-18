@@ -97,7 +97,7 @@ class TaskMappingTest extends PostgresTest {
     }
 
     private Map<String, Object> identity(UUID operation) {
-        return Map.of("operationId", operation, "request", Map.of("reference", "REQ-000001", "quantity", 25));
+        return Map.of("operationId", operation, "request", Map.of("quantity", 25));
     }
 
     private record Stored(UUID id, UUID operation) {}

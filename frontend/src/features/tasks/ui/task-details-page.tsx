@@ -72,8 +72,8 @@ function TaskDetails({ id, user }: { id: string; user: GetSession200 }) {
                 <dd>
                   <BusinessBadge status={item.businessStatus} />
                 </dd>
-                <dt>Заявка</dt>
-                <dd>{item.request.reference}</dd>
+                <dt>Номер задания</dt>
+                <dd>{item.taskNumber}</dd>
                 <dt>Количество</dt>
                 <dd>{item.request.quantity}</dd>
                 <dt>Создано</dt>

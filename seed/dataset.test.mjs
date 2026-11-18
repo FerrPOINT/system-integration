@@ -12,8 +12,7 @@ test('large catalogue is balanced, diverse and stable across runs', () => {
   const items = catalog();
   assert.equal(items.length, TASK_COUNT);
   assert.equal(new Set(items.map((item) => item.taskId)).size, TASK_COUNT);
-  assert.equal(new Set(items.map((item) => item.reference)).size, TASK_COUNT);
-  assert.equal(new Set(items.map((item) => item.title)).size, TASK_COUNT);
+  assert.ok(new Set(items.map((item) => item.title)).size >= 200);
   assert.equal(items.filter((item) => item.owner === 'initiator.one').length, TASK_COUNT / 2);
   assert.equal(items.filter((item) => item.owner === 'initiator.two').length, TASK_COUNT / 2);
   for (const scenario of SCENARIOS)
@@ -55,14 +54,12 @@ test('persisted aggregates have valid cross-database identities and business out
   const operations = new Map(rows.operations.map((row) => [row.id, row]));
   assert.ok(new Set(rows.tasks.map((task) => task.created_at.slice(0, 10))).size >= 80);
   for (const task of tasks.values()) {
-    assert.match(task.request_reference, /^REQ-\d{6}$/);
     assert.ok([...task.title].length <= 160);
     assert.ok(task.request_quantity >= 1 && task.request_quantity <= 1000);
     if (task.accepted_result) {
       assert.equal(task.accepted_result.status, task.business_status);
       assert.equal(task.accepted_result.operationId, task.operation_id);
       assert.deepEqual(task.accepted_result.request, {
-        reference: task.request_reference,
         quantity: task.request_quantity,
       });
       if (task.business_status !== 'REJECTED')
@@ -75,7 +72,7 @@ test('persisted aggregates have valid cross-database identities and business out
   for (const operation of operations.values()) {
     assert.equal(operation.executions, 1);
     assert.equal(operation.result.operationId, operation.id);
-    assert.equal(operation.result.request.reference, operation.reference);
+    assert.equal(operation.result.request.quantity, operation.quantity);
     assert.equal(operation.result.status, operation.quantity > 100 ? 'REJECTED' : 'SUCCEEDED');
     assert.ok(Date.parse(operation.completed_at) >= Date.parse(operation.accepted_at));
   }

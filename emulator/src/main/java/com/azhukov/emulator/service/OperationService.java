@@ -38,11 +38,11 @@ public class OperationService {
             auditAfterCommit("replayed", id, "executions=" + operation.executions());
             return new Accepted(operation, false, false);
         }
-        var fault = operations.lockFault(input.reference());
-        var mode = fault == null ? FaultMode.NONE : fault.forNextAcceptance();
+        var fault = operations.lockFault(id);
+        if (fault == FaultMode.UNAVAILABLE) throw new RuleViolation(RuleViolation.Code.UNAVAILABLE);
+        var mode = fault == null ? FaultMode.NONE : fault;
         var operation = operations.insert(id, input);
         auditAfterCommit("accepted", id, "mode=" + mode.name());
-        if (mode != FaultMode.NONE) operations.bindFault(input.reference(), id);
         if (mode == FaultMode.DROP_RESPONSE_AFTER_EXECUTION) {
             execute(operation, mode);
             return new Accepted(operations.get(id), true, true);
@@ -90,21 +90,23 @@ public class OperationService {
     }
 
     @Transactional
-    public void configure(String reference, FaultMode mode) {
+    public void configure(UUID id, FaultMode mode) {
         if (mode == null || mode == FaultMode.NONE) throw new RuleViolation(RuleViolation.Code.VALIDATION_FAILED);
-        operations.lockFaultConfiguration(reference);
-        var fault = operations.lockFault(reference);
-        if (fault != null && !fault.changeTo(mode)) return;
-        operations.configure(reference, mode);
-        auditAfterCommit("fault-configured", null, "reference=" + reference + ",mode=" + mode.name());
+        operations.lockOperation(id);
+        if (operations.lockFault(id) == mode) return;
+        if (operations.find(id).isPresent()) throw new RuleViolation(RuleViolation.Code.FAULT_ALREADY_BOUND);
+        operations.configure(id, mode);
+        auditAfterCommit("fault-configured", id, "mode=" + mode.name());
     }
 
     @Transactional
-    public void clear(String reference) {
-        var fault = operations.lockFault(reference);
-        if (fault != null && fault.bound() != null) operations.releaseEvents(fault.bound());
-        operations.clearFault(reference);
-        if (fault != null) auditAfterCommit("fault-cleared", fault.bound(), "reference=" + reference);
+    public void clear(UUID id) {
+        operations.lockOperation(id);
+        var fault = operations.lockFault(id);
+        if (fault == null) return;
+        operations.releaseEvents(id);
+        operations.clearFault(id);
+        auditAfterCommit("fault-cleared", id, "mode=" + fault.name());
     }
 
     // The transaction owns success: a rolled-back execution must not appear committed in logs.

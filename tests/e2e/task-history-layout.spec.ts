@@ -27,18 +27,28 @@ test('UI-09: task history fits the viewport and keeps page navigation below its 
           const viewport = scrollArea.getBoundingClientRect();
           const footer = panel.querySelector('.pagination-footer')!.getBoundingClientRect();
           const summary = document.querySelector('.task-summary')!.getBoundingClientRect();
-          const rows = [...panel.querySelectorAll('[data-event-id]')];
-          return (
-            panel.querySelector('[aria-busy]')!.getAttribute('aria-busy') === 'false' &&
-            panel.getBoundingClientRect().right <= summary.left &&
-            footer.bottom <= innerHeight &&
-            viewport.bottom <= footer.top &&
-            (rows.every((row) => row.getBoundingClientRect().bottom <= viewport.bottom + 1) ||
-              (rows.length === 1 && scrollArea.scrollHeight > scrollArea.clientHeight))
-          );
+          return {
+            ready: panel.querySelector('[aria-busy]')!.getAttribute('aria-busy') === 'false',
+            sideBySide: panel.getBoundingClientRect().right <= summary.left,
+            footerVisible: footer.bottom <= innerHeight + 1,
+            footerSeparated: viewport.bottom <= footer.top,
+          };
         }),
       )
-      .toBe(true);
+      .toEqual({ ready: true, sideBySide: true, footerVisible: true, footerSeparated: true });
+    // Taller events may require scrolling within the page. Navigation stays visible.
+    const search = new URL(page.url()).searchParams;
+    const pageQuery = new URLSearchParams({ page: search.get('page') ?? '0', size: search.get('size')! });
+    const response = await page.request.get('/api/tasks/' + task.taskId + '/history?' + pageQuery);
+    expect(response.ok()).toBe(true);
+    const { items } = await response.json();
+    const last = history.locator('[data-event-id]').last();
+    await expect(last).toHaveAttribute('data-event-id', items.at(-1).eventId);
+    await history.getByRole('region', { name: 'События истории', exact: true }).evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await expect(last).toBeInViewport();
+    await expect(history.locator('.pagination-footer')).toBeInViewport();
   }
   await expect(page).toHaveURL(/size=/);
   await fits();

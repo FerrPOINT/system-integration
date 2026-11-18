@@ -6,7 +6,7 @@ import { useDecisionCommand, useReconcileTask, useTakeIssue } from '../src/featu
 
 const taskId = '00000000-0000-4000-8000-000000000001';
 const snapshotId = '00000000-0000-4000-8000-000000000010';
-const input = { title: 'Probe task', request: { reference: 'REQ-123456', quantity: 25 } };
+const input = { title: 'Probe task', quantity: 25 };
 
 /** Exercise public command hooks, including overlapping calls before pending is rendered. */
 export function CommandProbe() {

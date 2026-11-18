@@ -96,7 +96,6 @@ test('UI-16: pending creation locks fields and dismissal until the real command 
     const dialog = page.getByRole('dialog', { name: 'Новое задание', exact: true });
     const title = 'E2E modal pending ' + crypto.randomUUID();
     await dialog.getByLabel('Название *', { exact: true }).fill(title);
-    await dialog.getByLabel('Номер заявки').fill('870099');
     await dialog.getByRole('button', { name: 'Создать', exact: true }).click();
     await expect(dialog.getByRole('button', { name: 'Сохраняем…', exact: true })).toBeDisabled();
     await expect(dialog.getByLabel('Название *', { exact: true })).toBeDisabled();

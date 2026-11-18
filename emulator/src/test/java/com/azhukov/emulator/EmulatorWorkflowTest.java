@@ -44,7 +44,7 @@ class EmulatorWorkflowTest {
     @Test
     void lifecycleLogsDescribeCommittedEffectsOnly(org.springframework.boot.test.system.CapturedOutput output) {
         var id = UUID.randomUUID();
-        var request = new OperationRequest("REQ-123456", 25);
+        var request = new OperationRequest(25);
         new TransactionTemplate(transactions)
                 .executeWithoutResult(tx -> {
                     service.accept(id, request);
@@ -82,7 +82,7 @@ class EmulatorWorkflowTest {
     void executionBatchIsBoundedAndRollsBackEveryResultAndEventOnFailure(
             org.springframework.boot.test.system.CapturedOutput output) {
         var ids = java.util.stream.IntStream.range(0, 5).mapToObj(n -> UUID.randomUUID()).toList();
-        ids.forEach(id -> service.accept(id, new OperationRequest("REQ-000010", 25)));
+        ids.forEach(id -> service.accept(id, new OperationRequest(25)));
         var completed = new java.util.concurrent.atomic.AtomicInteger();
         doAnswer(
                         call -> {
@@ -109,7 +109,7 @@ class EmulatorWorkflowTest {
 
     @Test
     void aSecondBatchWorkerSkipsTheFirstWorkersUncommittedOperations() throws Exception {
-        for (int n = 0; n < 5; n++) service.accept(UUID.randomUUID(), new OperationRequest("REQ-000011", 25));
+        for (int n = 0; n < 5; n++) service.accept(UUID.randomUUID(), new OperationRequest(25));
         var selected = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -144,7 +144,7 @@ class EmulatorWorkflowTest {
 
     @Test
     void batchCounterAndAllCursorAssignmentsRollbackTogether() {
-        service.accept(UUID.randomUUID(), new OperationRequest("REQ-000008", 25));
+        service.accept(UUID.randomUUID(), new OperationRequest(25));
         assertEquals(1, service.executeNext(1));
         new TransactionTemplate(transactions)
                 .executeWithoutResult(tx -> {
@@ -160,7 +160,7 @@ class EmulatorWorkflowTest {
 
     @Test
     void concurrentPublishersExposeNoHigherCursorBeforeTheFirstBatchCommits() throws Exception {
-        for (int n = 0; n < 25; n++) service.accept(UUID.randomUUID(), new OperationRequest("REQ-000009", 25));
+        for (int n = 0; n < 25; n++) service.accept(UUID.randomUUID(), new OperationRequest(25));
         while (service.executeNext(1) > 0) {}
         var selected = new CountDownLatch(1);
         var release = new CountDownLatch(1);
@@ -199,8 +199,8 @@ class EmulatorWorkflowTest {
     @Test
     void initialBatchDoesNotPullLateRunningIntoADeadlockWithConcurrentFaultRelease() throws Exception {
         UUID id = UUID.randomUUID();
-        var input = new OperationRequest("REQ-000010", 25);
-        service.configure(input.reference(), FaultMode.DELAY_RESULT);
+        var input = new OperationRequest(25);
+        service.configure(id, FaultMode.DELAY_RESULT);
         service.accept(id, input);
         assertEquals(1, service.executeNext(1));
         var selected = new CountDownLatch(1);
@@ -222,7 +222,7 @@ class EmulatorWorkflowTest {
             var publishing = pool.submit(() -> service.publish(2));
             try {
                 assertTrue(selected.await(2, TimeUnit.SECONDS));
-                var clearing = pool.submit(() -> service.clear(input.reference()));
+                var clearing = pool.submit(() -> service.clear(id));
                 awaitBlockedTransaction();
                 release.countDown();
                 assertEquals(
@@ -289,7 +289,7 @@ class EmulatorWorkflowTest {
                     mvc.perform(
                                     put("/operations/" + UUID.randomUUID())
                                             .contentType("application/json")
-                                            .content("{\"reference\":\"REQ-000001\",\"quantity\":" + quantity + "}"))
+                                            .content("{\"quantity\":" + quantity + "}"))
                             .andReturn();
             assertEquals(400, response.getResponse().getStatus());
         }
@@ -300,7 +300,7 @@ class EmulatorWorkflowTest {
     @Test
     void httpAcceptReplayConflictAndIndependentState() throws Exception {
         var id = UUID.randomUUID();
-        var body = "{\"reference\":\"REQ-000001\",\"quantity\":25}";
+        var body = "{\"quantity\":25}";
         var first = mvc.perform(put("/operations/" + id).contentType("application/json").content(body)).andReturn();
         assertEquals(202, first.getResponse().getStatus());
         var repeat = mvc.perform(put("/operations/" + id).contentType("application/json").content(body)).andReturn();
@@ -336,7 +336,7 @@ class EmulatorWorkflowTest {
     @Test
     void concurrentPutsAndWorkersProduceOneExecution() throws Exception {
         UUID id = UUID.randomUUID();
-        var input = new OperationRequest("REQ-000002", 150);
+        var input = new OperationRequest(150);
         try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
             var first = pool.submit(() -> service.accept(id, input));
             var second = pool.submit(() -> service.accept(id, input));
@@ -357,17 +357,18 @@ class EmulatorWorkflowTest {
     @Test
     void unavailableIsBeforeWriteAndClearingItPreservesTheOperation() {
         var id = UUID.randomUUID();
-        var input = new OperationRequest("REQ-000003", 25);
-        service.configure(input.reference(), FaultMode.UNAVAILABLE);
+        var input = new OperationRequest(25);
+        service.configure(id, FaultMode.UNAVAILABLE);
         assertEquals(
                 RuleViolation.Code.UNAVAILABLE,
                 assertThrows(RuleViolation.class, () -> service.accept(id, input)).code());
         assertEquals(
                 RuleViolation.Code.OPERATION_NOT_FOUND,
                 assertThrows(RuleViolation.class, () -> operations.get(id)).code());
-        service.clear(input.reference());
+        assertTrue(service.accept(UUID.randomUUID(), input).created());
+        service.clear(id);
         assertTrue(service.accept(id, input).created());
-        service.clear(input.reference());
+        service.clear(id);
         assertNotNull(operations.get(id));
     }
 
@@ -379,7 +380,7 @@ class EmulatorWorkflowTest {
         assertEquals(
                 "OPERATION_NOT_FOUND",
                 json.readTree(notFound.getResponse().getContentAsString()).get("code").asString());
-        var fault = "/test/faults/REQ-000007";
+        var fault = "/test/faults/" + absent;
         assertEquals(
                 204,
                 mvc.perform(put(fault).contentType("application/json").content("{\"mode\":\"UNAVAILABLE\"}"))
@@ -387,10 +388,7 @@ class EmulatorWorkflowTest {
                         .getResponse()
                         .getStatus());
         var unavailable =
-                mvc.perform(
-                                put("/operations/" + absent)
-                                        .contentType("application/json")
-                                        .content("{\"reference\":\"REQ-000007\",\"quantity\":25}"))
+                mvc.perform(put("/operations/" + absent).contentType("application/json").content("{\"quantity\":25}"))
                         .andReturn();
         assertEquals(503, unavailable.getResponse().getStatus());
         assertEquals(
@@ -403,7 +401,7 @@ class EmulatorWorkflowTest {
                         .andReturn()
                         .getResponse()
                         .getStatus());
-        service.accept(absent, new OperationRequest("REQ-000007", 25));
+        service.accept(absent, new OperationRequest(25));
         assertEquals(
                 204,
                 mvc.perform(put(fault).contentType("application/json").content("{\"mode\":\"DUPLICATE_RESULT\"}"))
@@ -419,14 +417,14 @@ class EmulatorWorkflowTest {
                 json.readTree(conflict.getResponse().getContentAsString()).get("code").asString());
         assertEquals(
                 "DUPLICATE_RESULT",
-                jdbc.queryForObject("SELECT mode FROM faults WHERE reference='REQ-000007'", String.class));
+                jdbc.queryForObject("SELECT mode FROM faults WHERE operation_id=?", String.class, absent));
     }
 
     @Test
     void droppedResponseHasCommittedResultAndHeldEventsUntilExplicitRelease() {
         var id = UUID.randomUUID();
-        var input = new OperationRequest("REQ-000004", 25);
-        service.configure(input.reference(), FaultMode.DROP_RESPONSE_AFTER_EXECUTION);
+        var input = new OperationRequest(25);
+        service.configure(id, FaultMode.DROP_RESPONSE_AFTER_EXECUTION);
         var acceptance = service.accept(id, input);
         assertTrue(acceptance.dropResponse());
         assertEquals(operations.get(id), acceptance.operation());
@@ -436,19 +434,19 @@ class EmulatorWorkflowTest {
         assertEquals(0, operations.events(0, 100).size());
         assertFalse(service.accept(id, input).dropResponse());
         assertEquals(before, json.valueToTree(operations.get(id)));
-        service.clear(input.reference());
+        service.clear(id);
         while (service.publish(1) > 0) {}
         assertEquals(2, operations.events(0, 100).size());
     }
 
     @Test
     void mixedExecutionBatchKeepsConfiguredModesAndUnconfiguredOperationsIndependent() throws Exception {
-        var duplicate = new OperationRequest("REQ-000005", 25);
-        var late = new OperationRequest("REQ-000006", 25);
-        var normal = new OperationRequest("REQ-000007", 101);
-        service.configure(duplicate.reference(), FaultMode.DUPLICATE_RESULT);
-        service.configure(late.reference(), FaultMode.DELAY_RESULT);
+        var duplicate = new OperationRequest(25);
+        var late = new OperationRequest(25);
+        var normal = new OperationRequest(101);
         UUID duplicateId = UUID.randomUUID(), lateId = UUID.randomUUID(), normalId = UUID.randomUUID();
+        service.configure(duplicateId, FaultMode.DUPLICATE_RESULT);
+        service.configure(lateId, FaultMode.DELAY_RESULT);
         service.accept(duplicateId, duplicate);
         service.accept(lateId, late);
         service.accept(normalId, normal);

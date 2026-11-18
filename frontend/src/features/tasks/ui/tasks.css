@@ -148,12 +148,7 @@
 
 .task-input-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 140px;
+  grid-template-columns: minmax(0, 1fr) clamp(95px, 30%, 140px);
   gap: 16px;
   align-items: start;
-}
-@media (max-width: 480px) {
-  .task-input-row {
-    grid-template-columns: 1fr;
-  }
 }

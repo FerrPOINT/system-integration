@@ -28,12 +28,7 @@ class ExchangeCoordinatorTest {
                 .thenAnswer(call ->
                         ClaimResult.claimed(
                                 new DeliveryAttempt(
-                                        UUID.randomUUID(),
-                                        UUID.randomUUID(),
-                                        "PUT",
-                                        1,
-                                        1,
-                                        new TaskInput("REQ-900001", 25))));
+                                        UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput(25))));
         when(client.deliver(any()))
                 .thenAnswer(call -> {
                     entered.countDown();
@@ -91,7 +86,7 @@ class ExchangeCoordinatorTest {
                         id = next == 1 ? newSlow : UUID.randomUUID();
                     }
                     return ClaimResult.claimed(
-                            new DeliveryAttempt(id, UUID.randomUUID(), "PUT", 1, 1, new TaskInput("REQ-900001", 25)));
+                            new DeliveryAttempt(id, UUID.randomUUID(), "PUT", 1, 1, new TaskInput(25)));
                 });
         doAnswer(
                         call -> {
@@ -170,7 +165,7 @@ class ExchangeCoordinatorTest {
                                     "PUT",
                                     1,
                                     1,
-                                    new TaskInput("REQ-900001", 25)));
+                                    new TaskInput(25)));
                 });
         doAnswer(
                         call -> {
@@ -232,13 +227,7 @@ class ExchangeCoordinatorTest {
                 .thenAnswer(call -> {
                     if (claimed.incrementAndGet() > 40) return ClaimResult.empty();
                     return ClaimResult.claimed(
-                            new DeliveryAttempt(
-                                    UUID.randomUUID(),
-                                    UUID.randomUUID(),
-                                    "PUT",
-                                    1,
-                                    1,
-                                    new TaskInput("REQ-900001", 25)));
+                            new DeliveryAttempt(UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput(25)));
                 });
         when(client.deliver(any()))
                 .thenAnswer(call -> {
@@ -294,7 +283,7 @@ class ExchangeCoordinatorTest {
                                     "PUT",
                                     1,
                                     1,
-                                    new TaskInput("REQ-900001", 25)));
+                                    new TaskInput(25)));
                 });
         when(client.deliver(any()))
                 .thenAnswer(call -> {
@@ -349,13 +338,7 @@ class ExchangeCoordinatorTest {
                     }
                     if (number > 2) otherClaim.countDown();
                     return ClaimResult.claimed(
-                            new DeliveryAttempt(
-                                    UUID.randomUUID(),
-                                    UUID.randomUUID(),
-                                    "PUT",
-                                    1,
-                                    1,
-                                    new TaskInput("REQ-900001", 25)));
+                            new DeliveryAttempt(UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput(25)));
                 });
         when(client.deliver(any()))
                 .thenReturn(
@@ -391,13 +374,7 @@ class ExchangeCoordinatorTest {
                     if (n == 2) return ClaimResult.skipped();
                     if (n == 9) ninth.countDown();
                     return ClaimResult.claimed(
-                            new DeliveryAttempt(
-                                    UUID.randomUUID(),
-                                    UUID.randomUUID(),
-                                    "PUT",
-                                    1,
-                                    1,
-                                    new TaskInput("REQ-900001", 25)));
+                            new DeliveryAttempt(UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput(25)));
                 });
         when(client.deliver(any()))
                 .thenAnswer(call -> {
@@ -433,13 +410,7 @@ class ExchangeCoordinatorTest {
                     if (n == 1) return ClaimResult.skipped();
                     if (n > 2) return ClaimResult.empty();
                     return ClaimResult.claimed(
-                            new DeliveryAttempt(
-                                    UUID.randomUUID(),
-                                    UUID.randomUUID(),
-                                    "PUT",
-                                    1,
-                                    1,
-                                    new TaskInput("REQ-900001", 25)));
+                            new DeliveryAttempt(UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput(25)));
                 });
         when(client.deliver(any()))
                 .thenReturn(
@@ -477,12 +448,7 @@ class ExchangeCoordinatorTest {
                         claimed.incrementAndGet();
                         return ClaimResult.claimed(
                                 new DeliveryAttempt(
-                                        UUID.randomUUID(),
-                                        UUID.randomUUID(),
-                                        "PUT",
-                                        1,
-                                        1,
-                                        new TaskInput("REQ-900001", 25)));
+                                        UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput(25)));
                     });
             when(client.deliver(any()))
                     .thenAnswer(call -> {
@@ -533,7 +499,7 @@ class ExchangeCoordinatorTest {
                                     "PUT",
                                     1,
                                     1,
-                                    new TaskInput("REQ-900001", 25)));
+                                    new TaskInput(25)));
                 });
         when(client.deliver(any()))
                 .thenAnswer(call -> {
@@ -589,8 +555,7 @@ class ExchangeCoordinatorTest {
     void failedSenderReturnsItsReservedSlotBeforeAnotherPass() {
         var tasks = mock(ExchangeService.class);
         var client = mock(ExternalExchangeClient.class);
-        var attempt =
-                new DeliveryAttempt(UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput("REQ-900001", 25));
+        var attempt = new DeliveryAttempt(UUID.randomUUID(), UUID.randomUUID(), "PUT", 1, 1, new TaskInput(25));
         when(tasks.claim()).thenReturn(ClaimResult.claimed(attempt), ClaimResult.empty());
         when(client.deliver(attempt)).thenThrow(new IllegalStateException("Controlled sender failure"));
         try (var worker = new ExchangeCoordinator(tasks, client, 1)) {

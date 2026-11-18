@@ -17,8 +17,8 @@
 4. Подготовьте image override установки: backend, emulator и frontend должны
    ссылаться на точные проверенные теги или digest. Проверьте labels и хеши
    извлечённых JAR/ассетов. Нельзя подменять квалифицированный образ повторной сборкой.
-5. Выберите схематически совместимый кандидат восстановления. Публичный старый
-   образ до V12 не является вариантом отката после удаления http_status.
+5. Сохраните прежние теги до начала миграций и сверьте порядок восстановления
+   после перехода в разделе ниже.
 
 В проверенной установке отдельный images.yml закрепляет образы вместе с
 compose.yml и compose.public.yml. Он относится к runtime inputs, а не к
@@ -26,14 +26,32 @@ compose.yml и compose.public.yml. Он относится к runtime inputs, а
 
 ## Миграции и переключение
 
-V11 нормализует прежние открытые DELIVERY_DELAYED с очередью, сохраняя счётчики,
-историю и завершённость захвата. V12 удаляет только command_receipts.http_status.
-Ключи, fingerprints, тела квитанций и время создания сохраняются.
-V13 выделяет остановки чтения ленты в отдельную область. ID, статусы,
-первичная диагностика и решения оператора сохраняются.
-До запуска кандидата оба старых Java-процесса останавливаются: прежний отправитель
-не должен работать одновременно с новой политикой и миграциями.
-Применённые Flyway-миграции не редактируются и не удаляются.
+Переход с V13/V2 на V15/V3 меняет контракт у всех трёх компонентов. V14
+нумерует существующие задания в порядке создания и ID. V15 обновляет
+сохранённые документы и квитанции. V3 переносит настройки отказов на ID
+операции и обновляет документы эмулятора. Прежние Flyway-миграции сохраняются
+как история схемы.
+
+После остановки Java-процессов запустите из checkout нового кандидата:
+
+~~~sh
+node deploy/prepare-task-numbers.mjs demo
+node deploy/prepare-task-numbers.mjs demo --stage
+~~~
+
+Для репетиции на отдельном QA вместо demo передайте load. Первая команда
+проверяет, что старый конфликт номера не превратится в автоматически
+принимаемый результат, и находит по одному ID для каждого ещё не связанного
+сбоя. Вторая сохраняет проверенные пары в служебной таблице миграции
+эмулятора. V3 удаляет её после переноса. При неоднозначности остановитесь
+до изменения схемы, разберите обнаруженную операцию и повторите проверку.
+
+Перед переключением сравните число заданий, операций, историй и сверок,
+наборы ID, счётчики попыток, исполнений и курсоры обеих БД. Для старых
+квитанций проверьте повтор команды с исходным названием, включая задания,
+которые успели переименовать. После миграции проверьте уникальность номеров
+и отсутствие повторного исполнения. Сохранённая сверка с исторической
+диагностикой читается по прежней ссылке.
 
 Укажите абсолютные пути к каталогу выбранной установки и её приватному
 environment file в `SI_RUNTIME_DIR` и `SI_RUNTIME_ENV_FILE`. Сверьте реальные
@@ -44,8 +62,11 @@ Compose labels и подготовьте `images.yml` с точными тега
 cd "$SI_RUNTIME_DIR" || exit 1
 test -f "$SI_RUNTIME_ENV_FILE" || exit 1
 docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app config --quiet
-docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app stop backend emulator
-docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app up -d --no-build --no-deps --wait backend emulator frontend
+docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app stop frontend backend emulator
+# Между этими командами выполните проверку и подготовку V15/V3 из checkout кандидата.
+docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app up -d --no-build --no-deps --wait emulator
+docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app up -d --no-build --no-deps --wait backend
+docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app up -d --no-build --no-deps --wait frontend
 systemctl status system-integration-tunnel.service
 ~~~
 
@@ -67,9 +88,13 @@ node --test tests/e2e/public.test.mjs
 После переключения проверьте Flyway, сохранённые записи/квитанции, readiness,
 labels всех трёх образов, фактически выдаваемые ассеты и TC-16 через HTTPS.
 Тестирование локального QA не подтверждает новую версию домена.
-При неудаче не возвращайте несовместимый со схемой старый backend:
-остановите неисправный процесс и используйте подготовленный совместимый образ.
-Удаление тома или откат схемы с потерей данных недопустимы.
+До запуска миграций допустимо вернуть прежние теги исходной установки.
+После миграции любой из БД держите обе версии клиентов на одной стороне
+границы: при отказе остановите Java-процессы, определите фактически
+применённые версии и завершите переход на проверенном совместимом кандидате.
+Возврат к V13/V2 потребовал бы синхронного восстановления обеих БД из
+подготовленного источника восстановления. Он выполняется отдельной
+операцией с согласованным источником данных. Тома сохраняются.
 
 ## Сеть и сессия
 

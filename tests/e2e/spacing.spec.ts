@@ -101,7 +101,7 @@ test('UI-07: exchange loading, error, empty and ready states keep the filter sep
     await initiator.login('initiator.one', process.env.SI_DEMO_PASSWORD);
     const task = await initiator.command('POST', '/api/tasks', {
       title: 'E2E интервалы сверки ' + crypto.randomUUID(),
-      request: { reference: 'REQ-870002', quantity: 25 },
+      quantity: 25,
     });
     await expect.poll(async () => (await initiator.get('/api/tasks/' + task.taskId)).businessStatus).toBe('SUCCEEDED');
     const { token } = await (await page.request.get('/api/csrf')).json();

@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { login, openAccountMenu, waitForRegistry } from './support';
+import { createHeldDelivery, releaseHeldDelivery } from '../support/held-delivery.mjs';
 
 test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive list', async ({ page }, testInfo) => {
   await login(page);
   await page.getByRole('link', { name: 'Создать задание' }).click();
   const name = `E2E ${testInfo.project.name} ${crypto.randomUUID()}`;
   await page.getByLabel('Название *', { exact: true }).fill(name);
-  await page.getByLabel('Номер заявки').fill('800001');
   await page.getByLabel('Количество *', { exact: true }).fill('25');
   await page.getByLabel('Количество *', { exact: true }).press('Tab');
   await expect(page.getByRole('button', { name: 'Отмена', exact: true })).toBeFocused();
@@ -14,7 +14,9 @@ test('TC-01 / TC-09: keyboard creation, immutable request, rename and responsive
   await expect(page.getByRole('button', { name: 'Создать', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
-  await expect(page.getByText('REQ-800001', { exact: true })).toBeVisible();
+  const task = await (await page.request.get('/api' + new URL(page.url()).pathname)).json();
+  expect(task.taskNumber).toMatch(/^[1-9][0-9]*$/);
+  await expect(page.getByText(task.taskNumber, { exact: true })).toBeVisible();
   await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
   await expect(page.getByText('Получено исполнителем', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Изменить название' }).click();
@@ -92,7 +94,7 @@ test('TC-08: logout clears owner data and another initiator cannot open a foreig
   const csrf = await (await context.request.get('/api/csrf')).json();
   const created = await context.request.post('/api/tasks', {
     headers: { 'X-CSRF-TOKEN': csrf.token, 'Idempotency-Key': crypto.randomUUID() },
-    data: { title: 'Закрытое задание ' + crypto.randomUUID(), request: { reference: 'REQ-800002', quantity: 25 } },
+    data: { title: 'Закрытое задание ' + crypto.randomUUID(), quantity: 25 },
   });
   expect(created.status()).toBe(201);
   const { taskId } = await created.json();
@@ -112,7 +114,6 @@ test('TC-01 / TC-09: business rejection, visible loading and recovery to the fil
   await page.getByRole('link', { name: 'Создать задание' }).click();
   const name = 'E2E отказ ' + crypto.randomUUID();
   await page.getByLabel('Название *', { exact: true }).fill(name);
-  await page.getByLabel('Номер заявки').fill('800004');
   await page.getByLabel('Количество *', { exact: true }).fill('150');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
@@ -141,7 +142,7 @@ test('TC-09 / TC-12: empty filter, server error recovery and UTC rendering', asy
   const csrf = await (await page.request.get('/api/csrf')).json();
   const created = await page.request.post('/api/tasks', {
     headers: { 'X-CSRF-TOKEN': csrf.token, 'Idempotency-Key': crypto.randomUUID() },
-    data: { title: 'E2E UTC ' + crypto.randomUUID(), request: { reference: 'REQ-800003', quantity: 25 } },
+    data: { title: 'E2E UTC ' + crypto.randomUUID(), quantity: 25 },
   });
   expect(created.status()).toBe(201);
   const { taskId } = await created.json();
@@ -199,7 +200,7 @@ test('TC-08: session refresh removes the previous owner cache before an in-place
   const title = 'E2E приватный кеш ' + crypto.randomUUID();
   const created = await page.request.post('/api/tasks', {
     headers: { 'X-CSRF-TOKEN': csrf.token, 'Idempotency-Key': crypto.randomUUID() },
-    data: { title, request: { reference: 'REQ-800005', quantity: 25 } },
+    data: { title, quantity: 25 },
   });
   expect(created.status()).toBe(201);
   await page.getByRole('button', { name: 'Обновить', exact: true }).click();
@@ -225,29 +226,30 @@ test('TC-08: session refresh removes the previous owner cache before an in-place
   await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0);
 });
 
-test('TC-09: history follows automatic task updates without reopening the card', async ({ page, request }, info) => {
+test('TC-09: history follows automatic task updates without reopening the card', async ({ page, request }) => {
   const external = process.env.SI_EMULATOR_URL || 'http://127.0.0.1:19681';
-  const reference = info.project.name === 'mobile' ? 'REQ-800007' : 'REQ-800006';
-  expect((await request.put(`${external}/test/faults/${reference}`, { data: { mode: 'UNAVAILABLE' } })).status()).toBe(
-    204,
-  );
-  try {
-    await login(page);
-    await page.getByRole('link', { name: 'Создать задание', exact: true }).click();
-    const title = 'E2E живая история ' + crypto.randomUUID();
+  await login(page);
+  const title = 'E2E живая история ' + crypto.randomUUID();
+  const { operationId } = await createHeldDelivery(async () => {
+    await page.getByRole('link', { name: 'Создать задание' }).click();
     await page.getByLabel('Название *', { exact: true }).fill(title);
-    await page.getByLabel('Номер заявки *', { exact: true }).fill(reference.slice('REQ-'.length));
     await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    return (await page.request.get('/api' + new URL(page.url()).pathname)).json();
+  });
+  const faultUrl = external + '/test/faults/' + operationId;
+  expect((await request.put(faultUrl, { data: { mode: 'UNAVAILABLE' } })).status()).toBe(204);
+  releaseHeldDelivery(operationId);
+  try {
     await expect(page.getByText('Задание принято и поставлено в очередь', { exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'История', exact: true })).toContainText('initiator.one');
     await expect(page.getByText('Ожидает исполнения', { exact: true })).toBeVisible();
-    expect((await request.delete(`${external}/test/faults/${reference}`)).status()).toBe(204);
+    expect((await request.delete(faultUrl)).status()).toBe(204);
     await expect(page.getByText('Выполнено', { exact: true })).toBeVisible();
     const applied = page.locator('[data-event-id]').filter({ hasText: 'Принят внешний результат: SUCCEEDED' });
     await expect(applied.getByText('Получен результат исполнителя', { exact: true })).toBeVisible();
     await expect(applied.getByText('Принят внешний результат: SUCCEEDED', { exact: true })).toBeVisible();
   } finally {
-    expect((await request.delete(`${external}/test/faults/${reference}`)).status()).toBe(204);
+    expect((await request.delete(faultUrl)).status()).toBe(204);
   }
 });

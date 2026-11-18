@@ -34,13 +34,13 @@ class OperationApiMapperTest {
             var mapper = context.getBean(OperationApiMapper.class);
             var id = UUID.randomUUID();
             var time = OffsetDateTime.parse("2026-01-02T03:04:05Z");
-            var request = mapper.request(new OperationInput("REQ-000001", 125));
-            assertEquals(new OperationRequest("REQ-000001", 125), request);
+            var request = mapper.request(new OperationInput(125));
+            assertEquals(new OperationRequest(125), request);
             var pending = new Operation(id, request, time, 0, null);
             var acknowledgement = mapper.acknowledgement(pending);
             assertEquals(id, acknowledgement.getOperationId());
             assertEquals(time, acknowledgement.getAcceptedAt());
-            assertEquals("REQ-000001", acknowledgement.getRequest().getReference());
+            assertEquals(125, acknowledgement.getRequest().getQuantity());
             assertNull(mapper.operation(pending).getResult());
             assertEquals(0, mapper.operation(pending).getExecutions().getValue());
             for (var status : OperationResult.Status.values()) {

@@ -23,7 +23,7 @@ class ReviewDocumentCompatibilityTest {
         for (String external :
                 new String[] {
                     "",
-                    ",\"external\":{\"operationId\":\"00000000-0000-4000-8000-000000000002\",\"request\":{\"reference\":\"REQ-000001\",\"quantity\":25},\"acceptedAt\":\"2026-11-12T00:00:00Z\",\"executions\":0,\"result\":null}"
+                    ",\"external\":{\"operationId\":\"00000000-0000-4000-8000-000000000002\",\"request\":{\"quantity\":25},\"acceptedAt\":\"2026-11-12T00:00:00Z\",\"executions\":0,\"result\":null}"
                 }) {
             var source =
                     json.readTree(
@@ -31,7 +31,7 @@ class ReviewDocumentCompatibilityTest {
                             {"reconciliationId":"00000000-0000-4000-8000-000000000003",
                              "taskId":"00000000-0000-4000-8000-000000000001","operationId":"00000000-0000-4000-8000-000000000002",
                              "checkedAt":"2026-11-12T00:00:00.123456789Z","checkedBy":"00000000-0000-4000-8000-000000000004",
-                             "outcome":"DIFFERENCE","local":{"request":{"reference":"REQ-000001","quantity":25},
+                             "outcome":"DIFFERENCE","local":{"request":{"quantity":25},
                              "deliveryStatus":"ACKNOWLEDGED","businessStatus":"REJECTED","resultVersion":2,
                              "result":{"status":"REJECTED","completedAt":"2026-11-12T00:00:00Z","rejectionCode":"QUANTITY_LIMIT_EXCEEDED"}},
                              "externalAvailability":"%s"%s}

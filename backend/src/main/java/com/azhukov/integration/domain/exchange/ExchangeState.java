@@ -49,6 +49,7 @@ public record ExchangeState(Task task, long version, OperationResult result) {
         var updated =
                 new Task(
                         task.id(),
+                        task.taskNumber(),
                         task.operationId(),
                         task.ownerId(),
                         task.title(),

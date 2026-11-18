@@ -17,7 +17,7 @@ class ReviewContextTest {
             operator = UUID.randomUUID(),
             snapshotId = UUID.randomUUID();
     private final OffsetDateTime time = OffsetDateTime.parse("2026-11-12T00:00:00Z");
-    private final TaskInput input = new TaskInput("REQ-000001", 25);
+    private final TaskInput input = new TaskInput(25);
 
     private ExchangeState state(DeliveryStatus delivery, OperationResult result, long revision) {
         var outcome =
@@ -27,6 +27,7 @@ class ReviewContextTest {
         return new ExchangeState(
                 new Task(
                         taskId,
+                        1,
                         operationId,
                         UUID.randomUUID(),
                         new TaskTitle("Задание", 7),
@@ -83,7 +84,8 @@ class ReviewContextTest {
                         LocalSnapshot.of(state),
                         availability,
                         external,
-                        issue.issueId());
+                        issue.issueId(),
+                        null);
         return new ReviewContext(issue, queueFree, state, saved, savedVersion);
     }
 
@@ -145,13 +147,7 @@ class ReviewContextTest {
                         .actions(operator)
                         .contains(RETRY));
         assertFalse(
-                context(
-                                issue,
-                                state,
-                                true,
-                                external(false, new TaskInput("REQ-000002", 25)),
-                                Reconciliation.Availability.PRESENT,
-                                10)
+                context(issue, state, true, external(false, new TaskInput(26)), Reconciliation.Availability.PRESENT, 10)
                         .actions(operator)
                         .contains(RETRY));
         assertFalse(
@@ -188,13 +184,7 @@ class ReviewContextTest {
                         .actions(operator));
         assertEquals(
                 List.of(RECONCILE, ACKNOWLEDGE_DIFFERENCE),
-                context(
-                                issue,
-                                state,
-                                true,
-                                external(true, new TaskInput("REQ-000001", 26)),
-                                Reconciliation.Availability.PRESENT,
-                                10)
+                context(issue, state, true, external(true, new TaskInput(26)), Reconciliation.Availability.PRESENT, 10)
                         .actions(operator));
         assertFalse(
                 context(issue, state, true, external(false, input), Reconciliation.Availability.PRESENT, 10)
@@ -265,9 +255,7 @@ class ReviewContextTest {
         assertTrue(
                 ReviewContext.matches(
                         renamed, new OperationSnapshot(operationId, input, time.plusHours(1), 1, external.result())));
-        assertFalse(
-                ReviewContext.matches(
-                        local, new OperationSnapshot(operationId, new TaskInput("REQ-000002", 25), time, 0, null)));
+        assertFalse(ReviewContext.matches(local, new OperationSnapshot(operationId, new TaskInput(26), time, 0, null)));
         assertFalse(ReviewContext.matches(state(DeliveryStatus.UNKNOWN, external.result(), 10), external));
     }
 }

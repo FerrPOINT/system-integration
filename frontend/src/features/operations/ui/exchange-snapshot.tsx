@@ -14,8 +14,6 @@ export function Snapshot({ title, value }: { title: string; value: LocalSnapshot
             <h3>{title}</h3>
           </CardTitle>
           <dl>
-            <dt>Заявка</dt>
-            <dd>{value.request.reference}</dd>
             <dt>Количество</dt>
             <dd>{value.request.quantity}</dd>
             {!external && (
@@ -64,8 +62,6 @@ export function ReceivedResult({ value }: { value: Result }) {
           <dl>
             <dt>ID операции</dt>
             <dd className="technical">{value.operationId}</dd>
-            <dt>Заявка</dt>
-            <dd>{value.request.reference}</dd>
             <dt>Количество</dt>
             <dd>{value.request.quantity}</dd>
             <dt>Версия</dt>

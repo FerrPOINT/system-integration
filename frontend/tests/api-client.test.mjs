@@ -32,7 +32,7 @@ test('login encodes the form and sends the CSRF header', async (t) => {
 
 test('createTask sends both command headers and exposes a conflict response', async (t) => {
   const key = '40ad5299-2e09-4d7f-9a14-f02ca60f55ef';
-  const body = { title: 'Проверка заявки', request: { reference: 'REQ-123456', quantity: 25 } };
+  const body = { title: 'Проверка заявки', quantity: 25 };
   const problem = { title: 'Конфликт', status: 409, code: 'IDEMPOTENCY_CONFLICT' };
 
   t.mock.method(globalThis, 'fetch', async (url, init) => {
@@ -115,19 +115,19 @@ test('saved reconciliation can be read again by its task and snapshot id', async
     checkedBy: '1b8697dc-a20e-4d1c-8db0-68086c9150a6',
     outcome: 'DIFFERENCE',
     local: {
-      request: { reference: 'REQ-123456', quantity: 25 },
+      quantity: 25,
       deliveryStatus: 'ACKNOWLEDGED',
       businessStatus: 'PENDING',
     },
     externalAvailability: 'PRESENT',
     external: {
       operationId: taskId,
-      request: { reference: 'REQ-123456', quantity: 25 },
+      quantity: 25,
       acceptedAt: '2026-11-12T00:00:00Z',
       executions: 1,
       result: {
         operationId: taskId,
-        request: { reference: 'REQ-123456', quantity: 25 },
+        quantity: 25,
         version: 2,
         status: 'SUCCEEDED',
         completedAt: '2026-11-12T00:00:00Z',
@@ -157,7 +157,7 @@ test('createTask exposes a temporary storage failure without treating it as an a
       }),
   );
   const reply = await createTask(
-    { title: 'Retry', request: { reference: 'REQ-123456', quantity: 25 } },
+    { title: 'Retry', quantity: 25 },
     { 'X-CSRF-TOKEN': 'token', 'Idempotency-Key': '40ad5299-2e09-4d7f-9a14-f02ca60f55ef' },
   );
   assert.equal(reply.status, 503);

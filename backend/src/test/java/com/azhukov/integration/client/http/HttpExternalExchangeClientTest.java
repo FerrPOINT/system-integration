@@ -116,7 +116,7 @@ class HttpExternalExchangeClientTest {
         UUID id = UUID.randomUUID();
         String snapshot =
                 """
-                {"operationId":"%s","request":{"reference":"REQ-000002","quantity":26},
+                {"operationId":"%s","request":{"quantity":26},
                  "acceptedAt":"2026-11-12T00:00:00Z","executions":0,"result":null}
                 """
                         .formatted(id);
@@ -205,7 +205,7 @@ class HttpExternalExchangeClientTest {
                                     "PUT",
                                     1,
                                     1,
-                                    new com.azhukov.integration.domain.task.TaskInput("REQ-999999", 25));
+                                    new com.azhukov.integration.domain.task.TaskInput(25));
                     assertEquals(
                             com.azhukov.integration.domain.exchange.DeliveryAttempt.Outcome.PROTOCOL_ERROR,
                             client.deliver(attempt).outcome());
@@ -235,7 +235,6 @@ class HttpExternalExchangeClientTest {
                     .put("completedAt", "9999-12-31T23:59:59.999999999Z")
                     .put("rejectionCode", "QUANTITY_LIMIT_EXCEEDED")
                     .putObject("request")
-                    .put("reference", "REQ-999999")
                     .put("quantity", 1000);
         }
         byte[] payload = json.writeValueAsBytes(page);
@@ -263,7 +262,7 @@ class HttpExternalExchangeClientTest {
         var result =
                 json.createObjectNode()
                         .put("operationId", id.toString())
-                        .set("request", json.createObjectNode().put("reference", "REQ-000001").put("quantity", 25))
+                        .set("request", json.createObjectNode().put("quantity", 25))
                         .put("version", 2)
                         .put("status", "SUCCEEDED")
                         .put("completedAt", "2026-11-12T00:00:00Z");
@@ -311,7 +310,7 @@ class HttpExternalExchangeClientTest {
                                 "GET",
                                 1,
                                 1,
-                                new com.azhukov.integration.domain.task.TaskInput("REQ-000001", 25));
+                                new com.azhukov.integration.domain.task.TaskInput(25));
                 var lookup = client.lookup(id);
                 assertEquals("UNAVAILABLE", lookup.availability().name());
                 assertNull(lookup.external());

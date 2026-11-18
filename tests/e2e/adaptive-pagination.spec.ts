@@ -9,7 +9,7 @@ async function create(page: Page, title: string) {
   const { token } = await (await page.request.get('/api/csrf')).json();
   const response = await page.request.post('/api/tasks', {
     headers: { 'X-CSRF-TOKEN': token, 'Idempotency-Key': crypto.randomUUID() },
-    data: { title, request: { reference: 'REQ-870001', quantity: 25 } },
+    data: { title, quantity: 25 },
   });
   expect(response.status()).toBe(201);
   return (await response.json()).taskId as string;

@@ -23,8 +23,6 @@ public interface TaskApiMapper {
 
     Request request(TaskInput value);
 
-    TaskInput input(Request value);
-
     CreateTask create(CreateTaskRequest value);
 
     CreateTaskResult created(CreateTask.Result value);

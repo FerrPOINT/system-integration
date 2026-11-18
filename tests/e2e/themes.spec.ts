@@ -179,12 +179,10 @@ test('UI-06: shared brand, surfaces and form fields across the application', asy
   await expect(page.getByRole('heading', { name: 'Новое задание', exact: true })).toHaveClass('ui-dialog-title');
   const editor = page.getByRole('dialog', { name: 'Новое задание', exact: true });
   expect(await editor.evaluate((el) => getComputedStyle(el).borderRadius)).toBe(dialogRadius);
-  const reference = page.getByLabel('Номер заявки');
-  await expect(reference).toHaveAttribute('aria-describedby', 'field-reference-hint');
-  await expect(page.locator('#field-reference-hint')).toHaveText(
-    'Введите шесть цифр, включая начальные нули. После создания изменить нельзя.',
-  );
-  await expect(reference).toHaveAttribute('required', '');
+  const quantity = page.getByLabel('Количество');
+  await expect(quantity).toHaveAttribute('aria-describedby', 'field-quantity-hint');
+  await expect(page.locator('#field-quantity-hint')).toHaveText('От 1 до 1000 единиц.');
+  await expect(quantity).toHaveAttribute('required', '');
   expect(
     await page.evaluate(
       () =>

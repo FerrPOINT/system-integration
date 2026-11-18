@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.azhukov.integration.config.DocumentJsonConfiguration;
 import com.azhukov.integration.contract.internal.model.*;
 import com.azhukov.integration.domain.review.IssueResolution;
-import com.azhukov.integration.domain.task.TaskInput;
 import com.azhukov.integration.dto.review.IssueCommands;
 import com.azhukov.integration.dto.task.CreateTask;
 import com.azhukov.integration.dto.task.RenameTask;
@@ -32,7 +31,7 @@ class CommandFingerprintTest {
     private final UUID snapshot = UUID.fromString("00000000-0000-4000-8000-000000000099");
 
     @TestFactory
-    Stream<DynamicTest> existingCommandsKeepTheirPersistedFingerprints() throws Exception {
+    Stream<DynamicTest> commandsHaveStablePersistedFingerprints() throws Exception {
         var resource = getClass().getResourceAsStream("/compatibility/command-fingerprints.json");
         assertNotNull(resource);
         final tools.jackson.databind.JsonNode fixtures;
@@ -40,7 +39,7 @@ class CommandFingerprintTest {
             fixtures = json.readTree(resource);
         }
         var inputs = new LinkedHashMap<String, Object>();
-        inputs.put("create", new CreateTaskRequest("Проверка заявки", new Request("REQ-000001", 25)));
+        inputs.put("create", new CreateTaskRequest("Проверка заявки", 25));
         inputs.put("rename", new RenameCommand(id, new RenameTaskRequest("Новое имя", 9007199254740990L)));
         inputs.put("take", new Target(id, new TakeIssueRequest(2L)));
         inputs.put("retry", new Target(id, new RetryRequest(2L, "Повтор")));
@@ -52,7 +51,7 @@ class CommandFingerprintTest {
                         new ResolveIssueRequest(2L, ResolutionAction.ACKNOWLEDGE_DIFFERENCE, "Проверено")
                                 .reconciliationId(snapshot)));
         inputs.put("reconcile", id);
-        inputs.put("create-application", new CreateTask("Проверка заявки", new TaskInput("REQ-000001", 25)));
+        inputs.put("create-application", new CreateTask("Проверка заявки", 25));
         inputs.put("rename-application", new RenameCommand(id, new RenameTask("Новое имя", 9007199254740990L)));
         inputs.put("take-application", new Target(id, new IssueCommands.Take(2L)));
         inputs.put("retry-application", new Target(id, new IssueCommands.Retry(2L, "Повтор", null)));
@@ -83,11 +82,11 @@ class CommandFingerprintTest {
     @Test
     void keyOrderIsIrrelevantButNullAndArrayOrderRemainSignificant() {
         var one = new LinkedHashMap<String, Object>();
-        one.put("b", Map.of("quantity", 25, "reference", "REQ-000001"));
+        one.put("b", Map.of("quantity", 25, "title", "a"));
         one.put("a", Arrays.asList("x", null, 2));
         var two = new LinkedHashMap<String, Object>();
         two.put("a", Arrays.asList("x", null, 2));
-        two.put("b", Map.of("reference", "REQ-000001", "quantity", 25));
+        two.put("b", Map.of("title", "a", "quantity", 25));
         assertEquals(ContentFingerprint.of(json, one), ContentFingerprint.of(json, two));
         two.put("a", Arrays.asList(2, null, "x"));
         assertNotEquals(ContentFingerprint.of(json, one), ContentFingerprint.of(json, two));
