@@ -26,6 +26,12 @@ compose.yml и compose.public.yml. Он относится к runtime inputs, а
 
 ## Миграции и переключение
 
+Сначала проверьте версии Flyway обеих БД. Подготовка сопоставлений ниже
+применяется один раз при переходе с V13/V2. Если стенд уже на V15/V3,
+переходите к [переключению образов](#переключение-образов).
+
+### Переход с V13/V2 на V15/V3
+
 Переход с V13/V2 на V15/V3 меняет контракт у всех трёх компонентов. V14
 нумерует существующие задания в порядке создания и ID. V15 обновляет
 сохранённые документы и квитанции. V3 переносит настройки отказов на ID
@@ -53,6 +59,8 @@ node deploy/prepare-task-numbers.mjs demo --stage
 и отсутствие повторного исполнения. Сохранённая сверка с исторической
 диагностикой читается по прежней ссылке.
 
+### Переключение образов
+
 Укажите абсолютные пути к каталогу выбранной установки и её приватному
 environment file в `SI_RUNTIME_DIR` и `SI_RUNTIME_ENV_FILE`. Сверьте реальные
 Compose labels и подготовьте `images.yml` с точными тегами проверенных образов.
@@ -63,7 +71,7 @@ cd "$SI_RUNTIME_DIR" || exit 1
 test -f "$SI_RUNTIME_ENV_FILE" || exit 1
 docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app config --quiet
 docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app stop frontend backend emulator
-# Между этими командами выполните проверку и подготовку V15/V3 из checkout кандидата.
+# При переходе с V13/V2 здесь выполните обе команды подготовки миграции.
 docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app up -d --no-build --no-deps --wait emulator
 docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app up -d --no-build --no-deps --wait backend
 docker compose --env-file "$SI_RUNTIME_ENV_FILE" -p system-integration -f compose.yml -f compose.public.yml -f images.yml --profile app up -d --no-build --no-deps --wait frontend
@@ -88,10 +96,9 @@ node --test tests/e2e/public.test.mjs
 После переключения проверьте Flyway, сохранённые записи/квитанции, readiness,
 labels всех трёх образов, фактически выдаваемые ассеты и TC-16 через HTTPS.
 Тестирование локального QA не подтверждает новую версию домена.
-До запуска миграций допустимо вернуть прежние теги исходной установки.
-После миграции любой из БД держите обе версии клиентов на одной стороне
-границы: при отказе остановите Java-процессы, определите фактически
-применённые версии и завершите переход на проверенном совместимом кандидате.
+Прежние теги можно вернуть, пока схемы обеих БД совместимы с ними.
+При отказе во время миграции остановите Java-процессы, определите версии
+обеих схем и завершите переход на проверенном совместимом кандидате.
 Возврат к V13/V2 потребовал бы синхронного восстановления обеих БД из
 подготовленного источника восстановления. Он выполняется отдельной
 операцией с согласованным источником данных. Тома сохраняются.

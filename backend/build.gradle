@@ -46,6 +46,7 @@ tasks.named('bootJar') {
 tasks.register('integrationTest', Test) {
     description = 'HTTP and transaction tests against the isolated si_test PostgreSQL database'
     group = 'verification'
+    doNotTrackState('The isolated PostgreSQL database can change independently of Gradle inputs')
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
     useJUnitPlatform { includeTags 'postgres' }

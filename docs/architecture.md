@@ -379,8 +379,9 @@ TypeScript входят в build, включая браузерные fixtures �
 Playwright-конфигурации и сценарии проверяются отдельным tests/tsconfig.json
 с Node/DOM types перед запуском тестов. Отрицательные lint fixtures проверяют
 сами ограничения и не входят в общий TypeScript scope.
-Причины совместимости lint toolchain и выбор lazy описаны в
-[плане frontend](https://github.com/FerrPOINT/system-integration/blob/500461d1737b98524ba618bac717d09fc34f7127/docs/frontend-refactoring-plan.md).
+Все экраны импортируются в таблицу маршрутов при начальной загрузке.
+Открытая вкладка получает необходимые для навигации экраны до публикации
+следующей версии.
 
 ## Правила разработки
 

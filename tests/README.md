@@ -11,7 +11,8 @@
 1. Выполните сборку/генерацию, Java check/bootJar, frontend build/unit/assets,
    TypeScript runner и unit тестовых инструментов по корневому README.
 2. Поднимите только PostgreSQL отдельного load-проекта и выполните оба
-   integrationTest. После них остановленные backend/emulator остаются остановленными.
+   integrationTest. Gradle выполняет эти задачи при каждом запуске: результат
+   зависит от состояния PostgreSQL. Backend и эмулятор остаются остановленными.
 3. Очистите только собственные QA-данные штатным reset, выполните
    [SQL-проверки](sql/README.md) на пустых si_test/si_emulator_test.
 4. Соберите три образа последовательно с revision кандидата. Поднимите QA,
